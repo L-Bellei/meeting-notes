@@ -52,6 +52,19 @@ func main() {
 		r.Delete("/{id}", themeHandler.Delete)
 	})
 
+	meetingHandler := handlers.NewMeetingHandler(
+		services.NewMeetingService(
+			repository.NewMeetingRepository(db),
+		),
+	)
+	r.Route("/api/meetings", func(r chi.Router) {
+		r.Get("/", meetingHandler.List)
+		r.Post("/", meetingHandler.Create)
+		r.Get("/{id}", meetingHandler.GetByID)
+		r.Put("/{id}", meetingHandler.Update)
+		r.Delete("/{id}", meetingHandler.Delete)
+	})
+
 	log.Printf("server listening on :%s", cfg.HTTPPort)
 	if err := http.ListenAndServe(":"+cfg.HTTPPort, r); err != nil {
 		log.Fatalf("server error: %v", err)
