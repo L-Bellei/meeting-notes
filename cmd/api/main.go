@@ -14,6 +14,9 @@ import (
 
 	"meeting-notes/internal/config"
 	"meeting-notes/internal/database"
+	"meeting-notes/internal/handlers"
+	"meeting-notes/internal/repository"
+	"meeting-notes/internal/services"
 )
 
 func main() {
@@ -35,6 +38,19 @@ func main() {
 	}))
 
 	r.Get("/health", healthHandler(db))
+
+	themeHandler := handlers.NewThemeHandler(
+		services.NewThemeService(
+			repository.NewThemeRepository(db),
+		),
+	)
+	r.Route("/api/themes", func(r chi.Router) {
+		r.Get("/", themeHandler.List)
+		r.Post("/", themeHandler.Create)
+		r.Get("/{id}", themeHandler.GetByID)
+		r.Put("/{id}", themeHandler.Update)
+		r.Delete("/{id}", themeHandler.Delete)
+	})
 
 	log.Printf("server listening on :%s", cfg.HTTPPort)
 	if err := http.ListenAndServe(":"+cfg.HTTPPort, r); err != nil {

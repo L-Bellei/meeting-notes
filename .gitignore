@@ -5,7 +5,7 @@
 meeting-notes.exe
 meeting-notes
 api.exe
-api
+/api
 /audio-service/.venv/
 __pycache__/
 *.pyc
