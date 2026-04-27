@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"meeting-notes/internal/database"
@@ -24,12 +25,6 @@ func newTestMeetingHandler(t *testing.T) *handlers.MeetingHandler {
 	return handlers.NewMeetingHandler(services.NewMeetingService(repository.NewMeetingRepository(db)))
 }
 
-type meetingDetailResp struct {
-	models.Meeting
-	Summary   *models.Summary   `json:"summary"`
-	KeyPoints []models.KeyPoint `json:"key_points"`
-	Tasks     []models.Task     `json:"tasks"`
-}
 
 func TestMeetingHandler_List_Empty(t *testing.T) {
 	h := newTestMeetingHandler(t)
@@ -117,7 +112,7 @@ func TestMeetingHandler_GetByID(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200; body: %s", w.Code, w.Body.String())
 	}
-	var detail meetingDetailResp
+	var detail handlers.MeetingDetailResponse
 	if err := json.NewDecoder(w.Body).Decode(&detail); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -254,5 +249,109 @@ func TestMeetingHandler_List_FilterByStatus(t *testing.T) {
 	}
 	if result[0].Title != "Completa" {
 		t.Errorf("Title = %q", result[0].Title)
+	}
+}
+
+func TestMeetingHandler_Create_InvalidStartedAt(t *testing.T) {
+	h := newTestMeetingHandler(t)
+	body := `{"title":"Test","started_at":"not-a-date"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/meetings", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Create(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestMeetingHandler_Update_InvalidStartedAt(t *testing.T) {
+	h := newTestMeetingHandler(t)
+
+	// First create a meeting
+	reqC := httptest.NewRequest(http.MethodPost, "/api/meetings", bytes.NewBufferString(`{"title":"Original"}`))
+	reqC.Header.Set("Content-Type", "application/json")
+	wC := httptest.NewRecorder()
+	h.Create(wC, reqC)
+	if wC.Code != http.StatusCreated {
+		t.Fatalf("create failed with status %d", wC.Code)
+	}
+	var created models.Meeting
+	if err := json.NewDecoder(wC.Body).Decode(&created); err != nil {
+		t.Fatalf("decode created: %v", err)
+	}
+
+	// Now try to update with invalid started_at
+	updateBody := `{"title":"Updated","started_at":"not-a-date"}`
+	req := withChiID(
+		httptest.NewRequest(http.MethodPut, "/api/meetings/"+created.ID, strings.NewReader(updateBody)),
+		created.ID,
+	)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Update(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func newTestMeetingAndThemeHandlers(t *testing.T) (*handlers.MeetingHandler, *handlers.ThemeHandler) {
+	t.Helper()
+	db, err := database.Open(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	mh := handlers.NewMeetingHandler(services.NewMeetingService(repository.NewMeetingRepository(db)))
+	th := handlers.NewThemeHandler(services.NewThemeService(repository.NewThemeRepository(db)))
+	return mh, th
+}
+
+func TestMeetingHandler_List_FilterByTheme(t *testing.T) {
+	mh, th := newTestMeetingAndThemeHandlers(t)
+
+	// Create a theme
+	themeBody := `{"name":"Engineering"}`
+	reqT := httptest.NewRequest(http.MethodPost, "/api/themes", bytes.NewBufferString(themeBody))
+	reqT.Header.Set("Content-Type", "application/json")
+	wT := httptest.NewRecorder()
+	th.Create(wT, reqT)
+	if wT.Code != http.StatusCreated {
+		t.Fatalf("create theme failed with status %d: %s", wT.Code, wT.Body.String())
+	}
+	var theme models.Theme
+	if err := json.NewDecoder(wT.Body).Decode(&theme); err != nil {
+		t.Fatalf("decode theme: %v", err)
+	}
+
+	// Create a meeting with the theme
+	m1Body := `{"title":"Meeting with theme","theme_id":"` + theme.ID + `"}`
+	req1 := httptest.NewRequest(http.MethodPost, "/api/meetings", bytes.NewBufferString(m1Body))
+	req1.Header.Set("Content-Type", "application/json")
+	mh.Create(httptest.NewRecorder(), req1)
+
+	// Create a meeting without a theme
+	m2Body := `{"title":"Meeting without theme"}`
+	req2 := httptest.NewRequest(http.MethodPost, "/api/meetings", bytes.NewBufferString(m2Body))
+	req2.Header.Set("Content-Type", "application/json")
+	mh.Create(httptest.NewRecorder(), req2)
+
+	// List meetings filtered by theme_id
+	req := httptest.NewRequest(http.MethodGet, "/api/meetings?theme_id="+theme.ID, nil)
+	w := httptest.NewRecorder()
+	mh.List(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var result []models.Meeting
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(result) != 1 {
+		t.Fatalf("expected 1 meeting, got %d", len(result))
+	}
+	if result[0].Title != "Meeting with theme" {
+		t.Errorf("Title = %q, want %q", result[0].Title, "Meeting with theme")
 	}
 }

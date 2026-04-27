@@ -37,7 +37,7 @@ type updateMeetingRequest struct {
 	Transcript      *string `json:"transcript"`
 }
 
-type meetingDetailResponse struct {
+type MeetingDetailResponse struct {
 	models.Meeting
 	Summary   *models.Summary   `json:"summary"`
 	KeyPoints []models.KeyPoint `json:"key_points"`
@@ -67,12 +67,12 @@ func (h *MeetingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	var startedAt *time.Time
 	if req.StartedAt != nil {
-		t, err := time.Parse(time.RFC3339, *req.StartedAt)
+		parsed, err := time.Parse(time.RFC3339, *req.StartedAt)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid started_at: use RFC3339 (e.g. 2006-01-02T15:04:05Z)")
 			return
 		}
-		startedAt = &t
+		startedAt = &parsed
 	}
 	m, err := h.svc.Create(r.Context(), req.Title, req.ThemeID, req.Status, startedAt)
 	if err != nil {
@@ -98,7 +98,7 @@ func (h *MeetingHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to get meeting")
 		return
 	}
-	writeJSON(w, http.StatusOK, meetingDetailResponse{
+	writeJSON(w, http.StatusOK, MeetingDetailResponse{
 		Meeting:   *m,
 		Summary:   nil,
 		KeyPoints: []models.KeyPoint{},
@@ -115,12 +115,12 @@ func (h *MeetingHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	var startedAt *time.Time
 	if req.StartedAt != nil {
-		t, err := time.Parse(time.RFC3339, *req.StartedAt)
+		parsed, err := time.Parse(time.RFC3339, *req.StartedAt)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid started_at: use RFC3339 (e.g. 2006-01-02T15:04:05Z)")
 			return
 		}
-		startedAt = &t
+		startedAt = &parsed
 	}
 	m, err := h.svc.Update(r.Context(), id, req.Title, req.ThemeID, req.Status, startedAt, req.DurationSeconds, req.Transcript)
 	if err != nil {
