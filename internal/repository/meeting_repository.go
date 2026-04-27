@@ -149,7 +149,7 @@ func scanMeeting(row meetingScanner) (*models.Meeting, error) {
 		m.ThemeID = &v
 	}
 	if startedAt.Valid {
-		t, err := parseMeetingTime(startedAt.String)
+		t, err := parseTime(startedAt.String)
 		if err != nil {
 			return nil, err
 		}
@@ -164,17 +164,8 @@ func scanMeeting(row meetingScanner) (*models.Meeting, error) {
 		m.Transcript = &v
 	}
 	m.Status = models.MeetingStatus(status)
-	if m.CreatedAt, err = parseMeetingTime(createdAt); err != nil {
+	if m.CreatedAt, err = parseTime(createdAt); err != nil {
 		return nil, err
 	}
 	return &m, nil
-}
-
-func parseMeetingTime(s string) (time.Time, error) {
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02 15:04:05"} {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t.UTC(), nil
-		}
-	}
-	return time.Time{}, fmt.Errorf("cannot parse time %q", s)
 }
