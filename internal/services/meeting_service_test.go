@@ -19,7 +19,9 @@ func newTestMeetingService(t *testing.T) *services.MeetingService {
 	}
 	t.Cleanup(func() { db.Close() })
 	// Pre-seed theme IDs used by tests to satisfy FK constraints.
-	db.Exec(`INSERT INTO themes (id, name, color) VALUES (?, ?, '#ffffff')`, "theme-abc", "theme-abc")
+	if _, err := db.Exec(`INSERT INTO themes (id, name, color) VALUES (?, ?, '#ffffff')`, "theme-abc", "theme-abc"); err != nil {
+		t.Fatalf("seed theme: %v", err)
+	}
 	return services.NewMeetingService(repository.NewMeetingRepository(db))
 }
 
@@ -195,5 +197,19 @@ func TestMeetingService_Delete(t *testing.T) {
 	_, err := svc.GetByID(ctx, created.ID)
 	if !errors.Is(err, repository.ErrNotFound) {
 		t.Errorf("expected ErrNotFound after delete, got %v", err)
+	}
+}
+
+func TestMeetingService_Update_PreservesStatusWhenEmpty(t *testing.T) {
+	svc := newTestMeetingService(t)
+	ctx := context.Background()
+
+	created, _ := svc.Create(ctx, "Original", "", "completed", nil)
+	updated, err := svc.Update(ctx, created.ID, "Novo título", nil, "", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if updated.Status != models.StatusCompleted {
+		t.Errorf("Status should be preserved as completed, got %q", updated.Status)
 	}
 }
