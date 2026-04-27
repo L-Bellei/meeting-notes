@@ -51,6 +51,9 @@ func (r *MeetingRepository) List(ctx context.Context, themeID, status string) ([
 		}
 		meetings = append(meetings, *m)
 	}
+	if meetings == nil {
+		meetings = []models.Meeting{}
+	}
 	return meetings, rows.Err()
 }
 

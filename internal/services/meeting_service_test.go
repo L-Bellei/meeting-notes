@@ -213,3 +213,50 @@ func TestMeetingService_Update_PreservesStatusWhenEmpty(t *testing.T) {
 		t.Errorf("Status should be preserved as completed, got %q", updated.Status)
 	}
 }
+
+func TestMeetingService_Update_ClearsThemeID(t *testing.T) {
+	svc := newTestMeetingService(t)
+	ctx := context.Background()
+
+	// Create a meeting with theme-abc (pre-seeded in newTestMeetingService).
+	created, err := svc.Create(ctx, "Com tema", "theme-abc", "", nil)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if created.ThemeID == nil || *created.ThemeID != "theme-abc" {
+		t.Fatalf("precondition: ThemeID = %v, want theme-abc", created.ThemeID)
+	}
+
+	// Update with themeID = ptr("") should clear the theme.
+	emptyStr := ""
+	updated, err := svc.Update(ctx, created.ID, "Com tema", &emptyStr, "", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if updated.ThemeID != nil {
+		t.Errorf("ThemeID should be nil after clearing, got %v", *updated.ThemeID)
+	}
+}
+
+func TestMeetingService_Update_PreservesThemeID(t *testing.T) {
+	svc := newTestMeetingService(t)
+	ctx := context.Background()
+
+	// Create a meeting with theme-abc (pre-seeded in newTestMeetingService).
+	created, err := svc.Create(ctx, "Com tema", "theme-abc", "", nil)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if created.ThemeID == nil || *created.ThemeID != "theme-abc" {
+		t.Fatalf("precondition: ThemeID = %v, want theme-abc", created.ThemeID)
+	}
+
+	// Update with themeID = nil should leave ThemeID unchanged.
+	updated, err := svc.Update(ctx, created.ID, "Com tema", nil, "", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if updated.ThemeID == nil || *updated.ThemeID != "theme-abc" {
+		t.Errorf("ThemeID should be preserved as theme-abc, got %v", updated.ThemeID)
+	}
+}
