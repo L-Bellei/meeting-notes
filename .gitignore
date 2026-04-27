@@ -1,0 +1,9 @@
+.env
+*.db
+*.db-shm
+*.db-wal
+meeting-notes.exe
+meeting-notes
+/audio-service/.venv/
+__pycache__/
+*.pyc
