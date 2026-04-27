@@ -4,6 +4,8 @@
 *.db-wal
 meeting-notes.exe
 meeting-notes
+api.exe
+api
 /audio-service/.venv/
 __pycache__/
 *.pyc
