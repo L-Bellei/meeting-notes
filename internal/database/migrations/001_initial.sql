@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 CREATE INDEX IF NOT EXISTS idx_meetings_theme     ON meetings(theme_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_status    ON meetings(status);
-CREATE INDEX IF NOT EXISTS idx_summaries_meeting  ON summaries(meeting_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_summaries_meeting  ON summaries(meeting_id);
 CREATE INDEX IF NOT EXISTS idx_key_points_meeting ON key_points(meeting_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_meeting      ON tasks(meeting_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_completed    ON tasks(completed);
