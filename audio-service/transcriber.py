@@ -33,9 +33,11 @@ class Transcriber:
         self.model_loaded = True
 
     def _setup_dll_paths(self):
+        self._dll_handles = []
         if sys.platform != "win32":
             return
         import importlib
+        extra_paths = []
         for pkg in ("nvidia.cudnn", "nvidia.cublas"):
             try:
                 module = importlib.import_module(pkg)
@@ -46,7 +48,10 @@ class Transcriber:
             base = Path(module.__file__).parent
             for candidate in (base / "bin", base / "lib"):
                 if candidate.exists():
-                    os.add_dll_directory(str(candidate))
+                    self._dll_handles.append(os.add_dll_directory(str(candidate)))
+                    extra_paths.append(str(candidate))
+        if extra_paths:
+            os.environ["PATH"] = os.pathsep.join(extra_paths) + os.pathsep + os.environ.get("PATH", "")
 
     def transcribe(self, path: Path, language: Optional[str] = None) -> TranscribeResult:
         resolved = Path(path).resolve()
