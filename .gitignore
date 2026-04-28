@@ -10,3 +10,6 @@ api.exe
 __pycache__/
 *.pyc
 /cmd/desktop/frontend/dist/.gitkeep
+/dist/
+/cmd/desktop/build/bin/
+desktop.exe
