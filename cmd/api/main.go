@@ -52,7 +52,7 @@ func main() {
 
 	// Audio + Orchestrator
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
-	orchestrator := services.NewOrchestrator(meetingRepo, summarySvc, keyPointSvc, taskSvc, audioClient, cfg.WhisperModel)
+	orchestrator := services.NewOrchestrator(meetingRepo, summarySvc, keyPointSvc, taskSvc, audioClient, cfg.WhisperLanguage)
 
 	// Handlers
 	themeHandler := handlers.NewThemeHandler(themeSvc)

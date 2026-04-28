@@ -1,0 +1,532 @@
+{
+  "info": {
+    "name": "Meeting Notes API",
+    "_postman_id": "meeting-notes-api-v1",
+    "description": "Coleção completa da Meeting Notes API. Defina a variável `base_url` (padrão: http://localhost:8080).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "meeting_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "theme_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "key_point_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "task_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Themes",
+      "item": [
+        {
+          "name": "List themes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/themes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "themes"]
+            }
+          }
+        },
+        {
+          "name": "Create theme",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json && json.id) { pm.collectionVariables.set('theme_id', json.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Engenharia\",\n  \"description\": \"Reuniões do time de eng\",\n  \"color\": \"#3B82F6\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/themes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "themes"]
+            }
+          }
+        },
+        {
+          "name": "Get theme by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/themes/{{theme_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "themes", "{{theme_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Update theme",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Engenharia (atualizado)\",\n  \"description\": \"Reuniões do time de eng\",\n  \"color\": \"#6366F1\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/themes/{{theme_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "themes", "{{theme_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete theme",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/themes/{{theme_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "themes", "{{theme_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Meetings",
+      "item": [
+        {
+          "name": "List meetings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings"]
+            }
+          }
+        },
+        {
+          "name": "Create meeting",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json && json.id) { pm.collectionVariables.set('meeting_id', json.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Daily 28/04\",\n  \"theme_id\": \"{{theme_id}}\",\n  \"started_at\": \"2026-04-28T09:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/meetings",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings"]
+            }
+          }
+        },
+        {
+          "name": "Get meeting by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Update meeting",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Daily 28/04 (editado)\",\n  \"status\": \"pending\",\n  \"duration_seconds\": 1800,\n  \"transcript\": \"Texto da reunião...\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete meeting",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Meetings — Orquestração",
+      "description": "Pipeline: start → stop (captura+transcrição automática) → acompanhe status via GET /meetings/{id}. Alternativa: set-transcript dispara AI diretamente. process re-roda apenas a AI.",
+      "item": [
+        {
+          "name": "Start recording",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/start",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "start"]
+            },
+            "description": "Inicia gravação via audio-service.\n\n→ 202: status muda para `recording`\n→ 503: audio-service indisponível\n→ 409: audio-service em estado conflitante\n→ 422: meeting já está em `recording`\n→ 404: meeting não existe"
+          }
+        },
+        {
+          "name": "Stop recording",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/stop",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "stop"]
+            },
+            "description": "Para a gravação e dispara pipeline em background:\nstop → transcribe (Whisper) → gera summary/key_points/tasks.\n\nAcompanhe o progresso fazendo GET no meeting e observando `status`:\npending → recording → transcribing → processing → completed (ou failed)"
+          }
+        },
+        {
+          "name": "Process (re-rodar AI)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/process",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "process"]
+            },
+            "description": "Re-roda apenas a geração de AI (summary + key_points + tasks) a partir do transcript já salvo.\n\nÚtil quando o pipeline anterior falhou na etapa de AI.\n\n→ 422: transcript vazio"
+          }
+        },
+        {
+          "name": "Set transcript (dispara AI)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transcript\": \"Discutimos os itens do sprint. João vai revisar o PR de autenticação até quinta. Maria assumirá a integração com o serviço de pagamento.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/transcript",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "transcript"]
+            },
+            "description": "Salva um transcript manualmente e dispara a geração de AI em background.\n\nÚtil para importar transcrições externas sem usar o audio-service.\n\n→ 400: JSON inválido\n→ 422: transcript vazio ou meeting em estado recording/transcribing"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Summary",
+      "item": [
+        {
+          "name": "Get summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/summary",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "summary"]
+            }
+          }
+        },
+        {
+          "name": "Create summary",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Reunião focada em revisão de PRs e planejamento do próximo sprint.\",\n  \"model_used\": \"claude-sonnet-4-6\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/summary",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "summary"]
+            }
+          }
+        },
+        {
+          "name": "Update summary",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Resumo atualizado manualmente.\",\n  \"model_used\": \"manual\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/summary",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "summary"]
+            }
+          }
+        },
+        {
+          "name": "Delete summary",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/summary",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "summary"]
+            }
+          }
+        },
+        {
+          "name": "Generate summary (AI)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/summary/generate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "summary", "generate"]
+            },
+            "description": "Gera resumo via Anthropic API a partir do transcript salvo no meeting."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Key Points",
+      "item": [
+        {
+          "name": "List key points",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/key_points",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "key_points"]
+            }
+          }
+        },
+        {
+          "name": "Create key point",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json && json.id) { pm.collectionVariables.set('key_point_id', json.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position\": 1,\n  \"content\": \"Revisão do PR de autenticação até quinta-feira.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/key_points",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "key_points"]
+            }
+          }
+        },
+        {
+          "name": "Update key point",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position\": 1,\n  \"content\": \"Revisão do PR de autenticação até sexta-feira.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/key_points/{{key_point_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "key_points", "{{key_point_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete key point",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/key_points/{{key_point_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "key_points", "{{key_point_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Generate key points (AI)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/key_points/generate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "key_points", "generate"]
+            },
+            "description": "Gera pontos-chave via Anthropic API a partir do transcript salvo no meeting."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "List tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "tasks"]
+            }
+          }
+        },
+        {
+          "name": "Create task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json && json.id) { pm.collectionVariables.set('task_id', json.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Revisar PR de autenticação\",\n  \"assignee\": \"João\",\n  \"due_date\": \"2026-05-01\",\n  \"priority\": \"high\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "tasks"]
+            }
+          }
+        },
+        {
+          "name": "Update task",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Revisar PR de autenticação\",\n  \"assignee\": \"João\",\n  \"due_date\": \"2026-05-02\",\n  \"priority\": \"high\",\n  \"completed\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "tasks", "{{task_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete task",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "tasks", "{{task_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Generate tasks (AI)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/meetings/{{meeting_id}}/tasks/generate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "meetings", "{{meeting_id}}", "tasks", "generate"]
+            },
+            "description": "Gera tarefas via Anthropic API a partir do transcript salvo no meeting."
+          }
+        }
+      ]
+    }
+  ]
+}

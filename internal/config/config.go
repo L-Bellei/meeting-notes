@@ -16,6 +16,7 @@ type Config struct {
 	WhisperModel       string
 	WhisperDevice      string
 	WhisperComputeType string
+	WhisperLanguage    string
 }
 
 func Load() *Config {
@@ -31,6 +32,7 @@ func Load() *Config {
 		WhisperModel:       getEnv("WHISPER_MODEL", "medium"),
 		WhisperDevice:      getEnv("WHISPER_DEVICE", "cuda"),
 		WhisperComputeType: getEnv("WHISPER_COMPUTE_TYPE", "int8_float16"),
+		WhisperLanguage:    getEnv("WHISPER_LANGUAGE", "pt"),
 	}
 }
 
