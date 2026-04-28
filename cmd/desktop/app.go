@@ -160,9 +160,15 @@ func (a *App) OnShutdown(ctx context.Context) {
 func (a *App) GetPort() int { return a.port }
 
 // startAudioService locates the audio-service directory and launches uvicorn via the
-// project venv. It returns immediately after spawning — the caller should rely on the
-// audio client's health-check for readiness.
+// project venv. If the service is already responding it skips spawning a new process.
 func (a *App) startAudioService(ctx context.Context, audioURL string) {
+	// If something is already listening on the audio port, reuse it.
+	if a.audioServiceAlive(audioURL) {
+		wailsruntime.LogInfof(ctx, "audio service already running, skipping start")
+		go a.waitAudioReady(ctx, audioURL)
+		return
+	}
+
 	dir := findAudioServiceDir()
 	if dir == "" {
 		wailsruntime.LogWarningf(ctx, "audio-service directory not found; skipping auto-start")
@@ -177,7 +183,6 @@ func (a *App) startAudioService(ctx context.Context, audioURL string) {
 
 	cmd := exec.Command(uvicorn, "main:app", "--port", "8765")
 	cmd.Dir = dir
-	// Redirect output to the Wails log so it's visible in dev console
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -189,6 +194,16 @@ func (a *App) startAudioService(ctx context.Context, audioURL string) {
 	wailsruntime.LogInfof(ctx, "audio service started (pid %d)", cmd.Process.Pid)
 
 	go a.waitAudioReady(ctx, audioURL)
+}
+
+func (a *App) audioServiceAlive(audioURL string) bool {
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(audioURL + "/health")
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }
 
 // waitAudioReady polls the audio service health endpoint and emits a frontend event

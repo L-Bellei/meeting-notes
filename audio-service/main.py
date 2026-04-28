@@ -62,6 +62,9 @@ def start_recording():
         if "already recording" in msg:
             raise HTTPException(status_code=409, detail=msg)
         raise HTTPException(status_code=503, detail=msg)
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=503, detail=f"{type(e).__name__}: {e}\n{traceback.format_exc()}")
     return {"recording_id": rec_id, "started_at": started_at.isoformat()}
 
 
