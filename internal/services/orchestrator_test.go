@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -351,5 +352,56 @@ func TestOrchestrator_SetTranscriptAndProcess_Success(t *testing.T) {
 	}
 	if got.Status != models.StatusCompleted {
 		t.Errorf("status = %q, want completed", got.Status)
+	}
+}
+
+func TestOrchestrator_NotifyFn_CalledOnStatusChange(t *testing.T) {
+	transcript := "hello world"
+	wavPath := t.TempDir() + "/rec.wav"
+	if err := os.WriteFile(wavPath, []byte("fake"), 0o644); err != nil {
+		t.Fatalf("write wav: %v", err)
+	}
+	fa := &fakeAudioClient{
+		startResp:      &audio.StartResponse{RecordingID: "r-1", StartedAt: time.Now().UTC()},
+		stopResp:       &audio.StopResponse{Path: wavPath, DurationSeconds: 10},
+		transcribeResp: &audio.TranscribeResponse{Transcript: transcript},
+	}
+	orch, _, id := newOrchTest(t, fa, &fakeAI{
+		summaryText: "s",
+		keyPoints:   []string{"kp1"},
+		tasks:       []ai.TaskSuggestion{{Description: "t1", Priority: "medium"}},
+	})
+
+	type call struct{ meetingID, status string }
+	var mu sync.Mutex
+	var calls []call
+	orch.SetNotifyFn(func(meetingID, status string) {
+		mu.Lock()
+		defer mu.Unlock()
+		calls = append(calls, call{meetingID, status})
+	})
+
+	if err := orch.StartRecording(context.Background(), id); err != nil {
+		t.Fatalf("StartRecording: %v", err)
+	}
+	if err := orch.StopRecording(context.Background(), id); err != nil {
+		t.Fatalf("StopRecording: %v", err)
+	}
+	orch.WaitPipelines()
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	wantStatuses := []string{"transcribing", "processing", "completed"}
+	if len(calls) != len(wantStatuses) {
+		t.Fatalf("expected %d notify calls, got %d: %+v", len(wantStatuses), len(calls), calls)
+	}
+	for i, want := range wantStatuses {
+		if calls[i].meetingID != id {
+			t.Errorf("call[%d] meetingID = %q, want %q", i, calls[i].meetingID, id)
+		}
+		if calls[i].status != want {
+			t.Errorf("call[%d] status = %q, want %q", i, calls[i].status, want)
+		}
 	}
 }

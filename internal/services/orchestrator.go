@@ -23,6 +23,7 @@ type Orchestrator struct {
 	audio       audio.Client
 	language    string
 	pipelineWG  sync.WaitGroup
+	notifyFn    func(meetingID, status string)
 }
 
 func NewOrchestrator(
@@ -40,6 +41,16 @@ func NewOrchestrator(
 		taskSvc:     taskSvc,
 		audio:       audioClient,
 		language:    language,
+	}
+}
+
+func (o *Orchestrator) SetNotifyFn(fn func(meetingID, status string)) {
+	o.notifyFn = fn
+}
+
+func (o *Orchestrator) notify(meetingID string, status models.MeetingStatus) {
+	if o.notifyFn != nil {
+		o.notifyFn(meetingID, string(status))
 	}
 }
 
@@ -127,6 +138,7 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 	if err := o.repo.Update(ctx, m); err != nil {
 		return err
 	}
+	o.notify(m.ID, m.Status)
 
 	stopResp, err := o.audio.StopRecording(ctx)
 	if err != nil {
@@ -147,6 +159,7 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 	if err := o.repo.Update(ctx, m); err != nil {
 		return err
 	}
+	o.notify(m.ID, m.Status)
 
 	if err := os.Remove(stopResp.Path); err != nil && !os.IsNotExist(err) {
 		log.Printf("warning: delete WAV %s: %v", stopResp.Path, err)
@@ -158,7 +171,11 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 	}
 
 	m.Status = models.StatusCompleted
-	return o.repo.Update(ctx, m)
+	if err := o.repo.Update(ctx, m); err != nil {
+		return err
+	}
+	o.notify(m.ID, m.Status)
+	return nil
 }
 
 func (o *Orchestrator) RunAIPipeline(ctx context.Context, meetingID string) error {
@@ -174,6 +191,7 @@ func (o *Orchestrator) RunAIPipeline(ctx context.Context, meetingID string) erro
 	if err := o.repo.Update(ctx, m); err != nil {
 		return err
 	}
+	o.notify(m.ID, m.Status)
 
 	if err := o.runAIGeneration(ctx, m); err != nil {
 		o.markFailed(ctx, m)
@@ -181,7 +199,11 @@ func (o *Orchestrator) RunAIPipeline(ctx context.Context, meetingID string) erro
 	}
 
 	m.Status = models.StatusCompleted
-	return o.repo.Update(ctx, m)
+	if err := o.repo.Update(ctx, m); err != nil {
+		return err
+	}
+	o.notify(m.ID, m.Status)
+	return nil
 }
 
 func (o *Orchestrator) runAIGeneration(ctx context.Context, m *models.Meeting) error {
@@ -201,5 +223,7 @@ func (o *Orchestrator) markFailed(ctx context.Context, m *models.Meeting) {
 	m.Status = models.StatusFailed
 	if err := o.repo.Update(ctx, m); err != nil {
 		log.Printf("warning: mark failed %s: %v", m.ID, err)
+		return
 	}
+	o.notify(m.ID, m.Status)
 }
