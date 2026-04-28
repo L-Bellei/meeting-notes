@@ -57,6 +57,7 @@ class Recorder:
         self._mic_native_rate = None
         self._loopback_native_rate = None
         self._loopback_channels = None
+        self._mic_channels = None
         self._writer = None
         self._frames_written = 0
         self._stop_event = None
@@ -137,6 +138,7 @@ class Recorder:
         self._mic_native_rate = int(self._mic_info["defaultSampleRate"])
         self._loopback_native_rate = int(self._loopback_info["defaultSampleRate"])
         self._loopback_channels = int(self._loopback_info["maxInputChannels"])
+        self._mic_channels = int(self._mic_info["maxInputChannels"])
         self._frames_written = 0
         self._stop_event = threading.Event()
 
@@ -150,7 +152,7 @@ class Recorder:
 
         self._mic_stream = self._pa.open(
             format=pyaudio.paInt16,
-            channels=1,
+            channels=self._mic_channels,
             rate=self._mic_native_rate,
             input=True,
             input_device_index=self._mic_info["index"],
@@ -198,7 +200,7 @@ class Recorder:
                 lb_chunk = self._safe_get(self._loopback_queue, 0.05)
                 if mic_chunk is None and lb_chunk is None:
                     continue
-                mic_mono16 = self._chunk_to_mono16k(mic_chunk, 1, self._mic_native_rate)
+                mic_mono16 = self._chunk_to_mono16k(mic_chunk, self._mic_channels, self._mic_native_rate)
                 lb_mono16 = self._chunk_to_mono16k(lb_chunk, self._loopback_channels, self._loopback_native_rate)
                 mixed = self._mix(mic_mono16, lb_mono16)
                 if mixed.size > 0:
@@ -221,7 +223,7 @@ class Recorder:
             lb_chunk = self._safe_get(self._loopback_queue, 0)
             if mic_chunk is None and lb_chunk is None:
                 return
-            mic_mono16 = self._chunk_to_mono16k(mic_chunk, 1, self._mic_native_rate)
+            mic_mono16 = self._chunk_to_mono16k(mic_chunk, self._mic_channels, self._mic_native_rate)
             lb_mono16 = self._chunk_to_mono16k(lb_chunk, self._loopback_channels, self._loopback_native_rate)
             mixed = self._mix(mic_mono16, lb_mono16)
             if mixed.size > 0:
@@ -250,9 +252,6 @@ class Recorder:
         return np.clip(mixed, -1.0, 1.0)
 
     def _close_streams(self):
-        if self._stop_event is not None:
-            self._stop_event.set()
-
         for stream in (self._mic_stream, self._loopback_stream):
             if stream is None:
                 continue
@@ -263,6 +262,9 @@ class Recorder:
             except Exception as e:
                 log.warning("error closing stream: %s", e)
                 self._partial = True
+
+        if self._stop_event is not None:
+            self._stop_event.set()
 
         if self._mixer_thread is not None:
             self._mixer_thread.join(timeout=5.0)
@@ -284,6 +286,7 @@ class Recorder:
         self._mixer_thread = None
         self._stop_event = None
         self._writer = None
+        self._mic_channels = None
 
     def _compute_duration(self):
         return self._frames_written / TARGET_SAMPLE_RATE
