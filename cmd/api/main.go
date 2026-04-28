@@ -42,6 +42,7 @@ func main() {
 	summaryRepo := repository.NewSummaryRepository(db)
 	keyPointRepo := repository.NewKeyPointRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
+	settingsRepo := repository.NewSettingsRepository(db)
 
 	// Services
 	themeSvc := services.NewThemeService(themeRepo)
@@ -49,6 +50,7 @@ func main() {
 	summarySvc := services.NewSummaryService(summaryRepo, aiClient)
 	keyPointSvc := services.NewKeyPointService(keyPointRepo, aiClient)
 	taskSvc := services.NewTaskService(taskRepo, aiClient)
+	settingsSvc := services.NewSettingsService(settingsRepo)
 
 	// Audio + Orchestrator
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
@@ -60,6 +62,7 @@ func main() {
 	summaryHandler := handlers.NewSummaryHandler(summarySvc, meetingSvc)
 	keyPointHandler := handlers.NewKeyPointHandler(keyPointSvc, meetingSvc)
 	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc)
+	settingsH := handlers.NewSettingsHandler(settingsSvc)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -115,6 +118,11 @@ func main() {
 			r.Put("/{taskId}", taskHandler.Update)
 			r.Delete("/{taskId}", taskHandler.Delete)
 		})
+	})
+
+	r.Route("/api/settings", func(r chi.Router) {
+		r.Get("/", settingsH.Get)
+		r.Put("/", settingsH.Update)
 	})
 
 	log.Printf("server listening on :%s", cfg.HTTPPort)
