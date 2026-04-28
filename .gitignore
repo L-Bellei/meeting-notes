@@ -9,5 +9,4 @@ api.exe
 /audio-service/.venv/
 __pycache__/
 *.pyc
-/cmd/desktop/frontend/dist/*
-!/cmd/desktop/frontend/dist/.gitkeep
+/cmd/desktop/frontend/dist/.gitkeep
