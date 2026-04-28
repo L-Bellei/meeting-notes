@@ -7,6 +7,7 @@ import {
 } from "../../hooks/useMeeting"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
+import { Spinner } from "../ui/spinner"
 import { cn } from "../../lib/utils"
 
 interface Props { meetingId: string | null }
@@ -23,27 +24,33 @@ export function MeetingDetail({ meetingId }: Props) {
 
   if (!meetingId || !meeting) {
     return (
-      <div className="flex-1 h-full flex items-center justify-center text-sm text-muted-foreground">
+      <div className="flex-1 h-full flex items-center justify-center text-sm text-muted-foreground animate-fade-in">
         Selecione uma reunião
       </div>
     )
   }
 
+  const tabLabels: Record<Tab, string> = {
+    transcript: "Transcrição", summary: "Resumo", keypoints: "Pontos-chave", tasks: "Tarefas",
+  }
+
   return (
-    <div className="flex-1 h-full flex flex-col overflow-hidden">
+    <div className="flex-1 h-full flex flex-col overflow-hidden animate-fade-in">
       <MeetingHeader meeting={meeting} />
-      <div className="border-b">
-        <div className="flex">
+      <div className="px-4 pt-3 pb-0 border-b border-border flex-shrink-0">
+        <div className="flex gap-1">
           {(["transcript", "summary", "keypoints", "tasks"] as Tab[]).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={cn(
-                "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
-                tab === t ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+                "px-3 py-1.5 text-xs font-medium rounded-full transition-colors",
+                tab === t
+                  ? "bg-primary/20 text-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
               )}
             >
-              {{ transcript: "Transcrição", summary: "Resumo", keypoints: "Pontos-chave", tasks: "Tarefas" }[t]}
+              {tabLabels[t]}
             </button>
           ))}
         </div>
@@ -75,7 +82,7 @@ function MeetingHeader({ meeting }: { meeting: any }) {
   }
 
   return (
-    <div className="p-4 border-b">
+    <div className="px-4 py-3 border-b border-border flex-shrink-0">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-base font-semibold truncate">{meeting.title}</h2>
         <Badge variant={statusVariant(meeting.status)}>{meeting.status}</Badge>
@@ -84,17 +91,20 @@ function MeetingHeader({ meeting }: { meeting: any }) {
       <div className="flex gap-2 mt-2">
         {(meeting.status === "pending" || meeting.status === "failed") && (
           <Button size="sm" onClick={handleStart} disabled={start.isPending}>
-            <Play size={14} className="mr-1" /> Start
+            {start.isPending ? <Spinner size={14} className="mr-1.5" /> : <Play size={14} className="mr-1" />}
+            Start
           </Button>
         )}
         {meeting.status === "recording" && (
           <Button size="sm" variant="destructive" onClick={handleStop} disabled={stop.isPending}>
-            <Square size={14} className="mr-1" /> Stop
+            {stop.isPending ? <Spinner size={14} className="mr-1.5" /> : <Square size={14} className="mr-1" />}
+            Stop
           </Button>
         )}
         {(meeting.status === "failed" || meeting.status === "completed") && meeting.transcript && (
           <Button size="sm" variant="outline" onClick={handleReprocess} disabled={reprocess.isPending}>
-            <RefreshCw size={14} className="mr-1" /> Reprocessar
+            {reprocess.isPending ? <Spinner size={14} className="mr-1.5" /> : <RefreshCw size={14} className="mr-1" />}
+            Reprocessar
           </Button>
         )}
       </div>
@@ -120,7 +130,7 @@ function TranscriptTab({ meeting }: { meeting: any }) {
       value={value}
       onChange={e => handleChange(e.target.value)}
       placeholder="Nenhuma transcrição ainda..."
-      className="w-full h-full min-h-[300px] text-sm bg-background border rounded p-3 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+      className="w-full h-full min-h-[300px] text-sm rounded-xl p-3 resize-none focus:outline-none focus:ring-1 focus:ring-primary bg-muted/40 border border-border"
     />
   )
 }
@@ -131,7 +141,7 @@ function SummaryTab({ meeting }: { meeting: any }) {
     <div>
       <div className="flex justify-end mb-3">
         <Button size="sm" onClick={() => generate.mutate()} disabled={generate.isPending || !meeting.transcript}>
-          <Wand2 size={14} className="mr-1" />
+          {generate.isPending ? <Spinner size={14} className="mr-1.5" /> : <Wand2 size={14} className="mr-1" />}
           {generate.isPending ? "Gerando..." : "Gerar resumo"}
         </Button>
       </div>
@@ -150,7 +160,7 @@ function KeyPointsTab({ meeting }: { meeting: any }) {
     <div>
       <div className="flex justify-end mb-3">
         <Button size="sm" onClick={() => generate.mutate()} disabled={generate.isPending || !meeting.transcript}>
-          <Wand2 size={14} className="mr-1" />
+          {generate.isPending ? <Spinner size={14} className="mr-1.5" /> : <Wand2 size={14} className="mr-1" />}
           {generate.isPending ? "Gerando..." : "Gerar pontos"}
         </Button>
       </div>
@@ -176,7 +186,7 @@ function TasksTab({ meeting }: { meeting: any }) {
     <div>
       <div className="flex justify-end mb-3">
         <Button size="sm" onClick={() => generate.mutate()} disabled={generate.isPending || !meeting.transcript}>
-          <Wand2 size={14} className="mr-1" />
+          {generate.isPending ? <Spinner size={14} className="mr-1.5" /> : <Wand2 size={14} className="mr-1" />}
           {generate.isPending ? "Gerando..." : "Gerar tarefas"}
         </Button>
       </div>

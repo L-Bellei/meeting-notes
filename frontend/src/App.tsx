@@ -7,6 +7,8 @@ import { Sidebar } from "./components/layout/Sidebar"
 import { MeetingList } from "./components/layout/MeetingList"
 import { MeetingDetail } from "./components/layout/MeetingDetail"
 import { Toolbar } from "./components/layout/Toolbar"
+import { RecordingModal } from "./components/recording/RecordingModal"
+import { Spinner } from "./components/ui/spinner"
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10_000 } },
@@ -17,6 +19,7 @@ function AppInner() {
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null)
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null)
   const [recordingModalOpen, setRecordingModalOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
     GetPort().then(port => {
@@ -29,7 +32,8 @@ function AppInner() {
 
   if (!ready) {
     return (
-      <div className="flex h-screen items-center justify-center text-muted-foreground text-sm">
+      <div className="flex h-screen items-center justify-center flex-col gap-3 text-muted-foreground text-sm animate-fade-in">
+        <Spinner size={24} className="text-primary" />
         Iniciando...
       </div>
     )
@@ -38,16 +42,16 @@ function AppInner() {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background">
       <Toolbar
+        onToggleSidebar={() => setSidebarOpen(o => !o)}
         onRecord={() => setRecordingModalOpen(true)}
-        recordingModalOpen={recordingModalOpen}
-        onRecordingModalClose={() => setRecordingModalOpen(false)}
-        onMeetingCreated={(id: string) => setSelectedMeetingId(id)}
+      />
+      <Sidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        selectedThemeId={selectedThemeId}
+        onSelectTheme={setSelectedThemeId}
       />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar
-          selectedThemeId={selectedThemeId}
-          onSelectTheme={setSelectedThemeId}
-        />
         <MeetingList
           themeId={selectedThemeId}
           selectedMeetingId={selectedMeetingId}
@@ -57,6 +61,11 @@ function AppInner() {
           meetingId={selectedMeetingId}
         />
       </div>
+      <RecordingModal
+        open={recordingModalOpen}
+        onClose={() => setRecordingModalOpen(false)}
+        onMeetingCreated={(id: string) => setSelectedMeetingId(id)}
+      />
     </div>
   )
 }

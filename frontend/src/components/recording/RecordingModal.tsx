@@ -1,9 +1,11 @@
 import { useState } from "react"
+import { createPortal } from "react-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import { useThemes } from "../../hooks/useThemes"
 import { useCreateMeeting } from "../../hooks/useMeetings"
 import { api } from "../../hooks/useApi"
 import { Button } from "../ui/button"
+import { Spinner } from "../ui/spinner"
 
 interface Props {
   open: boolean
@@ -49,10 +51,10 @@ export function RecordingModal({ open, onClose, onMeetingCreated }: Props) {
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background rounded-lg shadow-xl w-96 p-6">
-        <h2 className="text-base font-semibold mb-4">Nova Gravação</h2>
+  const content = (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md">
+      <div className="bg-[#1a1430] border border-border rounded-2xl shadow-2xl shadow-black/50 w-96 p-6">
+        <h2 className="text-base font-semibold mb-4 text-foreground">Nova Gravação</h2>
         <div className="space-y-3">
           <div>
             <label className="text-xs text-muted-foreground">Título</label>
@@ -62,7 +64,7 @@ export function RecordingModal({ open, onClose, onMeetingCreated }: Props) {
               onChange={e => setTitle(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") handleStart(); if (e.key === "Escape") onClose() }}
               placeholder="Daily 28/04"
-              className="w-full mt-1 text-sm border rounded px-3 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-full mt-1 text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary bg-[#0e0b14] border border-border"
             />
           </div>
           <div>
@@ -70,7 +72,7 @@ export function RecordingModal({ open, onClose, onMeetingCreated }: Props) {
             <select
               value={themeId}
               onChange={e => setThemeId(e.target.value)}
-              className="w-full mt-1 text-sm border rounded px-3 py-1.5 bg-background focus:outline-none"
+              className="w-full mt-1 text-sm rounded-xl px-3 py-2 focus:outline-none bg-[#0e0b14] border border-border"
             >
               <option value="">Sem tema</option>
               {themes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -80,11 +82,19 @@ export function RecordingModal({ open, onClose, onMeetingCreated }: Props) {
         </div>
         <div className="flex gap-2 justify-end mt-5">
           <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
-          <Button size="sm" onClick={handleStart} disabled={loading || createMeeting.isPending}>
+          <Button
+            size="sm"
+            onClick={handleStart}
+            disabled={loading || createMeeting.isPending}
+            className="bg-gradient-to-r from-purple-600 to-purple-500 border-0"
+          >
+            {(loading || createMeeting.isPending) && <Spinner size={14} className="mr-1.5" />}
             {loading || createMeeting.isPending ? "Iniciando..." : "Iniciar Gravação"}
           </Button>
         </div>
       </div>
     </div>
   )
+
+  return createPortal(content, document.body)
 }

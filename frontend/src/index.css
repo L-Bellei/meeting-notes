@@ -1,1 +1,39 @@
 @import "tailwindcss";
+@config "../tailwind.config.js";
+
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground;
+  }
+
+  * {
+    border-color: #2d2548;
+  }
+
+  input, select, textarea {
+    @apply bg-input text-foreground border-border;
+  }
+
+  input::placeholder, textarea::placeholder {
+    @apply text-muted-foreground;
+  }
+
+  select option {
+    @apply bg-background text-foreground;
+  }
+}
