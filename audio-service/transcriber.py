@@ -35,10 +35,13 @@ class Transcriber:
     def _setup_dll_paths(self):
         if sys.platform != "win32":
             return
+        import importlib
         for pkg in ("nvidia.cudnn", "nvidia.cublas"):
             try:
-                module = __import__(pkg, fromlist=[""])
+                module = importlib.import_module(pkg)
             except ImportError:
+                continue
+            if module.__file__ is None:
                 continue
             base = Path(module.__file__).parent
             for candidate in (base / "bin", base / "lib"):
@@ -47,7 +50,9 @@ class Transcriber:
 
     def transcribe(self, path: Path, language: Optional[str] = None) -> TranscribeResult:
         resolved = Path(path).resolve()
-        if not str(resolved).startswith(str(self.recordings_dir)):
+        try:
+            resolved.relative_to(self.recordings_dir)
+        except ValueError:
             raise ValueError(f"path outside recordings dir: {path}")
         if not resolved.exists():
             raise ValueError(f"path does not exist: {path}")

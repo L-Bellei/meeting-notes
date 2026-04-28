@@ -103,6 +103,13 @@ def test_setup_dll_paths_noop_on_non_windows(tmp_path, monkeypatch):
     """The DLL setup should be a no-op on non-Windows platforms."""
     monkeypatch.setattr(sys, "platform", "linux")
     fake_model = MagicMock()
+
+    fake_add_dll = MagicMock()
+    if hasattr(__import__("os"), "add_dll_directory"):
+        monkeypatch.setattr("os.add_dll_directory", fake_add_dll)
+
     with patch("transcriber.WhisperModel", return_value=fake_model):
         t = Transcriber("medium", "cuda", "int8_float16", "pt", tmp_path)
+
     assert t.model_loaded is True
+    fake_add_dll.assert_not_called()
