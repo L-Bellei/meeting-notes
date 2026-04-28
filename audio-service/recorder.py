@@ -1,10 +1,21 @@
+import logging
+import queue
 import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
 import pyaudiowpatch as pyaudio
+import soundfile as sf
+from scipy.signal import resample_poly
+
+TARGET_SAMPLE_RATE = 16000
+CHUNK_FRAMES = 1024
+QUEUE_MAX_CHUNKS = 200
+
+log = logging.getLogger("recorder")
 
 
 class RecorderError(Exception):
@@ -38,6 +49,18 @@ class Recorder:
         self.mic_available = False
         self.loopback_available = False
         self._enumerate_devices()
+
+        self._mic_stream = None
+        self._loopback_stream = None
+        self._mic_queue = None
+        self._loopback_queue = None
+        self._mic_native_rate = None
+        self._loopback_native_rate = None
+        self._loopback_channels = None
+        self._writer = None
+        self._frames_written = 0
+        self._stop_event = None
+        self._mixer_thread = None
 
     def _enumerate_devices(self):
         try:
@@ -109,10 +132,158 @@ class Recorder:
             return result
 
     def _open_streams(self):
-        pass
+        self._mic_queue = queue.Queue(maxsize=QUEUE_MAX_CHUNKS)
+        self._loopback_queue = queue.Queue(maxsize=QUEUE_MAX_CHUNKS)
+        self._mic_native_rate = int(self._mic_info["defaultSampleRate"])
+        self._loopback_native_rate = int(self._loopback_info["defaultSampleRate"])
+        self._loopback_channels = int(self._loopback_info["maxInputChannels"])
+        self._frames_written = 0
+        self._stop_event = threading.Event()
+
+        self._writer = sf.SoundFile(
+            str(self._path),
+            mode="w",
+            samplerate=TARGET_SAMPLE_RATE,
+            channels=1,
+            subtype="PCM_16",
+        )
+
+        self._mic_stream = self._pa.open(
+            format=pyaudio.paInt16,
+            channels=1,
+            rate=self._mic_native_rate,
+            input=True,
+            input_device_index=self._mic_info["index"],
+            frames_per_buffer=CHUNK_FRAMES,
+            stream_callback=self._make_callback(self._mic_queue),
+        )
+
+        self._loopback_stream = self._pa.open(
+            format=pyaudio.paInt16,
+            channels=self._loopback_channels,
+            rate=self._loopback_native_rate,
+            input=True,
+            input_device_index=self._loopback_info["index"],
+            frames_per_buffer=CHUNK_FRAMES,
+            stream_callback=self._make_callback(self._loopback_queue),
+        )
+
+        self._mic_stream.start_stream()
+        self._loopback_stream.start_stream()
+
+        self._mixer_thread = threading.Thread(target=self._run_mixer, daemon=True)
+        self._mixer_thread.start()
+
+    def _make_callback(self, q):
+        def callback(in_data, frame_count, time_info, status):
+            try:
+                q.put_nowait(in_data)
+            except queue.Full:
+                try:
+                    q.get_nowait()
+                except queue.Empty:
+                    pass
+                try:
+                    q.put_nowait(in_data)
+                except queue.Full:
+                    self._partial = True
+                    log.warning("queue full; dropped audio chunk")
+            return (None, pyaudio.paContinue)
+        return callback
+
+    def _run_mixer(self):
+        try:
+            while not self._stop_event.is_set():
+                mic_chunk = self._safe_get(self._mic_queue, 0.05)
+                lb_chunk = self._safe_get(self._loopback_queue, 0.05)
+                if mic_chunk is None and lb_chunk is None:
+                    continue
+                mic_mono16 = self._chunk_to_mono16k(mic_chunk, 1, self._mic_native_rate)
+                lb_mono16 = self._chunk_to_mono16k(lb_chunk, self._loopback_channels, self._loopback_native_rate)
+                mixed = self._mix(mic_mono16, lb_mono16)
+                if mixed.size > 0:
+                    self._writer.write(mixed)
+                    self._frames_written += mixed.shape[0]
+            self._drain_queues()
+        except Exception as e:
+            log.exception("mixer thread error: %s", e)
+            self._partial = True
+
+    def _safe_get(self, q, timeout):
+        try:
+            return q.get(timeout=timeout)
+        except queue.Empty:
+            return None
+
+    def _drain_queues(self):
+        while True:
+            mic_chunk = self._safe_get(self._mic_queue, 0)
+            lb_chunk = self._safe_get(self._loopback_queue, 0)
+            if mic_chunk is None and lb_chunk is None:
+                return
+            mic_mono16 = self._chunk_to_mono16k(mic_chunk, 1, self._mic_native_rate)
+            lb_mono16 = self._chunk_to_mono16k(lb_chunk, self._loopback_channels, self._loopback_native_rate)
+            mixed = self._mix(mic_mono16, lb_mono16)
+            if mixed.size > 0:
+                self._writer.write(mixed)
+                self._frames_written += mixed.shape[0]
+
+    def _chunk_to_mono16k(self, raw, channels, native_rate):
+        if raw is None:
+            return np.zeros(0, dtype=np.float32)
+        samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+        if channels > 1:
+            samples = samples.reshape(-1, channels).mean(axis=1)
+        if native_rate != TARGET_SAMPLE_RATE:
+            samples = resample_poly(samples, TARGET_SAMPLE_RATE, native_rate)
+        return samples.astype(np.float32)
+
+    def _mix(self, a, b):
+        if a.size == 0 and b.size == 0:
+            return np.zeros(0, dtype=np.float32)
+        n = max(a.size, b.size)
+        if a.size < n:
+            a = np.pad(a, (0, n - a.size))
+        if b.size < n:
+            b = np.pad(b, (0, n - b.size))
+        mixed = a + b
+        return np.clip(mixed, -1.0, 1.0)
 
     def _close_streams(self):
-        pass
+        if self._stop_event is not None:
+            self._stop_event.set()
+
+        for stream in (self._mic_stream, self._loopback_stream):
+            if stream is None:
+                continue
+            try:
+                if stream.is_active():
+                    stream.stop_stream()
+                stream.close()
+            except Exception as e:
+                log.warning("error closing stream: %s", e)
+                self._partial = True
+
+        if self._mixer_thread is not None:
+            self._mixer_thread.join(timeout=5.0)
+            if self._mixer_thread.is_alive():
+                log.warning("mixer thread did not exit in time")
+                self._partial = True
+
+        if self._writer is not None:
+            try:
+                self._writer.close()
+            except Exception as e:
+                log.warning("error closing writer: %s", e)
+                self._partial = True
+
+        self._mic_stream = None
+        self._loopback_stream = None
+        self._mic_queue = None
+        self._loopback_queue = None
+        self._mixer_thread = None
+        self._stop_event = None
+        self._writer = None
 
     def _compute_duration(self):
-        return 0.0
+        return self._frames_written / TARGET_SAMPLE_RATE
