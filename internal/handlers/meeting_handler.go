@@ -250,7 +250,7 @@ func (h *MeetingHandler) SetTranscript(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeOrchError(w http.ResponseWriter, err error) {
-	if errors.Is(err, audio.ErrAudioServiceUnavailable) {
+	if errors.Is(err, audio.ErrAudioServiceUnavailable) || errors.Is(err, audio.ErrAudioGenericError) {
 		writeError(w, http.StatusServiceUnavailable, "audio service unavailable")
 		return
 	}
