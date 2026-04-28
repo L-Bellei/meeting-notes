@@ -60,7 +60,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	taskRepo := repository.NewTaskRepository(db)
 
 	themeSvc := services.NewThemeService(themeRepo)
-	meetingSvc := services.NewMeetingService(meetingRepo)
+	meetingSvc := services.NewMeetingService(meetingRepo, themeRepo)
 	summarySvc := services.NewSummaryService(summaryRepo, aiClient)
 	keyPointSvc := services.NewKeyPointService(keyPointRepo, aiClient)
 	taskSvc := services.NewTaskService(taskRepo, aiClient)

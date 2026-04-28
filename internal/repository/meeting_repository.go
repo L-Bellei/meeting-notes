@@ -19,18 +19,46 @@ func NewMeetingRepository(db *sql.DB) *MeetingRepository {
 	return &MeetingRepository{db: db}
 }
 
-func (r *MeetingRepository) List(ctx context.Context, themeID, status string) ([]models.Meeting, error) {
+// ListFilters holds all optional filters for listing meetings.
+type ListFilters struct {
+	ThemeIDs     []string // empty = no filter; multiple = OR match
+	Status       string
+	Q            string // title LIKE %q%
+	StartedAfter string // RFC3339 date
+	StartedBefore string // RFC3339 date
+}
+
+func (r *MeetingRepository) List(ctx context.Context, f ListFilters) ([]models.Meeting, error) {
 	query := `SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, created_at FROM meetings`
 	var args []any
 	var conditions []string
 
-	if themeID != "" {
+	if len(f.ThemeIDs) == 1 {
 		conditions = append(conditions, "theme_id = ?")
-		args = append(args, themeID)
+		args = append(args, f.ThemeIDs[0])
+	} else if len(f.ThemeIDs) > 1 {
+		placeholders := strings.Repeat("?,", len(f.ThemeIDs))
+		placeholders = placeholders[:len(placeholders)-1]
+		conditions = append(conditions, "theme_id IN ("+placeholders+")")
+		for _, id := range f.ThemeIDs {
+			args = append(args, id)
+		}
 	}
-	if status != "" {
+	if f.Status != "" {
 		conditions = append(conditions, "status = ?")
-		args = append(args, status)
+		args = append(args, f.Status)
+	}
+	if f.Q != "" {
+		conditions = append(conditions, "title LIKE ?")
+		args = append(args, "%"+f.Q+"%")
+	}
+	if f.StartedAfter != "" {
+		conditions = append(conditions, "started_at >= ?")
+		args = append(args, f.StartedAfter)
+	}
+	if f.StartedBefore != "" {
+		conditions = append(conditions, "started_at <= ?")
+		args = append(args, f.StartedBefore)
 	}
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")

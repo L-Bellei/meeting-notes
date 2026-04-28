@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react"
-import { Play, Square, RefreshCw, Wand2 } from "lucide-react"
+import { Play, Square, RefreshCw, Wand2, Trash2 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import {
@@ -7,12 +7,13 @@ import {
   useReprocess, useGenerateSummary, useGenerateKeyPoints, useGenerateTasks,
   useUpdateTask,
 } from "../../hooks/useMeeting"
+import { useDeleteMeeting } from "../../hooks/useMeetings"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Spinner } from "../ui/spinner"
 import { cn } from "../../lib/utils"
 
-interface Props { meetingId: string | null }
+interface Props { meetingId: string | null; onDeleted?: () => void }
 
 type Tab = "transcript" | "summary" | "keypoints" | "tasks" | "notes"
 
@@ -20,7 +21,7 @@ function statusVariant(s: string) {
   return s as any
 }
 
-export function MeetingDetail({ meetingId }: Props) {
+export function MeetingDetail({ meetingId, onDeleted }: Props) {
   const { data: meeting } = useMeeting(meetingId)
   const [tab, setTab] = useState<Tab>("transcript")
 
@@ -38,7 +39,7 @@ export function MeetingDetail({ meetingId }: Props) {
 
   return (
     <div className="flex-1 h-full flex flex-col overflow-hidden animate-fade-in">
-      <MeetingHeader meeting={meeting} />
+      <MeetingHeader meeting={meeting} onDeleted={onDeleted} />
       <div className="px-4 pt-3 pb-0 border-b border-border flex-shrink-0">
         <div className="flex gap-1">
           {(["transcript", "summary", "keypoints", "tasks", "notes"] as Tab[]).map(t => (
@@ -68,11 +69,13 @@ export function MeetingDetail({ meetingId }: Props) {
   )
 }
 
-function MeetingHeader({ meeting }: { meeting: any }) {
+function MeetingHeader({ meeting, onDeleted }: { meeting: any; onDeleted?: () => void }) {
   const start = useStartRecording(meeting.id)
   const stop = useStopRecording(meeting.id)
   const reprocess = useReprocess(meeting.id)
+  const deleteMeeting = useDeleteMeeting()
   const [error, setError] = useState("")
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   async function handleStart() {
     try { await start.mutateAsync() } catch (e: any) { setError(e.message) }
@@ -83,12 +86,31 @@ function MeetingHeader({ meeting }: { meeting: any }) {
   async function handleReprocess() {
     try { await reprocess.mutateAsync() } catch (e: any) { setError(e.message) }
   }
+  async function handleDelete() {
+    if (!confirmDelete) { setConfirmDelete(true); return }
+    await deleteMeeting.mutateAsync(meeting.id)
+    onDeleted?.()
+  }
 
   return (
     <div className="px-4 py-3 border-b border-border flex-shrink-0">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-base font-semibold truncate">{meeting.title}</h2>
-        <Badge variant={statusVariant(meeting.status)}>{meeting.status}</Badge>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <Badge variant={statusVariant(meeting.status)}>{meeting.status}</Badge>
+          <button
+            onClick={handleDelete}
+            title={confirmDelete ? "Clique novamente para confirmar" : "Excluir reunião"}
+            className={cn(
+              "p-1 rounded transition-colors",
+              confirmDelete
+                ? "text-destructive bg-destructive/20"
+                : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            )}
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
       {error && <p className="text-xs text-destructive mt-1">{error}</p>}
       <div className="flex gap-2 mt-2">

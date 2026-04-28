@@ -72,10 +72,14 @@ type MeetingDetailResponse struct {
 }
 
 func (h *MeetingHandler) List(w http.ResponseWriter, r *http.Request) {
-	themeID := r.URL.Query().Get("theme_id")
-	status := r.URL.Query().Get("status")
-
-	meetings, err := h.svc.List(r.Context(), themeID, status)
+	q := r.URL.Query()
+	meetings, err := h.svc.List(r.Context(), services.MeetingFilters{
+		ThemeID:       q.Get("theme_id"),
+		Status:        q.Get("status"),
+		Q:             q.Get("q"),
+		StartedAfter:  q.Get("started_after"),
+		StartedBefore: q.Get("started_before"),
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list meetings")
 		return

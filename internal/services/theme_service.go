@@ -28,7 +28,7 @@ func (s *ThemeService) List(ctx context.Context) ([]models.Theme, error) {
 	return s.repo.List(ctx)
 }
 
-func (s *ThemeService) Create(ctx context.Context, name, description, color string) (*models.Theme, error) {
+func (s *ThemeService) Create(ctx context.Context, name, description, color string, parentID *string) (*models.Theme, error) {
 	if name == "" {
 		return nil, &ValidationError{"name is required"}
 	}
@@ -37,6 +37,7 @@ func (s *ThemeService) Create(ctx context.Context, name, description, color stri
 	}
 	t := &models.Theme{
 		ID:          uuid.New().String(),
+		ParentID:    parentID,
 		Name:        name,
 		Description: description,
 		Color:       color,
@@ -52,7 +53,7 @@ func (s *ThemeService) GetByID(ctx context.Context, id string) (*models.Theme, e
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *ThemeService) Update(ctx context.Context, id, name, description, color string) (*models.Theme, error) {
+func (s *ThemeService) Update(ctx context.Context, id, name, description, color string, parentID *string) (*models.Theme, error) {
 	if name == "" {
 		return nil, &ValidationError{"name is required"}
 	}
@@ -65,6 +66,7 @@ func (s *ThemeService) Update(ctx context.Context, id, name, description, color 
 	if color != "" {
 		t.Color = color
 	}
+	t.ParentID = parentID
 	if err := s.repo.Update(ctx, t); err != nil {
 		return nil, err
 	}

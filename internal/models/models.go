@@ -4,6 +4,7 @@ import "time"
 
 type Theme struct {
 	ID          string    `json:"id"`
+	ParentID    *string   `json:"parent_id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	Color       string    `json:"color"`

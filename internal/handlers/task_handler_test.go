@@ -47,7 +47,7 @@ func newTestTaskHandler(t *testing.T, aiClient ai.AIClient) (*handlers.TaskHandl
 	}
 	t.Cleanup(func() { db.Close() })
 	mr := repository.NewMeetingRepository(db)
-	meetingSvc := services.NewMeetingService(mr)
+	meetingSvc := services.NewMeetingService(mr, repository.NewThemeRepository(db))
 	transcript := "x"
 	m, err := meetingSvc.Create(context.Background(), "R", "", "completed", nil)
 	if err != nil {

@@ -22,7 +22,7 @@ func newTestMeetingService(t *testing.T) *services.MeetingService {
 	if _, err := db.Exec(`INSERT INTO themes (id, name, color) VALUES (?, ?, '#ffffff')`, "theme-abc", "theme-abc"); err != nil {
 		t.Fatalf("seed theme: %v", err)
 	}
-	return services.NewMeetingService(repository.NewMeetingRepository(db))
+	return services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db))
 }
 
 func TestMeetingService_Create(t *testing.T) {
@@ -115,7 +115,7 @@ func TestMeetingService_List(t *testing.T) {
 	ctx := context.Background()
 	svc.Create(ctx, "A", "", "", nil)
 	svc.Create(ctx, "B", "", "", nil)
-	meetings, err := svc.List(ctx, "", "")
+	meetings, err := svc.List(ctx, services.MeetingFilters{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestMeetingService_List_FilterByStatus(t *testing.T) {
 	ctx := context.Background()
 	svc.Create(ctx, "Pendente", "", "pending", nil)
 	svc.Create(ctx, "Completa", "", "completed", nil)
-	meetings, err := svc.List(ctx, "", "completed")
+	meetings, err := svc.List(ctx, services.MeetingFilters{Status: "completed"})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}

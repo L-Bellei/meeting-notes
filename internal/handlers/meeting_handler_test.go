@@ -58,7 +58,7 @@ func newTestMeetingHandler(t *testing.T) *handlers.MeetingHandler {
 	}
 	t.Cleanup(func() { db.Close() })
 	return handlers.NewMeetingHandler(
-		services.NewMeetingService(repository.NewMeetingRepository(db)),
+		services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db)),
 		repository.NewSummaryRepository(db),
 		repository.NewKeyPointRepository(db),
 		repository.NewTaskRepository(db),
@@ -343,7 +343,7 @@ func newTestMeetingAndThemeHandlers(t *testing.T) (*handlers.MeetingHandler, *ha
 	}
 	t.Cleanup(func() { db.Close() })
 	mh := handlers.NewMeetingHandler(
-		services.NewMeetingService(repository.NewMeetingRepository(db)),
+		services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db)),
 		repository.NewSummaryRepository(db),
 		repository.NewKeyPointRepository(db),
 		repository.NewTaskRepository(db),
@@ -414,7 +414,7 @@ func TestMeetingHandler_GetByID_PopulatesNestedData(t *testing.T) {
 	kpr := repository.NewKeyPointRepository(db)
 	tr := repository.NewTaskRepository(db)
 
-	mh := handlers.NewMeetingHandler(services.NewMeetingService(mr), sr, kpr, tr, nil)
+	mh := handlers.NewMeetingHandler(services.NewMeetingService(mr, repository.NewThemeRepository(db)), sr, kpr, tr, nil)
 
 	now := time.Now().UTC()
 	m := &models.Meeting{ID: "m-1", Title: "R", StartedAt: &now, Status: models.StatusCompleted}
@@ -462,7 +462,7 @@ func newOrchHandler(t *testing.T, fo *fakeOrchestrator) *handlers.MeetingHandler
 	}
 	t.Cleanup(func() { db.Close() })
 	return handlers.NewMeetingHandler(
-		services.NewMeetingService(repository.NewMeetingRepository(db)),
+		services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db)),
 		repository.NewSummaryRepository(db),
 		repository.NewKeyPointRepository(db),
 		repository.NewTaskRepository(db),

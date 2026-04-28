@@ -13,11 +13,26 @@ export interface Meeting {
   created_at: string
 }
 
-export function useMeetings(themeId?: string | null) {
+export interface MeetingFilters {
+  theme_id?: string | null
+  status?: string
+  q?: string
+  started_after?: string
+  started_before?: string
+}
+
+export function useMeetings(filters: MeetingFilters = {}) {
+  const params = new URLSearchParams()
+  if (filters.theme_id) params.set("theme_id", filters.theme_id)
+  if (filters.status) params.set("status", filters.status)
+  if (filters.q) params.set("q", filters.q)
+  if (filters.started_after) params.set("started_after", filters.started_after)
+  if (filters.started_before) params.set("started_before", filters.started_before)
+  const qs = params.toString()
+
   return useQuery({
-    queryKey: ["meetings", themeId ?? "all"],
-    queryFn: () => api<Meeting[]>("/api/meetings"),
-    select: (data) => themeId ? data.filter(m => m.theme_id === themeId) : data,
+    queryKey: ["meetings", filters],
+    queryFn: () => api<Meeting[]>(`/api/meetings${qs ? "?" + qs : ""}`),
   })
 }
 

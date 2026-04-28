@@ -10,6 +10,14 @@ import (
 	"meeting-notes/internal/repository"
 )
 
+type MeetingFilters struct {
+	ThemeID       string // single theme; sub-themes are resolved automatically
+	Status        string
+	Q             string
+	StartedAfter  string
+	StartedBefore string
+}
+
 var validMeetingStatuses = map[string]bool{
 	string(models.StatusPending):      true,
 	string(models.StatusRecording):    true,
@@ -20,15 +28,31 @@ var validMeetingStatuses = map[string]bool{
 }
 
 type MeetingService struct {
-	repo *repository.MeetingRepository
+	repo      *repository.MeetingRepository
+	themeRepo *repository.ThemeRepository
 }
 
-func NewMeetingService(repo *repository.MeetingRepository) *MeetingService {
-	return &MeetingService{repo: repo}
+func NewMeetingService(repo *repository.MeetingRepository, themeRepo *repository.ThemeRepository) *MeetingService {
+	return &MeetingService{repo: repo, themeRepo: themeRepo}
 }
 
-func (s *MeetingService) List(ctx context.Context, themeID, status string) ([]models.Meeting, error) {
-	return s.repo.List(ctx, themeID, status)
+func (s *MeetingService) List(ctx context.Context, f MeetingFilters) ([]models.Meeting, error) {
+	rf := repository.ListFilters{
+		Status:        f.Status,
+		Q:             f.Q,
+		StartedAfter:  f.StartedAfter,
+		StartedBefore: f.StartedBefore,
+	}
+	if f.ThemeID != "" {
+		rf.ThemeIDs = []string{f.ThemeID}
+		// include direct children
+		children, err := s.themeRepo.ChildIDs(ctx, f.ThemeID)
+		if err != nil {
+			return nil, err
+		}
+		rf.ThemeIDs = append(rf.ThemeIDs, children...)
+	}
+	return s.repo.List(ctx, rf)
 }
 
 func (s *MeetingService) Create(ctx context.Context, title, themeID, status string, startedAt *time.Time) (*models.Meeting, error) {

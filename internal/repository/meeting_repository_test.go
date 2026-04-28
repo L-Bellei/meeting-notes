@@ -65,7 +65,7 @@ func TestMeetingRepository_GetByID_NotFound(t *testing.T) {
 
 func TestMeetingRepository_List_Empty(t *testing.T) {
 	repo := openMeetingTestDB(t)
-	meetings, err := repo.List(context.Background(), "", "")
+	meetings, err := repo.List(context.Background(), repository.ListFilters{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestMeetingRepository_List_OrderedByStartedAt(t *testing.T) {
 	repo.Create(ctx, &models.Meeting{ID: "a", Title: "Antiga", StartedAt: &t1, Status: models.StatusPending})
 	repo.Create(ctx, &models.Meeting{ID: "b", Title: "Recente", StartedAt: &t2, Status: models.StatusCompleted})
 
-	meetings, err := repo.List(ctx, "", "")
+	meetings, err := repo.List(ctx, repository.ListFilters{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestMeetingRepository_List_FilterByThemeID(t *testing.T) {
 	repo.Create(ctx, &models.Meeting{ID: "a", Title: "Com tema", ThemeID: &themeID, StartedAt: &now, Status: models.StatusPending})
 	repo.Create(ctx, &models.Meeting{ID: "b", Title: "Sem tema", StartedAt: &now, Status: models.StatusPending})
 
-	meetings, err := repo.List(ctx, themeID, "")
+	meetings, err := repo.List(ctx, repository.ListFilters{ThemeIDs: []string{themeID}})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestMeetingRepository_List_FilterByStatus(t *testing.T) {
 	repo.Create(ctx, &models.Meeting{ID: "a", Title: "Pendente", StartedAt: &now, Status: models.StatusPending})
 	repo.Create(ctx, &models.Meeting{ID: "b", Title: "Completa", StartedAt: &now, Status: models.StatusCompleted})
 
-	meetings, err := repo.List(ctx, "", string(models.StatusCompleted))
+	meetings, err := repo.List(ctx, repository.ListFilters{Status: string(models.StatusCompleted)})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestMeetingRepository_List_FilterByBoth(t *testing.T) {
 	repo.Create(ctx, &models.Meeting{ID: "b", Title: "Tema errado", StartedAt: &now, Status: models.StatusCompleted})
 	repo.Create(ctx, &models.Meeting{ID: "c", Title: "Status errado", ThemeID: &themeID, StartedAt: &now, Status: models.StatusPending})
 
-	meetings, err := repo.List(ctx, themeID, string(models.StatusCompleted))
+	meetings, err := repo.List(ctx, repository.ListFilters{ThemeIDs: []string{themeID}, Status: string(models.StatusCompleted)})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}

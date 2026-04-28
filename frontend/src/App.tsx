@@ -56,9 +56,11 @@ function AppInner() {
           themeId={selectedThemeId}
           selectedMeetingId={selectedMeetingId}
           onSelectMeeting={setSelectedMeetingId}
+          onMeetingDeleted={id => { if (selectedMeetingId === id) setSelectedMeetingId(null) }}
         />
         <MeetingDetail
           meetingId={selectedMeetingId}
+          onDeleted={() => setSelectedMeetingId(null)}
         />
       </div>
       <RecordingModal

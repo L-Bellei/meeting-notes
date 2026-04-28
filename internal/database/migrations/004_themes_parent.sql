@@ -1,0 +1,1 @@
+ALTER TABLE themes ADD COLUMN parent_id TEXT REFERENCES themes(id) ON DELETE SET NULL;

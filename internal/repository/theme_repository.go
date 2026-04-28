@@ -26,7 +26,7 @@ func NewThemeRepository(db *sql.DB) *ThemeRepository {
 
 func (r *ThemeRepository) List(ctx context.Context) ([]models.Theme, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, name, description, color, created_at FROM themes ORDER BY name`)
+		`SELECT id, parent_id, name, description, color, created_at FROM themes ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("list themes: %w", err)
 	}
@@ -34,15 +34,11 @@ func (r *ThemeRepository) List(ctx context.Context) ([]models.Theme, error) {
 
 	var themes []models.Theme
 	for rows.Next() {
-		var t models.Theme
-		var createdAt string
-		if err := rows.Scan(&t.ID, &t.Name, &t.Description, &t.Color, &createdAt); err != nil {
+		t, err := scanTheme(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan theme: %w", err)
 		}
-		if t.CreatedAt, err = parseTime(createdAt); err != nil {
-			return nil, err
-		}
-		themes = append(themes, t)
+		themes = append(themes, *t)
 	}
 	return themes, rows.Err()
 }
@@ -52,8 +48,8 @@ func (r *ThemeRepository) Create(ctx context.Context, theme *models.Theme) error
 		theme.CreatedAt = time.Now().UTC()
 	}
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO themes (id, name, description, color, created_at) VALUES (?, ?, ?, ?, ?)`,
-		theme.ID, theme.Name, theme.Description, theme.Color,
+		`INSERT INTO themes (id, parent_id, name, description, color, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		theme.ID, theme.ParentID, theme.Name, theme.Description, theme.Color,
 		theme.CreatedAt.UTC().Format(time.RFC3339Nano),
 	)
 	if err != nil {
@@ -66,27 +62,40 @@ func (r *ThemeRepository) Create(ctx context.Context, theme *models.Theme) error
 }
 
 func (r *ThemeRepository) GetByID(ctx context.Context, id string) (*models.Theme, error) {
-	var t models.Theme
-	var createdAt string
-	err := r.db.QueryRowContext(ctx,
-		`SELECT id, name, description, color, created_at FROM themes WHERE id = ?`, id,
-	).Scan(&t.ID, &t.Name, &t.Description, &t.Color, &createdAt)
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, parent_id, name, description, color, created_at FROM themes WHERE id = ?`, id)
+	t, err := scanTheme(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get theme: %w", err)
 	}
-	if t.CreatedAt, err = parseTime(createdAt); err != nil {
-		return nil, err
+	return t, nil
+}
+
+// ChildIDs returns the IDs of all direct children of the given theme.
+func (r *ThemeRepository) ChildIDs(ctx context.Context, parentID string) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id FROM themes WHERE parent_id = ?`, parentID)
+	if err != nil {
+		return nil, fmt.Errorf("child theme ids: %w", err)
 	}
-	return &t, nil
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 func (r *ThemeRepository) Update(ctx context.Context, theme *models.Theme) error {
 	result, err := r.db.ExecContext(ctx,
-		`UPDATE themes SET name = ?, description = ?, color = ? WHERE id = ?`,
-		theme.Name, theme.Description, theme.Color, theme.ID,
+		`UPDATE themes SET parent_id = ?, name = ?, description = ?, color = ? WHERE id = ?`,
+		theme.ParentID, theme.Name, theme.Description, theme.Color, theme.ID,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -117,6 +126,28 @@ func (r *ThemeRepository) Delete(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+type themeScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanTheme(row themeScanner) (*models.Theme, error) {
+	var t models.Theme
+	var parentID sql.NullString
+	var createdAt string
+	if err := row.Scan(&t.ID, &parentID, &t.Name, &t.Description, &t.Color, &createdAt); err != nil {
+		return nil, err
+	}
+	if parentID.Valid {
+		v := parentID.String
+		t.ParentID = &v
+	}
+	var err error
+	if t.CreatedAt, err = parseTime(createdAt); err != nil {
+		return nil, err
+	}
+	return &t, nil
 }
 
 func parseTime(s string) (time.Time, error) {

@@ -21,15 +21,17 @@ func NewThemeHandler(svc *services.ThemeService) *ThemeHandler {
 }
 
 type createThemeRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Color       string `json:"color"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Color       string  `json:"color"`
+	ParentID    *string `json:"parent_id"`
 }
 
 type updateThemeRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Color       string `json:"color"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Color       string  `json:"color"`
+	ParentID    *string `json:"parent_id"`
 }
 
 func (h *ThemeHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +52,7 @@ func (h *ThemeHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	theme, err := h.svc.Create(r.Context(), req.Name, req.Description, req.Color)
+	theme, err := h.svc.Create(r.Context(), req.Name, req.Description, req.Color, req.ParentID)
 	if err != nil {
 		var ve *services.ValidationError
 		if errors.As(err, &ve) {
@@ -88,7 +90,7 @@ func (h *ThemeHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	theme, err := h.svc.Update(r.Context(), id, req.Name, req.Description, req.Color)
+	theme, err := h.svc.Update(r.Context(), id, req.Name, req.Description, req.Color, req.ParentID)
 	if err != nil {
 		var ve *services.ValidationError
 		if errors.As(err, &ve) {
