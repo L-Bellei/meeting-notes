@@ -42,6 +42,7 @@ class Recorder:
         self._started_at = None
         self._path = None
         self._partial = False
+        self._stopping = False
 
         self._pa = pyaudio.PyAudio()
         self._mic_info = None
@@ -115,22 +116,33 @@ class Recorder:
         with self._lock:
             if self._state == "idle":
                 raise RecorderError("not recording")
+            if self._stopping:
+                raise RecorderError("already stopping")
+            self._stopping = True
+            path = self._path
+            recording_id = self._recording_id
+            partial_at_entry = self._partial
 
+        try:
             self._close_streams()
             duration = self._compute_duration()
-            size_bytes = self._path.stat().st_size if self._path.exists() else 0
+            size_bytes = path.stat().st_size if path.exists() else 0
             result = StopResult(
-                recording_id=self._recording_id,
-                path=self._path,
+                recording_id=recording_id,
+                path=path,
                 duration_seconds=duration,
                 size_bytes=size_bytes,
                 partial=self._partial,
             )
-            self._state = "idle"
-            self._recording_id = None
-            self._started_at = None
-            self._path = None
-            return result
+        finally:
+            with self._lock:
+                self._state = "idle"
+                self._recording_id = None
+                self._started_at = None
+                self._path = None
+                self._stopping = False
+
+        return result
 
     def _open_streams(self):
         self._mic_queue = queue.Queue(maxsize=QUEUE_MAX_CHUNKS)
