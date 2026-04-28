@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/joho/godotenv"
 )
@@ -20,7 +21,7 @@ type Config struct {
 }
 
 func Load() *Config {
-	_ = godotenv.Load()
+	loadDotEnv()
 
 	return &Config{
 		HTTPPort:           getEnv("HTTP_PORT", "8080"),
@@ -41,4 +42,26 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// loadDotEnv walks up from the current directory until it finds a .env file or
+// reaches the filesystem root. This handles running from subdirectories like
+// cmd/desktop/ during wails dev.
+func loadDotEnv() {
+	dir, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	for {
+		candidate := filepath.Join(dir, ".env")
+		if _, err := os.Stat(candidate); err == nil {
+			_ = godotenv.Load(candidate)
+			return
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
 }
