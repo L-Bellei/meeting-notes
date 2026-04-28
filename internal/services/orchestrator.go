@@ -15,13 +15,17 @@ import (
 
 const pipelineTimeout = 15 * time.Minute
 
+type orchestratorSettings interface {
+	GetAll(ctx context.Context) (map[string]string, error)
+}
+
 type Orchestrator struct {
 	repo        *repository.MeetingRepository
 	summarySvc  *SummaryService
 	keyPointSvc *KeyPointService
 	taskSvc     *TaskService
 	audio       audio.Client
-	language    string
+	settings    orchestratorSettings
 	pipelineWG  sync.WaitGroup
 	notifyFn    func(meetingID, status string)
 }
@@ -32,7 +36,7 @@ func NewOrchestrator(
 	keyPointSvc *KeyPointService,
 	taskSvc *TaskService,
 	audioClient audio.Client,
-	language string,
+	settings orchestratorSettings,
 ) *Orchestrator {
 	return &Orchestrator{
 		repo:        repo,
@@ -40,7 +44,7 @@ func NewOrchestrator(
 		keyPointSvc: keyPointSvc,
 		taskSvc:     taskSvc,
 		audio:       audioClient,
-		language:    language,
+		settings:    settings,
 	}
 }
 
@@ -146,7 +150,13 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 		return err
 	}
 
-	trResp, err := o.audio.Transcribe(ctx, stopResp.Path, o.language)
+	whisperLang := "pt"
+	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
+		if v := s["whisper_language"]; v != "" {
+			whisperLang = v
+		}
+	}
+	trResp, err := o.audio.Transcribe(ctx, stopResp.Path, whisperLang)
 	if err != nil {
 		o.markFailed(ctx, m)
 		return err
@@ -165,9 +175,15 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 		log.Printf("warning: delete WAV %s: %v", stopResp.Path, err)
 	}
 
-	if err := o.runAIGeneration(ctx, m); err != nil {
-		o.markFailed(ctx, m)
-		return err
+	autoGen := true
+	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
+		autoGen = s["auto_generate"] != "false"
+	}
+	if autoGen {
+		if err := o.runAIGeneration(ctx, m); err != nil {
+			o.markFailed(ctx, m)
+			return err
+		}
 	}
 
 	m.Status = models.StatusCompleted

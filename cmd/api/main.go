@@ -30,12 +30,6 @@ func main() {
 	}
 	defer db.Close()
 
-	// AI client (nil-safe — generate endpoints return 503 when API key absent)
-	var aiClient ai.AIClient
-	if cfg.AnthropicAPIKey != "" {
-		aiClient = ai.NewAnthropicClient(cfg.AnthropicAPIKey, cfg.AnthropicModel)
-	}
-
 	// Repositories
 	themeRepo := repository.NewThemeRepository(db)
 	meetingRepo := repository.NewMeetingRepository(db)
@@ -43,6 +37,8 @@ func main() {
 	keyPointRepo := repository.NewKeyPointRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
 	settingsRepo := repository.NewSettingsRepository(db)
+
+	aiClient := ai.NewDynamicAIClient(settingsRepo)
 
 	// Services
 	themeSvc := services.NewThemeService(themeRepo)
@@ -54,7 +50,7 @@ func main() {
 
 	// Audio + Orchestrator
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
-	orchestrator := services.NewOrchestrator(meetingRepo, summarySvc, keyPointSvc, taskSvc, audioClient, cfg.WhisperLanguage)
+	orchestrator := services.NewOrchestrator(meetingRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo)
 
 	// Handlers
 	themeHandler := handlers.NewThemeHandler(themeSvc)

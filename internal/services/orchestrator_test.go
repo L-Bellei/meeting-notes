@@ -16,6 +16,17 @@ import (
 	"meeting-notes/internal/services"
 )
 
+type fakeSettings struct {
+	data map[string]string
+}
+
+func (f *fakeSettings) GetAll(ctx context.Context) (map[string]string, error) {
+	if f.data == nil {
+		return map[string]string{}, nil
+	}
+	return f.data, nil
+}
+
 type fakeAudioClient struct {
 	healthResp     *audio.HealthResponse
 	healthErr      error
@@ -62,7 +73,7 @@ func newOrchTest(t *testing.T, audioClient audio.Client, aiClient ai.AIClient) (
 	keyPointSvc := services.NewKeyPointService(kpr, aiClient)
 	taskSvc := services.NewTaskService(tr, aiClient)
 
-	orch := services.NewOrchestrator(mr, summarySvc, keyPointSvc, taskSvc, audioClient, "pt")
+	orch := services.NewOrchestrator(mr, summarySvc, keyPointSvc, taskSvc, audioClient, &fakeSettings{})
 
 	now := time.Now().UTC()
 	m := &models.Meeting{ID: "m-1", Title: "R", StartedAt: &now, Status: models.StatusPending}
