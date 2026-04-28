@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -22,10 +26,11 @@ import (
 )
 
 type App struct {
-	ctx    context.Context
-	db     *sql.DB
-	port   int
-	server *http.Server
+	ctx       context.Context
+	db        *sql.DB
+	port      int
+	server    *http.Server
+	audioProc *exec.Cmd
 }
 
 func NewApp() *App { return &App{} }
@@ -33,6 +38,8 @@ func NewApp() *App { return &App{} }
 func (a *App) OnStartup(ctx context.Context) {
 	a.ctx = ctx
 	cfg := config.Load()
+
+	a.startAudioService(ctx, cfg.AudioServiceURL)
 
 	db, err := database.Open(cfg.DatabasePath)
 	if err != nil {
@@ -145,6 +152,84 @@ func (a *App) OnShutdown(ctx context.Context) {
 	if a.db != nil {
 		a.db.Close()
 	}
+	if a.audioProc != nil && a.audioProc.Process != nil {
+		a.audioProc.Process.Kill()
+	}
 }
 
 func (a *App) GetPort() int { return a.port }
+
+// startAudioService locates the audio-service directory and launches uvicorn via the
+// project venv. It returns immediately after spawning — the caller should rely on the
+// audio client's health-check for readiness.
+func (a *App) startAudioService(ctx context.Context, audioURL string) {
+	dir := findAudioServiceDir()
+	if dir == "" {
+		wailsruntime.LogWarningf(ctx, "audio-service directory not found; skipping auto-start")
+		return
+	}
+
+	uvicorn := filepath.Join(dir, ".venv", "Scripts", "uvicorn.exe")
+	if _, err := os.Stat(uvicorn); err != nil {
+		wailsruntime.LogWarningf(ctx, "uvicorn not found at %s; skipping audio service auto-start", uvicorn)
+		return
+	}
+
+	cmd := exec.Command(uvicorn, "main:app", "--port", "8765")
+	cmd.Dir = dir
+	// Redirect output to the Wails log so it's visible in dev console
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		wailsruntime.LogErrorf(ctx, "start audio service: %v", err)
+		return
+	}
+	a.audioProc = cmd
+	wailsruntime.LogInfof(ctx, "audio service started (pid %d)", cmd.Process.Pid)
+
+	go a.waitAudioReady(ctx, audioURL)
+}
+
+// waitAudioReady polls the audio service health endpoint and emits a frontend event
+// once it's up. Gives up after 90 seconds (model load can take ~30 s on first run).
+func (a *App) waitAudioReady(ctx context.Context, audioURL string) {
+	client := &http.Client{Timeout: 2 * time.Second}
+	deadline := time.Now().Add(90 * time.Second)
+	for time.Now().Before(deadline) {
+		resp, err := client.Get(audioURL + "/health")
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				wailsruntime.LogInfof(ctx, "audio service ready")
+				wailsruntime.EventsEmit(ctx, "audio:ready", nil)
+				return
+			}
+		}
+		time.Sleep(2 * time.Second)
+	}
+	wailsruntime.LogWarningf(ctx, "audio service did not become ready within 90 s")
+}
+
+// findAudioServiceDir searches common locations relative to the working directory.
+func findAudioServiceDir() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	candidates := []string{
+		filepath.Join(cwd, "..", "..", "audio-service"), // wails dev from cmd/desktop/
+		filepath.Join(cwd, "audio-service"),             // run from project root
+		filepath.Join(cwd, "..", "audio-service"),       // one level up
+	}
+	for _, p := range candidates {
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			continue
+		}
+		if info, err := os.Stat(abs); err == nil && info.IsDir() {
+			return abs
+		}
+	}
+	return ""
+}
