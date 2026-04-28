@@ -50,11 +50,30 @@ func TestSettingsHandler_Update_OK(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (body: %s)", w.Code, w.Body.String())
 	}
+	var m map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&m); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if m["user_name"] != "Leonardo" {
+		t.Errorf("user_name = %q, want Leonardo", m["user_name"])
+	}
 }
 
 func TestSettingsHandler_Update_InvalidProvider(t *testing.T) {
 	h := newSettingsHandler(t)
 	body, _ := json.Marshal(map[string]string{"ai_provider": "gemini"})
+	req := httptest.NewRequest(http.MethodPut, "/api/settings", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Update(w, req)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", w.Code)
+	}
+}
+
+func TestSettingsHandler_Update_UnknownKey(t *testing.T) {
+	h := newSettingsHandler(t)
+	body, _ := json.Marshal(map[string]string{"foo": "bar"})
 	req := httptest.NewRequest(http.MethodPut, "/api/settings", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
