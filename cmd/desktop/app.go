@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -43,7 +44,7 @@ func (a *App) OnStartup(ctx context.Context) {
 
 	db, err := database.Open(cfg.DatabasePath)
 	if err != nil {
-		wailsruntime.LogErrorf(ctx, "open db: %v", err)
+		log.Printf("open db: %v", err)
 		return
 	}
 	a.db = db
@@ -65,14 +66,18 @@ func (a *App) OnStartup(ctx context.Context) {
 	keyPointSvc := services.NewKeyPointService(keyPointRepo, aiClient)
 	taskSvc := services.NewTaskService(taskRepo, aiClient)
 
+	settingsRepo := repository.NewSettingsRepository(db)
+
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
-	orch := services.NewOrchestrator(meetingRepo, summarySvc, keyPointSvc, taskSvc, audioClient, cfg.WhisperLanguage)
+	orch := services.NewOrchestrator(meetingRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo)
 	orch.SetNotifyFn(func(meetingID, status string) {
-		type payload struct {
-			MeetingID string `json:"meeting_id"`
-			Status    string `json:"status"`
+		if isWailsContext(ctx) {
+			type payload struct {
+				MeetingID string `json:"meeting_id"`
+				Status    string `json:"status"`
+			}
+			wailsruntime.EventsEmit(ctx, "pipeline:status", payload{MeetingID: meetingID, Status: status})
 		}
-		wailsruntime.EventsEmit(ctx, "pipeline:status", payload{MeetingID: meetingID, Status: status})
 	})
 
 	themeHandler := handlers.NewThemeHandler(themeSvc)
@@ -137,7 +142,7 @@ func (a *App) OnStartup(ctx context.Context) {
 
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
-		wailsruntime.LogErrorf(ctx, "listen: %v", err)
+		log.Printf("listen: %v", err)
 		return
 	}
 	a.port = ln.Addr().(*net.TCPAddr).Port
@@ -164,20 +169,20 @@ func (a *App) GetPort() int { return a.port }
 func (a *App) startAudioService(ctx context.Context, audioURL string) {
 	// If something is already listening on the audio port, reuse it.
 	if a.audioServiceAlive(audioURL) {
-		wailsruntime.LogInfof(ctx, "audio service already running, skipping start")
+		log.Printf("audio service already running, skipping start")
 		go a.waitAudioReady(ctx, audioURL)
 		return
 	}
 
 	dir := findAudioServiceDir()
 	if dir == "" {
-		wailsruntime.LogWarningf(ctx, "audio-service directory not found; skipping auto-start")
+		log.Printf("audio-service directory not found; skipping auto-start")
 		return
 	}
 
 	uvicorn := filepath.Join(dir, ".venv", "Scripts", "uvicorn.exe")
 	if _, err := os.Stat(uvicorn); err != nil {
-		wailsruntime.LogWarningf(ctx, "uvicorn not found at %s; skipping audio service auto-start", uvicorn)
+		log.Printf("uvicorn not found at %s; skipping audio service auto-start", uvicorn)
 		return
 	}
 
@@ -187,11 +192,11 @@ func (a *App) startAudioService(ctx context.Context, audioURL string) {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		wailsruntime.LogErrorf(ctx, "start audio service: %v", err)
+		log.Printf("start audio service: %v", err)
 		return
 	}
 	a.audioProc = cmd
-	wailsruntime.LogInfof(ctx, "audio service started (pid %d)", cmd.Process.Pid)
+	log.Printf("audio service started (pid %d)", cmd.Process.Pid)
 
 	go a.waitAudioReady(ctx, audioURL)
 }
@@ -216,14 +221,16 @@ func (a *App) waitAudioReady(ctx context.Context, audioURL string) {
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
-				wailsruntime.LogInfof(ctx, "audio service ready")
-				wailsruntime.EventsEmit(ctx, "audio:ready", nil)
+				log.Printf("audio service ready")
+				if isWailsContext(ctx) {
+					wailsruntime.EventsEmit(ctx, "audio:ready", nil)
+				}
 				return
 			}
 		}
 		time.Sleep(2 * time.Second)
 	}
-	wailsruntime.LogWarningf(ctx, "audio service did not become ready within 90 s")
+	log.Printf("audio service did not become ready within 90 s")
 }
 
 // findAudioServiceDir searches common locations relative to the working directory.
@@ -247,4 +254,11 @@ func findAudioServiceDir() string {
 		}
 	}
 	return ""
+}
+
+// isWailsContext returns true when ctx carries a valid Wails application context.
+// It prevents log.Fatal panics from the Wails runtime when code runs outside
+// of the Wails lifecycle (e.g. in unit tests).
+func isWailsContext(ctx context.Context) bool {
+	return ctx.Value("events") != nil
 }
