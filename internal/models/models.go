@@ -29,6 +29,7 @@ type Meeting struct {
 	DurationSeconds *int          `json:"duration_seconds"`
 	Status          MeetingStatus `json:"status"`
 	Transcript      *string       `json:"transcript"`
+	Notes           *string       `json:"notes"`
 	CreatedAt       time.Time     `json:"created_at"`
 }
 

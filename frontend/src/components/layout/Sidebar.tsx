@@ -46,7 +46,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
       <div
         className={cn(
           "fixed left-0 top-0 h-full z-40 w-64 flex flex-col",
-          "bg-[#110d1e] border-r border-border rounded-r-2xl",
+          "bg-[#161616] border-r border-border rounded-r-2xl",
           "transform transition-transform duration-300 ease-in-out",
           open ? "translate-x-0" : "-translate-x-full"
         )}

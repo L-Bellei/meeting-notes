@@ -61,6 +61,7 @@ type updateMeetingRequest struct {
 	Status          string  `json:"status"`
 	DurationSeconds *int    `json:"duration_seconds"`
 	Transcript      *string `json:"transcript"`
+	Notes           *string `json:"notes"`
 }
 
 type MeetingDetailResponse struct {
@@ -170,7 +171,7 @@ func (h *MeetingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		startedAt = &parsed
 	}
-	m, err := h.svc.Update(r.Context(), id, req.Title, req.ThemeID, req.Status, startedAt, req.DurationSeconds, req.Transcript)
+	m, err := h.svc.Update(r.Context(), id, req.Title, req.ThemeID, req.Status, startedAt, req.DurationSeconds, req.Transcript, req.Notes)
 	if err != nil {
 		var ve *services.ValidationError
 		if errors.As(err, &ve) {

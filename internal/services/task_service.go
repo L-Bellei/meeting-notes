@@ -90,7 +90,11 @@ func (s *TaskService) Generate(ctx context.Context, meeting *models.Meeting) ([]
 	if meeting.Transcript == nil || *meeting.Transcript == "" {
 		return nil, &ValidationError{"transcript is required for generation"}
 	}
-	suggestions, _, _, err := s.ai.GenerateTasks(ctx, *meeting.Transcript)
+	notes := ""
+	if meeting.Notes != nil {
+		notes = *meeting.Notes
+	}
+	suggestions, _, _, err := s.ai.GenerateTasks(ctx, *meeting.Transcript, notes)
 	if err != nil {
 		return nil, err
 	}

@@ -66,7 +66,11 @@ func (s *KeyPointService) Generate(ctx context.Context, meeting *models.Meeting)
 	if meeting.Transcript == nil || *meeting.Transcript == "" {
 		return nil, &ValidationError{"transcript is required for generation"}
 	}
-	points, _, _, err := s.ai.GenerateKeyPoints(ctx, *meeting.Transcript)
+	notes := ""
+	if meeting.Notes != nil {
+		notes = *meeting.Notes
+	}
+	points, _, _, err := s.ai.GenerateKeyPoints(ctx, *meeting.Transcript, notes)
 	if err != nil {
 		return nil, err
 	}

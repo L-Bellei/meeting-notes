@@ -55,7 +55,11 @@ func (s *SummaryService) Generate(ctx context.Context, meeting *models.Meeting) 
 	if meeting.Transcript == nil || *meeting.Transcript == "" {
 		return nil, &ValidationError{"transcript is required for generation"}
 	}
-	content, inputTokens, outputTokens, err := s.ai.GenerateSummary(ctx, *meeting.Transcript)
+	notes := ""
+	if meeting.Notes != nil {
+		notes = *meeting.Notes
+	}
+	content, inputTokens, outputTokens, err := s.ai.GenerateSummary(ctx, *meeting.Transcript, notes)
 	if err != nil {
 		return nil, err
 	}

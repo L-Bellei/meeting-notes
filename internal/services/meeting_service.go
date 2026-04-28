@@ -66,7 +66,7 @@ func (s *MeetingService) GetByID(ctx context.Context, id string) (*models.Meetin
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *MeetingService) Update(ctx context.Context, id, title string, themeID *string, status string, startedAt *time.Time, durationSeconds *int, transcript *string) (*models.Meeting, error) {
+func (s *MeetingService) Update(ctx context.Context, id, title string, themeID *string, status string, startedAt *time.Time, durationSeconds *int, transcript *string, notes *string) (*models.Meeting, error) {
 	if title == "" {
 		return nil, &ValidationError{"title is required"}
 	}
@@ -96,6 +96,9 @@ func (s *MeetingService) Update(ctx context.Context, id, title string, themeID *
 	}
 	if transcript != nil {
 		m.Transcript = transcript
+	}
+	if notes != nil {
+		m.Notes = notes
 	}
 	if err := s.repo.Update(ctx, m); err != nil {
 		return nil, err

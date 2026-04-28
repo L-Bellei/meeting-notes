@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { Play, Square, RefreshCw, Wand2 } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import {
   useMeeting, useUpdateMeeting, useStartRecording, useStopRecording,
   useReprocess, useGenerateSummary, useGenerateKeyPoints, useGenerateTasks,
@@ -12,7 +14,7 @@ import { cn } from "../../lib/utils"
 
 interface Props { meetingId: string | null }
 
-type Tab = "transcript" | "summary" | "keypoints" | "tasks"
+type Tab = "transcript" | "summary" | "keypoints" | "tasks" | "notes"
 
 function statusVariant(s: string) {
   return s as any
@@ -31,7 +33,7 @@ export function MeetingDetail({ meetingId }: Props) {
   }
 
   const tabLabels: Record<Tab, string> = {
-    transcript: "Transcrição", summary: "Resumo", keypoints: "Pontos-chave", tasks: "Tarefas",
+    transcript: "Transcrição", summary: "Resumo", keypoints: "Pontos-chave", tasks: "Tarefas", notes: "Notas",
   }
 
   return (
@@ -39,7 +41,7 @@ export function MeetingDetail({ meetingId }: Props) {
       <MeetingHeader meeting={meeting} />
       <div className="px-4 pt-3 pb-0 border-b border-border flex-shrink-0">
         <div className="flex gap-1">
-          {(["transcript", "summary", "keypoints", "tasks"] as Tab[]).map(t => (
+          {(["transcript", "summary", "keypoints", "tasks", "notes"] as Tab[]).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -60,6 +62,7 @@ export function MeetingDetail({ meetingId }: Props) {
         {tab === "summary" && <SummaryTab meeting={meeting} />}
         {tab === "keypoints" && <KeyPointsTab meeting={meeting} />}
         {tab === "tasks" && <TasksTab meeting={meeting} />}
+        {tab === "notes" && <NotesTab meeting={meeting} />}
       </div>
     </div>
   )
@@ -122,7 +125,7 @@ function TranscriptTab({ meeting }: { meeting: any }) {
   function handleChange(v: string) {
     setValue(v)
     if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => update.mutate({ transcript: v }), 1000)
+    timer.current = setTimeout(() => update.mutate({ ...meeting, transcript: v }), 1000)
   }
 
   return (
@@ -218,5 +221,113 @@ function TaskItem({ task, meetingId }: { task: any; meetingId: string }) {
         {task.assignee && <span className="ml-2 text-xs text-muted-foreground">@{task.assignee}</span>}
       </div>
     </li>
+  )
+}
+
+type NotesMode = "edit" | "preview"
+
+function NotesTab({ meeting }: { meeting: any }) {
+  const update = useUpdateMeeting(meeting.id)
+  const [value, setValue] = useState(meeting.notes ?? "")
+  const [mode, setMode] = useState<NotesMode>("edit")
+  const [showToolbar, setShowToolbar] = useState(true)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => { setValue(meeting.notes ?? "") }, [meeting.notes])
+
+  function handleChange(v: string) {
+    setValue(v)
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => update.mutate({ ...meeting, notes: v }), 1000)
+  }
+
+  function insertMarkdown(before: string, after = "", placeholder = "texto") {
+    const el = textareaRef.current
+    if (!el) return
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    const selected = value.slice(start, end) || placeholder
+    const newVal = value.slice(0, start) + before + selected + after + value.slice(end)
+    handleChange(newVal)
+    setTimeout(() => {
+      el.focus()
+      el.setSelectionRange(start + before.length, start + before.length + selected.length)
+    }, 0)
+  }
+
+  const toolbarActions = [
+    { label: "B",   title: "Bold",         action: () => insertMarkdown("**", "**", "negrito") },
+    { label: "I",   title: "Italic",       action: () => insertMarkdown("*", "*", "itálico") },
+    { label: "H1",  title: "Heading 1",    action: () => insertMarkdown("# ", "", "Título") },
+    { label: "H2",  title: "Heading 2",    action: () => insertMarkdown("## ", "", "Subtítulo") },
+    { label: "|",   title: "",             action: () => {} },
+    { label: "•",   title: "Bullet list",  action: () => insertMarkdown("- ", "", "item") },
+    { label: "1.",  title: "Ordered list", action: () => insertMarkdown("1. ", "", "item") },
+    { label: "`",   title: "Inline code",  action: () => insertMarkdown("`", "`", "código") },
+    { label: "```", title: "Code block",   action: () => insertMarkdown("```\n", "\n```", "código") },
+  ]
+
+  return (
+    <div className="flex flex-col h-full gap-2">
+      <div className="flex items-center justify-between flex-shrink-0">
+        <button
+          onClick={() => setShowToolbar(v => !v)}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {showToolbar ? "Ocultar toolbar" : "Mostrar toolbar"}
+        </button>
+        <div className="flex rounded-lg overflow-hidden border border-border">
+          {(["edit", "preview"] as NotesMode[]).map(m => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={cn(
+                "px-3 py-1 text-xs font-medium transition-colors",
+                mode === m ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-accent"
+              )}
+            >
+              {m === "edit" ? "Editar" : "Preview"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {showToolbar && mode === "edit" && (
+        <div className="flex gap-1 flex-wrap p-2 rounded-lg bg-muted/40 border border-border flex-shrink-0">
+          {toolbarActions.map((a, i) =>
+            a.label === "|" ? (
+              <span key={i} className="w-px h-5 bg-border mx-1 self-center" />
+            ) : (
+              <button
+                key={i}
+                title={a.title}
+                onClick={a.action}
+                className="px-2 py-1 text-xs font-mono rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {a.label}
+              </button>
+            )
+          )}
+        </div>
+      )}
+
+      {mode === "edit" ? (
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={e => handleChange(e.target.value)}
+          placeholder="Escreva suas notas em Markdown..."
+          className="flex-1 min-h-[200px] text-sm rounded-xl p-3 resize-none focus:outline-none focus:ring-1 focus:ring-primary bg-muted/40 border border-border font-mono"
+        />
+      ) : (
+        <div className="flex-1 overflow-y-auto rounded-xl p-4 bg-muted/40 border border-border prose prose-invert prose-sm max-w-none">
+          {value
+            ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
+            : <p className="text-muted-foreground text-sm">Nenhuma nota ainda.</p>
+          }
+        </div>
+      )}
+    </div>
   )
 }

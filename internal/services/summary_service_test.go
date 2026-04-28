@@ -20,19 +20,19 @@ type fakeAI struct {
 	err         error
 }
 
-func (f *fakeAI) GenerateSummary(ctx context.Context, transcript string) (string, int, int, error) {
+func (f *fakeAI) GenerateSummary(ctx context.Context, transcript, notes string) (string, int, int, error) {
 	if f.err != nil {
 		return "", 0, 0, f.err
 	}
 	return f.summaryText, 100, 50, nil
 }
-func (f *fakeAI) GenerateKeyPoints(ctx context.Context, transcript string) ([]string, int, int, error) {
+func (f *fakeAI) GenerateKeyPoints(ctx context.Context, transcript, notes string) ([]string, int, int, error) {
 	if f.err != nil {
 		return nil, 0, 0, f.err
 	}
 	return f.keyPoints, 100, 50, nil
 }
-func (f *fakeAI) GenerateTasks(ctx context.Context, transcript string) ([]ai.TaskSuggestion, int, int, error) {
+func (f *fakeAI) GenerateTasks(ctx context.Context, transcript, notes string) ([]ai.TaskSuggestion, int, int, error) {
 	if f.err != nil {
 		return nil, 0, 0, f.err
 	}

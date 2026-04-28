@@ -38,6 +38,10 @@ func Open(path string) (*sql.DB, error) {
 }
 
 func runMigrations(db *sql.DB) error {
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY)`); err != nil {
+		return fmt.Errorf("create schema_migrations: %w", err)
+	}
+
 	entries, err := fs.ReadDir(migrationsFS, "migrations")
 	if err != nil {
 		return fmt.Errorf("read migrations dir: %w", err)
@@ -51,12 +55,26 @@ func runMigrations(db *sql.DB) error {
 		if entry.IsDir() {
 			continue
 		}
-		content, err := migrationsFS.ReadFile("migrations/" + entry.Name())
+		name := entry.Name()
+
+		var applied string
+		err := db.QueryRow(`SELECT name FROM schema_migrations WHERE name = ?`, name).Scan(&applied)
+		if err == nil {
+			continue // already applied
+		}
+		if err != sql.ErrNoRows {
+			return fmt.Errorf("check migration %s: %w", name, err)
+		}
+
+		content, err := migrationsFS.ReadFile("migrations/" + name)
 		if err != nil {
-			return fmt.Errorf("read migration %s: %w", entry.Name(), err)
+			return fmt.Errorf("read migration %s: %w", name, err)
 		}
 		if _, err := db.Exec(string(content)); err != nil {
-			return fmt.Errorf("apply migration %s: %w", entry.Name(), err)
+			return fmt.Errorf("apply migration %s: %w", name, err)
+		}
+		if _, err := db.Exec(`INSERT INTO schema_migrations (name) VALUES (?)`, name); err != nil {
+			return fmt.Errorf("record migration %s: %w", name, err)
 		}
 	}
 	return nil

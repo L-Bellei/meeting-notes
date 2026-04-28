@@ -9,6 +9,7 @@ export interface Meeting {
   duration_seconds: number | null
   status: "pending" | "recording" | "transcribing" | "processing" | "completed" | "failed"
   transcript: string | null
+  notes: string | null
   created_at: string
 }
 

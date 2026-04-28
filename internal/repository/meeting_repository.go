@@ -20,7 +20,7 @@ func NewMeetingRepository(db *sql.DB) *MeetingRepository {
 }
 
 func (r *MeetingRepository) List(ctx context.Context, themeID, status string) ([]models.Meeting, error) {
-	query := `SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, created_at FROM meetings`
+	query := `SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, created_at FROM meetings`
 	var args []any
 	var conditions []string
 
@@ -67,8 +67,8 @@ func (r *MeetingRepository) Create(ctx context.Context, m *models.Meeting) error
 		startedAt = &s
 	}
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO meetings (id, theme_id, title, started_at, duration_seconds, status, transcript, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		m.ID, m.ThemeID, m.Title, startedAt, m.DurationSeconds, string(m.Status), m.Transcript,
+		`INSERT INTO meetings (id, theme_id, title, started_at, duration_seconds, status, transcript, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		m.ID, m.ThemeID, m.Title, startedAt, m.DurationSeconds, string(m.Status), m.Transcript, m.Notes,
 		m.CreatedAt.UTC().Format(time.RFC3339Nano),
 	)
 	if err != nil {
@@ -79,7 +79,7 @@ func (r *MeetingRepository) Create(ctx context.Context, m *models.Meeting) error
 
 func (r *MeetingRepository) GetByID(ctx context.Context, id string) (*models.Meeting, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, created_at FROM meetings WHERE id = ?`, id,
+		`SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, created_at FROM meetings WHERE id = ?`, id,
 	)
 	m, err := scanMeeting(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -98,8 +98,8 @@ func (r *MeetingRepository) Update(ctx context.Context, m *models.Meeting) error
 		startedAt = &s
 	}
 	result, err := r.db.ExecContext(ctx,
-		`UPDATE meetings SET theme_id = ?, title = ?, started_at = ?, duration_seconds = ?, status = ?, transcript = ? WHERE id = ?`,
-		m.ThemeID, m.Title, startedAt, m.DurationSeconds, string(m.Status), m.Transcript, m.ID,
+		`UPDATE meetings SET theme_id = ?, title = ?, started_at = ?, duration_seconds = ?, status = ?, transcript = ?, notes = ? WHERE id = ?`,
+		m.ThemeID, m.Title, startedAt, m.DurationSeconds, string(m.Status), m.Transcript, m.Notes, m.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update meeting: %w", err)
@@ -139,10 +139,11 @@ func scanMeeting(row meetingScanner) (*models.Meeting, error) {
 	var startedAt sql.NullString
 	var duration sql.NullInt64
 	var transcript sql.NullString
+	var notes sql.NullString
 	var createdAt string
 	var status string
 
-	err := row.Scan(&m.ID, &themeID, &m.Title, &startedAt, &duration, &status, &transcript, &createdAt)
+	err := row.Scan(&m.ID, &themeID, &m.Title, &startedAt, &duration, &status, &transcript, &notes, &createdAt)
 	if err != nil {
 		return nil, err
 	}
@@ -165,6 +166,10 @@ func scanMeeting(row meetingScanner) (*models.Meeting, error) {
 	if transcript.Valid {
 		v := transcript.String
 		m.Transcript = &v
+	}
+	if notes.Valid {
+		v := notes.String
+		m.Notes = &v
 	}
 	m.Status = models.MeetingStatus(status)
 	if m.CreatedAt, err = parseTime(createdAt); err != nil {

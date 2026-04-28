@@ -53,7 +53,7 @@ export function RecordingModal({ open, onClose, onMeetingCreated }: Props) {
 
   const content = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md">
-      <div className="bg-[#1a1430] border border-border rounded-2xl shadow-2xl shadow-black/50 w-96 p-6">
+      <div className="bg-[#1a1a1a] border border-border rounded-2xl shadow-2xl shadow-black/50 w-96 p-6">
         <h2 className="text-base font-semibold mb-4 text-foreground">Nova Gravação</h2>
         <div className="space-y-3">
           <div>
@@ -64,7 +64,7 @@ export function RecordingModal({ open, onClose, onMeetingCreated }: Props) {
               onChange={e => setTitle(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") handleStart(); if (e.key === "Escape") onClose() }}
               placeholder="Daily 28/04"
-              className="w-full mt-1 text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary bg-[#0e0b14] border border-border"
+              className="w-full mt-1 text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary bg-[#111111] border border-border"
             />
           </div>
           <div>
@@ -72,7 +72,7 @@ export function RecordingModal({ open, onClose, onMeetingCreated }: Props) {
             <select
               value={themeId}
               onChange={e => setThemeId(e.target.value)}
-              className="w-full mt-1 text-sm rounded-xl px-3 py-2 focus:outline-none bg-[#0e0b14] border border-border"
+              className="w-full mt-1 text-sm rounded-xl px-3 py-2 focus:outline-none bg-[#111111] border border-border"
             >
               <option value="">Sem tema</option>
               {themes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}

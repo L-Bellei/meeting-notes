@@ -22,13 +22,13 @@ type fakeTaskAI struct {
 	tasks []ai.TaskSuggestion
 }
 
-func (f *fakeTaskAI) GenerateSummary(ctx context.Context, transcript string) (string, int, int, error) {
+func (f *fakeTaskAI) GenerateSummary(ctx context.Context, transcript, notes string) (string, int, int, error) {
 	return "", 0, 0, nil
 }
-func (f *fakeTaskAI) GenerateKeyPoints(ctx context.Context, transcript string) ([]string, int, int, error) {
+func (f *fakeTaskAI) GenerateKeyPoints(ctx context.Context, transcript, notes string) ([]string, int, int, error) {
 	return nil, 0, 0, nil
 }
-func (f *fakeTaskAI) GenerateTasks(ctx context.Context, transcript string) ([]ai.TaskSuggestion, int, int, error) {
+func (f *fakeTaskAI) GenerateTasks(ctx context.Context, transcript, notes string) ([]ai.TaskSuggestion, int, int, error) {
 	return f.tasks, 100, 50, nil
 }
 

@@ -145,7 +145,7 @@ func TestMeetingService_Update(t *testing.T) {
 	svc := newTestMeetingService(t)
 	ctx := context.Background()
 	created, _ := svc.Create(ctx, "Original", "", "", nil)
-	updated, err := svc.Update(ctx, created.ID, "Atualizado", nil, "completed", nil, nil, nil)
+	updated, err := svc.Update(ctx, created.ID, "Atualizado", nil, "completed", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestMeetingService_Update_TitleRequired(t *testing.T) {
 	svc := newTestMeetingService(t)
 	ctx := context.Background()
 	created, _ := svc.Create(ctx, "Original", "", "", nil)
-	_, err := svc.Update(ctx, created.ID, "", nil, "", nil, nil, nil)
+	_, err := svc.Update(ctx, created.ID, "", nil, "", nil, nil, nil, nil)
 	var ve *services.ValidationError
 	if !errors.As(err, &ve) {
 		t.Errorf("expected ValidationError, got %T: %v", err, err)
@@ -172,7 +172,7 @@ func TestMeetingService_Update_InvalidStatus(t *testing.T) {
 	svc := newTestMeetingService(t)
 	ctx := context.Background()
 	created, _ := svc.Create(ctx, "Original", "", "", nil)
-	_, err := svc.Update(ctx, created.ID, "Título", nil, "invalido", nil, nil, nil)
+	_, err := svc.Update(ctx, created.ID, "Título", nil, "invalido", nil, nil, nil, nil)
 	var ve *services.ValidationError
 	if !errors.As(err, &ve) {
 		t.Errorf("expected ValidationError, got %T: %v", err, err)
@@ -181,7 +181,7 @@ func TestMeetingService_Update_InvalidStatus(t *testing.T) {
 
 func TestMeetingService_Update_NotFound(t *testing.T) {
 	svc := newTestMeetingService(t)
-	_, err := svc.Update(context.Background(), "nope", "Título", nil, "", nil, nil, nil)
+	_, err := svc.Update(context.Background(), "nope", "Título", nil, "", nil, nil, nil, nil)
 	if !errors.Is(err, repository.ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
@@ -205,7 +205,7 @@ func TestMeetingService_Update_PreservesStatusWhenEmpty(t *testing.T) {
 	ctx := context.Background()
 
 	created, _ := svc.Create(ctx, "Original", "", "completed", nil)
-	updated, err := svc.Update(ctx, created.ID, "Novo título", nil, "", nil, nil, nil)
+	updated, err := svc.Update(ctx, created.ID, "Novo título", nil, "", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestMeetingService_Update_ClearsThemeID(t *testing.T) {
 
 	// Update with themeID = ptr("") should clear the theme.
 	emptyStr := ""
-	updated, err := svc.Update(ctx, created.ID, "Com tema", &emptyStr, "", nil, nil, nil)
+	updated, err := svc.Update(ctx, created.ID, "Com tema", &emptyStr, "", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestMeetingService_Update_PreservesThemeID(t *testing.T) {
 	}
 
 	// Update with themeID = nil should leave ThemeID unchanged.
-	updated, err := svc.Update(ctx, created.ID, "Com tema", nil, "", nil, nil, nil)
+	updated, err := svc.Update(ctx, created.ID, "Com tema", nil, "", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}

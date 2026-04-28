@@ -17,9 +17,9 @@ type TaskSuggestion struct {
 }
 
 type AIClient interface {
-	GenerateSummary(ctx context.Context, transcript string) (content string, inputTokens, outputTokens int, err error)
-	GenerateKeyPoints(ctx context.Context, transcript string) (points []string, inputTokens, outputTokens int, err error)
-	GenerateTasks(ctx context.Context, transcript string) (tasks []TaskSuggestion, inputTokens, outputTokens int, err error)
+	GenerateSummary(ctx context.Context, transcript, notes string) (content string, inputTokens, outputTokens int, err error)
+	GenerateKeyPoints(ctx context.Context, transcript, notes string) (points []string, inputTokens, outputTokens int, err error)
+	GenerateTasks(ctx context.Context, transcript, notes string) (tasks []TaskSuggestion, inputTokens, outputTokens int, err error)
 }
 
 type AnthropicClient struct {
@@ -34,11 +34,18 @@ func NewAnthropicClient(apiKey, model string) *AnthropicClient {
 
 func (c *AnthropicClient) Model() string { return c.model }
 
-func (c *AnthropicClient) GenerateSummary(ctx context.Context, transcript string) (string, int, int, error) {
-	prompt := fmt.Sprintf(`Summarize the following meeting transcript in 2-3 paragraphs, in the same language as the transcript. Return ONLY a JSON object with the shape {"summary":"..."} and no extra text.
+func buildContext(transcript, notes string) string {
+	if notes == "" {
+		return transcript
+	}
+	return "Transcript:\n" + transcript + "\n\nMeeting Notes (added by the user):\n" + notes
+}
 
-Transcript:
-%s`, transcript)
+func (c *AnthropicClient) GenerateSummary(ctx context.Context, transcript, notes string) (string, int, int, error) {
+	prompt := fmt.Sprintf(`Summarize the following meeting content in 2-3 paragraphs, in the same language as the content. Return ONLY a JSON object with the shape {"summary":"..."} and no extra text.
+
+Content:
+%s`, buildContext(transcript, notes))
 
 	text, in, out, err := c.callJSON(ctx, prompt, 1024)
 	if err != nil {
@@ -53,11 +60,11 @@ Transcript:
 	return result.Summary, in, out, nil
 }
 
-func (c *AnthropicClient) GenerateKeyPoints(ctx context.Context, transcript string) ([]string, int, int, error) {
-	prompt := fmt.Sprintf(`Extract the key points discussed in the following meeting transcript, in the same language as the transcript. Return ONLY a JSON array of strings: ["point 1","point 2",...] and no extra text.
+func (c *AnthropicClient) GenerateKeyPoints(ctx context.Context, transcript, notes string) ([]string, int, int, error) {
+	prompt := fmt.Sprintf(`Extract the key points discussed in the following meeting content, in the same language as the content. Return ONLY a JSON array of strings: ["point 1","point 2",...] and no extra text.
 
-Transcript:
-%s`, transcript)
+Content:
+%s`, buildContext(transcript, notes))
 
 	text, in, out, err := c.callJSON(ctx, prompt, 1024)
 	if err != nil {
@@ -70,11 +77,11 @@ Transcript:
 	return points, in, out, nil
 }
 
-func (c *AnthropicClient) GenerateTasks(ctx context.Context, transcript string) ([]TaskSuggestion, int, int, error) {
-	prompt := fmt.Sprintf(`Extract action items from the following meeting transcript, in the same language as the transcript. Return ONLY a JSON array with the shape [{"description":"...","assignee":"name or empty string","priority":"low|medium|high"},...] and no extra text.
+func (c *AnthropicClient) GenerateTasks(ctx context.Context, transcript, notes string) ([]TaskSuggestion, int, int, error) {
+	prompt := fmt.Sprintf(`Extract action items from the following meeting content, in the same language as the content. Return ONLY a JSON array with the shape [{"description":"...","assignee":"name or empty string","priority":"low|medium|high"},...] and no extra text.
 
-Transcript:
-%s`, transcript)
+Content:
+%s`, buildContext(transcript, notes))
 
 	text, in, out, err := c.callJSON(ctx, prompt, 2048)
 	if err != nil {

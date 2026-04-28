@@ -5,20 +5,20 @@ export default {
     colors: {
       transparent: "transparent",
       current: "currentColor",
-      background:  "#0e0b14",
+      background:  "#111111",
       foreground:  "#ede9ff",
-      border:      "#2d2548",
-      input:       "#1c1830",
+      border:      "#2a2a2a",
+      input:       "#1c1c1c",
       primary: {
         DEFAULT:    "#7c3aed",
         foreground: "#ffffff",
       },
       muted: {
-        DEFAULT:    "#1c1830",
+        DEFAULT:    "#1c1c1c",
         foreground: "#8b7aaa",
       },
       accent: {
-        DEFAULT:    "#241e38",
+        DEFAULT:    "#222222",
         foreground: "#ede9ff",
       },
       destructive: {
@@ -68,4 +68,5 @@ export default {
       },
     },
   },
+  plugins: [require("@tailwindcss/typography")],
 }

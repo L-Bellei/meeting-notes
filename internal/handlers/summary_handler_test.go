@@ -21,16 +21,16 @@ type fakeSummaryAI struct {
 	err  error
 }
 
-func (f *fakeSummaryAI) GenerateSummary(ctx context.Context, transcript string) (string, int, int, error) {
+func (f *fakeSummaryAI) GenerateSummary(ctx context.Context, transcript, notes string) (string, int, int, error) {
 	if f.err != nil {
 		return "", 0, 0, f.err
 	}
 	return f.text, 100, 50, nil
 }
-func (f *fakeSummaryAI) GenerateKeyPoints(ctx context.Context, transcript string) ([]string, int, int, error) {
+func (f *fakeSummaryAI) GenerateKeyPoints(ctx context.Context, transcript, notes string) ([]string, int, int, error) {
 	return nil, 0, 0, nil
 }
-func (f *fakeSummaryAI) GenerateTasks(ctx context.Context, transcript string) ([]ai.TaskSuggestion, int, int, error) {
+func (f *fakeSummaryAI) GenerateTasks(ctx context.Context, transcript, notes string) ([]ai.TaskSuggestion, int, int, error) {
 	return nil, 0, 0, nil
 }
 
