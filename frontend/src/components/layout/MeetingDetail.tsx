@@ -37,13 +37,26 @@ export function MeetingDetail({ meetingId, onDeleted }: Props) {
       settings?.auto_generate === "true" &&
       !meeting.summary &&
       (!meeting.key_points || meeting.key_points.length === 0) &&
-      (!meeting.tasks || meeting.tasks.length === 0)
+      (!meeting.tasks || meeting.tasks.length === 0) &&
+      !generateSummary.isPending &&
+      !generateKeyPoints.isPending &&
+      !generateTasks.isPending
     ) {
       generateSummary.mutate()
       generateKeyPoints.mutate()
       generateTasks.mutate()
     }
-  }, [meeting?.status, meeting?.id])
+  }, [
+    meeting?.status,
+    meeting?.id,
+    meeting?.summary,
+    meeting?.key_points,
+    meeting?.tasks,
+    settings?.auto_generate,
+    generateSummary,
+    generateKeyPoints,
+    generateTasks,
+  ])
 
   if (!meetingId || !meeting) {
     return (

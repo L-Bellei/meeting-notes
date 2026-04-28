@@ -46,8 +46,8 @@ export function SettingsModal({ open, onClose }: Props) {
   const [error, setError] = useState("")
 
   useEffect(() => {
-    if (settings) setForm(settings)
-  }, [settings])
+    if (open && settings) setForm(settings)
+  }, [open, settings])
 
   if (!open) return null
 
