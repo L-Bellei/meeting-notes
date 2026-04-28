@@ -8,6 +8,7 @@ import {
   useUpdateTask,
 } from "../../hooks/useMeeting"
 import { useDeleteMeeting } from "../../hooks/useMeetings"
+import { useSettings } from "../../hooks/useSettings"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Spinner } from "../ui/spinner"
@@ -23,7 +24,26 @@ function statusVariant(s: string) {
 
 export function MeetingDetail({ meetingId, onDeleted }: Props) {
   const { data: meeting } = useMeeting(meetingId)
+  const { data: settings } = useSettings()
   const [tab, setTab] = useState<Tab>("transcript")
+
+  const generateSummary   = useGenerateSummary(meetingId ?? "")
+  const generateKeyPoints = useGenerateKeyPoints(meetingId ?? "")
+  const generateTasks     = useGenerateTasks(meetingId ?? "")
+
+  useEffect(() => {
+    if (
+      meeting?.status === "completed" &&
+      settings?.auto_generate === "true" &&
+      !meeting.summary &&
+      (!meeting.key_points || meeting.key_points.length === 0) &&
+      (!meeting.tasks || meeting.tasks.length === 0)
+    ) {
+      generateSummary.mutate()
+      generateKeyPoints.mutate()
+      generateTasks.mutate()
+    }
+  }, [meeting?.status, meeting?.id])
 
   if (!meetingId || !meeting) {
     return (
