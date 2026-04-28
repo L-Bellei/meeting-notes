@@ -1,14 +1,41 @@
-import threading
 from pathlib import Path
 
 import pytest
 
 from recorder import Recorder, RecorderError, StopResult
 
+from unittest.mock import MagicMock, patch
+
+
+def _fake_pyaudio_with(default_input=True, loopback=True):
+    """Build a MagicMock that simulates a PyAudio instance."""
+    pa = MagicMock()
+    if default_input:
+        pa.get_default_input_device_info.return_value = {
+            "index": 0, "name": "Microfone", "defaultSampleRate": 48000.0, "maxInputChannels": 1,
+        }
+    else:
+        pa.get_default_input_device_info.side_effect = OSError("no default input")
+    if loopback:
+        pa.get_default_output_device_info.return_value = {
+            "index": 1, "name": "Alto-falantes", "defaultSampleRate": 48000.0,
+        }
+        pa.get_loopback_device_info_generator.return_value = iter([
+            {"index": 2, "name": "Alto-falantes [Loopback]", "defaultSampleRate": 48000.0, "maxInputChannels": 2},
+        ])
+    else:
+        pa.get_default_output_device_info.return_value = {
+            "index": 1, "name": "Alto-falantes", "defaultSampleRate": 48000.0,
+        }
+        pa.get_loopback_device_info_generator.return_value = iter([])
+    return pa
+
 
 @pytest.fixture
 def recorder(tmp_path):
-    return Recorder(tmp_path)
+    fake_pa = _fake_pyaudio_with(default_input=True, loopback=True)
+    with patch("recorder.pyaudio.PyAudio", return_value=fake_pa):
+        yield Recorder(tmp_path)
 
 
 def test_initial_state_is_idle(recorder):
@@ -59,20 +86,48 @@ def test_stop_returns_stopresult_and_transitions_to_idle(recorder):
 
 
 def test_start_when_loopback_unavailable_raises(tmp_path):
-    rec = Recorder(tmp_path)
-    rec.loopback_available = False
-    with pytest.raises(RecorderError, match="loopback unavailable"):
-        rec.start()
+    fake_pa = _fake_pyaudio_with(default_input=True, loopback=True)
+    with patch("recorder.pyaudio.PyAudio", return_value=fake_pa):
+        rec = Recorder(tmp_path)
+        rec.loopback_available = False
+        with pytest.raises(RecorderError, match="loopback unavailable"):
+            rec.start()
 
 
 def test_start_when_mic_unavailable_raises(tmp_path):
-    rec = Recorder(tmp_path)
-    rec.mic_available = False
-    with pytest.raises(RecorderError, match="mic unavailable"):
-        rec.start()
+    fake_pa = _fake_pyaudio_with(default_input=True, loopback=True)
+    with patch("recorder.pyaudio.PyAudio", return_value=fake_pa):
+        rec = Recorder(tmp_path)
+        rec.mic_available = False
+        with pytest.raises(RecorderError, match="mic unavailable"):
+            rec.start()
 
 
 def test_recordings_dir_is_created(tmp_path):
+    fake_pa = _fake_pyaudio_with(default_input=True, loopback=True)
     target = tmp_path / "subdir"
-    Recorder(target)
+    with patch("recorder.pyaudio.PyAudio", return_value=fake_pa):
+        Recorder(target)
     assert target.exists() and target.is_dir()
+
+
+def test_init_detects_devices_when_present(tmp_path):
+    fake_pa = _fake_pyaudio_with(default_input=True, loopback=True)
+    with patch("recorder.pyaudio.PyAudio", return_value=fake_pa):
+        rec = Recorder(tmp_path)
+    assert rec.mic_available is True
+    assert rec.loopback_available is True
+
+
+def test_init_marks_loopback_unavailable_when_no_match(tmp_path):
+    fake_pa = _fake_pyaudio_with(default_input=True, loopback=False)
+    with patch("recorder.pyaudio.PyAudio", return_value=fake_pa):
+        rec = Recorder(tmp_path)
+    assert rec.loopback_available is False
+
+
+def test_init_marks_mic_unavailable_when_no_default_input(tmp_path):
+    fake_pa = _fake_pyaudio_with(default_input=False, loopback=True)
+    with patch("recorder.pyaudio.PyAudio", return_value=fake_pa):
+        rec = Recorder(tmp_path)
+    assert rec.mic_available is False

@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pyaudiowpatch as pyaudio
+
 
 class RecorderError(Exception):
     pass
@@ -30,8 +32,30 @@ class Recorder:
         self._path = None
         self._partial = False
 
-        self.loopback_available = True
-        self.mic_available = True
+        self._pa = pyaudio.PyAudio()
+        self._mic_info = None
+        self._loopback_info = None
+        self.mic_available = False
+        self.loopback_available = False
+        self._enumerate_devices()
+
+    def _enumerate_devices(self):
+        try:
+            mic = self._pa.get_default_input_device_info()
+            self._mic_info = mic
+            self.mic_available = True
+        except (OSError, IOError):
+            self.mic_available = False
+
+        try:
+            speakers = self._pa.get_default_output_device_info()
+            for lb in self._pa.get_loopback_device_info_generator():
+                if speakers["name"] in lb["name"]:
+                    self._loopback_info = lb
+                    self.loopback_available = True
+                    break
+        except (OSError, IOError):
+            self.loopback_available = False
 
     @property
     def state(self):
