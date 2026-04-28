@@ -8,6 +8,7 @@ import { MeetingList } from "./components/layout/MeetingList"
 import { MeetingDetail } from "./components/layout/MeetingDetail"
 import { Toolbar } from "./components/layout/Toolbar"
 import { RecordingModal } from "./components/recording/RecordingModal"
+import { SettingsModal } from "./components/settings/SettingsModal"
 import { Spinner } from "./components/ui/spinner"
 
 const queryClient = new QueryClient({
@@ -20,6 +21,7 @@ function AppInner() {
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null)
   const [recordingModalOpen, setRecordingModalOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   useEffect(() => {
     GetPort().then(port => {
@@ -44,6 +46,7 @@ function AppInner() {
       <Toolbar
         onToggleSidebar={() => setSidebarOpen(o => !o)}
         onRecord={() => setRecordingModalOpen(true)}
+        onSettings={() => setSettingsOpen(true)}
       />
       <Sidebar
         open={sidebarOpen}
@@ -68,6 +71,7 @@ function AppInner() {
         onClose={() => setRecordingModalOpen(false)}
         onMeetingCreated={(id: string) => setSelectedMeetingId(id)}
       />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }
