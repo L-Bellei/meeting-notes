@@ -2,6 +2,7 @@ package services_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"meeting-notes/internal/database"
@@ -45,23 +46,26 @@ func TestSettingsService_Update_ValidProvider(t *testing.T) {
 func TestSettingsService_Update_InvalidProvider(t *testing.T) {
 	svc := newSettingsSvc(t)
 	err := svc.Update(context.Background(), map[string]string{"ai_provider": "gemini"})
-	if err == nil {
-		t.Fatal("expected validation error, got nil")
+	var ve *services.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
 	}
 }
 
 func TestSettingsService_Update_InvalidWhisperModel(t *testing.T) {
 	svc := newSettingsSvc(t)
 	err := svc.Update(context.Background(), map[string]string{"whisper_model": "huge"})
-	if err == nil {
-		t.Fatal("expected validation error, got nil")
+	var ve *services.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
 	}
 }
 
 func TestSettingsService_Update_UnknownKeyRejected(t *testing.T) {
 	svc := newSettingsSvc(t)
 	err := svc.Update(context.Background(), map[string]string{"unknown_key": "value"})
-	if err == nil {
-		t.Fatal("expected error for unknown key, got nil")
+	var ve *services.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
 	}
 }
