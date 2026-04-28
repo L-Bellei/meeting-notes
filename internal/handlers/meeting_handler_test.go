@@ -2,11 +2,13 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"meeting-notes/internal/database"
 	"meeting-notes/internal/handlers"
@@ -22,7 +24,12 @@ func newTestMeetingHandler(t *testing.T) *handlers.MeetingHandler {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	return handlers.NewMeetingHandler(services.NewMeetingService(repository.NewMeetingRepository(db)))
+	return handlers.NewMeetingHandler(
+		services.NewMeetingService(repository.NewMeetingRepository(db)),
+		repository.NewSummaryRepository(db),
+		repository.NewKeyPointRepository(db),
+		repository.NewTaskRepository(db),
+	)
 }
 
 
@@ -302,7 +309,12 @@ func newTestMeetingAndThemeHandlers(t *testing.T) (*handlers.MeetingHandler, *ha
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	mh := handlers.NewMeetingHandler(services.NewMeetingService(repository.NewMeetingRepository(db)))
+	mh := handlers.NewMeetingHandler(
+		services.NewMeetingService(repository.NewMeetingRepository(db)),
+		repository.NewSummaryRepository(db),
+		repository.NewKeyPointRepository(db),
+		repository.NewTaskRepository(db),
+	)
 	th := handlers.NewThemeHandler(services.NewThemeService(repository.NewThemeRepository(db)))
 	return mh, th
 }
@@ -353,5 +365,56 @@ func TestMeetingHandler_List_FilterByTheme(t *testing.T) {
 	}
 	if result[0].Title != "Meeting with theme" {
 		t.Errorf("Title = %q, want %q", result[0].Title, "Meeting with theme")
+	}
+}
+
+func TestMeetingHandler_GetByID_PopulatesNestedData(t *testing.T) {
+	db, err := database.Open(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	mr := repository.NewMeetingRepository(db)
+	sr := repository.NewSummaryRepository(db)
+	kpr := repository.NewKeyPointRepository(db)
+	tr := repository.NewTaskRepository(db)
+
+	mh := handlers.NewMeetingHandler(services.NewMeetingService(mr), sr, kpr, tr)
+
+	now := time.Now().UTC()
+	m := &models.Meeting{ID: "m-1", Title: "R", StartedAt: &now, Status: models.StatusCompleted}
+	if err := mr.Create(context.Background(), m); err != nil {
+		t.Fatalf("create meeting: %v", err)
+	}
+	if err := sr.Upsert(context.Background(), &models.Summary{ID: "s-1", MeetingID: "m-1", Content: "Resumo", ModelUsed: "manual"}); err != nil {
+		t.Fatalf("upsert summary: %v", err)
+	}
+	if err := kpr.Create(context.Background(), &models.KeyPoint{ID: "kp-1", MeetingID: "m-1", Position: 0, Content: "Ponto"}); err != nil {
+		t.Fatalf("create kp: %v", err)
+	}
+	if err := tr.Create(context.Background(), &models.Task{ID: "t-1", MeetingID: "m-1", Description: "Task", Priority: models.PriorityMedium}); err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+
+	req := withChiID(httptest.NewRequest(http.MethodGet, "/api/meetings/m-1", nil), "m-1")
+	w := httptest.NewRecorder()
+	mh.GetByID(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var detail handlers.MeetingDetailResponse
+	if err := json.NewDecoder(w.Body).Decode(&detail); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if detail.Summary == nil || detail.Summary.Content != "Resumo" {
+		t.Errorf("Summary = %+v", detail.Summary)
+	}
+	if len(detail.KeyPoints) != 1 || detail.KeyPoints[0].Content != "Ponto" {
+		t.Errorf("KeyPoints = %+v", detail.KeyPoints)
+	}
+	if len(detail.Tasks) != 1 || detail.Tasks[0].Description != "Task" {
+		t.Errorf("Tasks = %+v", detail.Tasks)
 	}
 }

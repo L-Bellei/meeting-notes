@@ -14,11 +14,24 @@ import (
 )
 
 type MeetingHandler struct {
-	svc *services.MeetingService
+	svc          *services.MeetingService
+	summaryRepo  *repository.SummaryRepository
+	keyPointRepo *repository.KeyPointRepository
+	taskRepo     *repository.TaskRepository
 }
 
-func NewMeetingHandler(svc *services.MeetingService) *MeetingHandler {
-	return &MeetingHandler{svc: svc}
+func NewMeetingHandler(
+	svc *services.MeetingService,
+	summaryRepo *repository.SummaryRepository,
+	keyPointRepo *repository.KeyPointRepository,
+	taskRepo *repository.TaskRepository,
+) *MeetingHandler {
+	return &MeetingHandler{
+		svc:          svc,
+		summaryRepo:  summaryRepo,
+		keyPointRepo: keyPointRepo,
+		taskRepo:     taskRepo,
+	}
 }
 
 type createMeetingRequest struct {
@@ -98,11 +111,33 @@ func (h *MeetingHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to get meeting")
 		return
 	}
+
+	var summary *models.Summary
+	s, err := h.summaryRepo.GetByMeetingID(r.Context(), id)
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusInternalServerError, "failed to get summary")
+		return
+	}
+	if err == nil {
+		summary = s
+	}
+
+	keyPoints, err := h.keyPointRepo.ListByMeetingID(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get key points")
+		return
+	}
+	tasks, err := h.taskRepo.ListByMeetingID(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get tasks")
+		return
+	}
+
 	writeJSON(w, http.StatusOK, MeetingDetailResponse{
 		Meeting:   *m,
-		Summary:   nil,
-		KeyPoints: []models.KeyPoint{},
-		Tasks:     []models.Task{},
+		Summary:   summary,
+		KeyPoints: keyPoints,
+		Tasks:     tasks,
 	})
 }
 
