@@ -20,9 +20,9 @@ import (
 
 // fakeOrchestrator implements handlers.MeetingOrchestrator for tests.
 type fakeOrchestrator struct {
-	startErr       error
-	stopErr        error
-	reprocessErr   error
+	startErr         error
+	stopErr          error
+	reprocessErr     error
 	setTranscriptErr error
 
 	lastMeetingID  string
@@ -65,7 +65,6 @@ func newTestMeetingHandler(t *testing.T) *handlers.MeetingHandler {
 		nil,
 	)
 }
-
 
 func TestMeetingHandler_List_Empty(t *testing.T) {
 	h := newTestMeetingHandler(t)
