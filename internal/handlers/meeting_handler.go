@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -8,16 +9,26 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"meeting-notes/internal/audio"
 	"meeting-notes/internal/models"
 	"meeting-notes/internal/repository"
 	"meeting-notes/internal/services"
 )
+
+// MeetingOrchestrator abstracts the orchestration service for testability.
+type MeetingOrchestrator interface {
+	StartRecording(ctx context.Context, meetingID string) error
+	StopRecording(ctx context.Context, meetingID string) error
+	Reprocess(ctx context.Context, meetingID string) error
+	SetTranscriptAndProcess(ctx context.Context, meetingID, transcript string) error
+}
 
 type MeetingHandler struct {
 	svc          *services.MeetingService
 	summaryRepo  *repository.SummaryRepository
 	keyPointRepo *repository.KeyPointRepository
 	taskRepo     *repository.TaskRepository
+	orch         MeetingOrchestrator
 }
 
 func NewMeetingHandler(
@@ -25,12 +36,14 @@ func NewMeetingHandler(
 	summaryRepo *repository.SummaryRepository,
 	keyPointRepo *repository.KeyPointRepository,
 	taskRepo *repository.TaskRepository,
+	orch MeetingOrchestrator,
 ) *MeetingHandler {
 	return &MeetingHandler{
 		svc:          svc,
 		summaryRepo:  summaryRepo,
 		keyPointRepo: keyPointRepo,
 		taskRepo:     taskRepo,
+		orch:         orch,
 	}
 }
 
@@ -185,4 +198,74 @@ func (h *MeetingHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/meetings/{id}/start
+func (h *MeetingHandler) Start(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.orch.StartRecording(r.Context(), id); err != nil {
+		writeOrchError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// POST /api/meetings/{id}/stop
+func (h *MeetingHandler) Stop(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.orch.StopRecording(r.Context(), id); err != nil {
+		writeOrchError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// POST /api/meetings/{id}/process
+func (h *MeetingHandler) Process(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.orch.Reprocess(r.Context(), id); err != nil {
+		writeOrchError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+type setTranscriptRequest struct {
+	Transcript string `json:"transcript"`
+}
+
+// POST /api/meetings/{id}/transcript
+func (h *MeetingHandler) SetTranscript(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req setTranscriptRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := h.orch.SetTranscriptAndProcess(r.Context(), id, req.Transcript); err != nil {
+		writeOrchError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func writeOrchError(w http.ResponseWriter, err error) {
+	if errors.Is(err, audio.ErrAudioServiceUnavailable) {
+		writeError(w, http.StatusServiceUnavailable, "audio service unavailable")
+		return
+	}
+	if errors.Is(err, audio.ErrAudioServiceConflict) {
+		writeError(w, http.StatusConflict, "audio service conflict")
+		return
+	}
+	var ve *services.ValidationError
+	if errors.As(err, &ve) {
+		writeError(w, http.StatusUnprocessableEntity, ve.Message)
+		return
+	}
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "meeting not found")
+		return
+	}
+	writeError(w, http.StatusInternalServerError, "internal server error")
 }

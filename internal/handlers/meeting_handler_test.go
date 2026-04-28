@@ -10,12 +10,45 @@ import (
 	"testing"
 	"time"
 
+	"meeting-notes/internal/audio"
 	"meeting-notes/internal/database"
 	"meeting-notes/internal/handlers"
 	"meeting-notes/internal/models"
 	"meeting-notes/internal/repository"
 	"meeting-notes/internal/services"
 )
+
+// fakeOrchestrator implements handlers.MeetingOrchestrator for tests.
+type fakeOrchestrator struct {
+	startErr       error
+	stopErr        error
+	reprocessErr   error
+	setTranscriptErr error
+
+	lastMeetingID  string
+	lastTranscript string
+}
+
+func (f *fakeOrchestrator) StartRecording(_ context.Context, meetingID string) error {
+	f.lastMeetingID = meetingID
+	return f.startErr
+}
+
+func (f *fakeOrchestrator) StopRecording(_ context.Context, meetingID string) error {
+	f.lastMeetingID = meetingID
+	return f.stopErr
+}
+
+func (f *fakeOrchestrator) Reprocess(_ context.Context, meetingID string) error {
+	f.lastMeetingID = meetingID
+	return f.reprocessErr
+}
+
+func (f *fakeOrchestrator) SetTranscriptAndProcess(_ context.Context, meetingID, transcript string) error {
+	f.lastMeetingID = meetingID
+	f.lastTranscript = transcript
+	return f.setTranscriptErr
+}
 
 func newTestMeetingHandler(t *testing.T) *handlers.MeetingHandler {
 	t.Helper()
@@ -29,6 +62,7 @@ func newTestMeetingHandler(t *testing.T) *handlers.MeetingHandler {
 		repository.NewSummaryRepository(db),
 		repository.NewKeyPointRepository(db),
 		repository.NewTaskRepository(db),
+		nil,
 	)
 }
 
@@ -314,6 +348,7 @@ func newTestMeetingAndThemeHandlers(t *testing.T) (*handlers.MeetingHandler, *ha
 		repository.NewSummaryRepository(db),
 		repository.NewKeyPointRepository(db),
 		repository.NewTaskRepository(db),
+		nil,
 	)
 	th := handlers.NewThemeHandler(services.NewThemeService(repository.NewThemeRepository(db)))
 	return mh, th
@@ -380,7 +415,7 @@ func TestMeetingHandler_GetByID_PopulatesNestedData(t *testing.T) {
 	kpr := repository.NewKeyPointRepository(db)
 	tr := repository.NewTaskRepository(db)
 
-	mh := handlers.NewMeetingHandler(services.NewMeetingService(mr), sr, kpr, tr)
+	mh := handlers.NewMeetingHandler(services.NewMeetingService(mr), sr, kpr, tr, nil)
 
 	now := time.Now().UTC()
 	m := &models.Meeting{ID: "m-1", Title: "R", StartedAt: &now, Status: models.StatusCompleted}
@@ -416,5 +451,154 @@ func TestMeetingHandler_GetByID_PopulatesNestedData(t *testing.T) {
 	}
 	if len(detail.Tasks) != 1 || detail.Tasks[0].Description != "Task" {
 		t.Errorf("Tasks = %+v", detail.Tasks)
+	}
+}
+
+// newOrchHandler creates a MeetingHandler with a fakeOrchestrator for orchestration tests.
+func newOrchHandler(t *testing.T, fo *fakeOrchestrator) *handlers.MeetingHandler {
+	t.Helper()
+	db, err := database.Open(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return handlers.NewMeetingHandler(
+		services.NewMeetingService(repository.NewMeetingRepository(db)),
+		repository.NewSummaryRepository(db),
+		repository.NewKeyPointRepository(db),
+		repository.NewTaskRepository(db),
+		fo,
+	)
+}
+
+func TestMeetingHandler_Start_Success(t *testing.T) {
+	fo := &fakeOrchestrator{}
+	h := newOrchHandler(t, fo)
+	req := withChiID(httptest.NewRequest(http.MethodPost, "/api/meetings/abc/start", nil), "abc")
+	w := httptest.NewRecorder()
+	h.Start(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Errorf("status = %d, want 202; body: %s", w.Code, w.Body.String())
+	}
+	if fo.lastMeetingID != "abc" {
+		t.Errorf("lastMeetingID = %q, want %q", fo.lastMeetingID, "abc")
+	}
+}
+
+func TestMeetingHandler_Start_AudioServiceDown(t *testing.T) {
+	fo := &fakeOrchestrator{startErr: audio.ErrAudioServiceUnavailable}
+	h := newOrchHandler(t, fo)
+	req := withChiID(httptest.NewRequest(http.MethodPost, "/api/meetings/abc/start", nil), "abc")
+	w := httptest.NewRecorder()
+	h.Start(w, req)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503", w.Code)
+	}
+}
+
+func TestMeetingHandler_Start_Conflict(t *testing.T) {
+	fo := &fakeOrchestrator{startErr: audio.ErrAudioServiceConflict}
+	h := newOrchHandler(t, fo)
+	req := withChiID(httptest.NewRequest(http.MethodPost, "/api/meetings/abc/start", nil), "abc")
+	w := httptest.NewRecorder()
+	h.Start(w, req)
+	if w.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409", w.Code)
+	}
+}
+
+func TestMeetingHandler_Start_NotFound(t *testing.T) {
+	fo := &fakeOrchestrator{startErr: repository.ErrNotFound}
+	h := newOrchHandler(t, fo)
+	req := withChiID(httptest.NewRequest(http.MethodPost, "/api/meetings/nope/start", nil), "nope")
+	w := httptest.NewRecorder()
+	h.Start(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", w.Code)
+	}
+}
+
+func TestMeetingHandler_Stop_Success(t *testing.T) {
+	fo := &fakeOrchestrator{}
+	h := newOrchHandler(t, fo)
+	req := withChiID(httptest.NewRequest(http.MethodPost, "/api/meetings/abc/stop", nil), "abc")
+	w := httptest.NewRecorder()
+	h.Stop(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Errorf("status = %d, want 202; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestMeetingHandler_Stop_NotRecording(t *testing.T) {
+	fo := &fakeOrchestrator{stopErr: &services.ValidationError{Message: "meeting is not recording"}}
+	h := newOrchHandler(t, fo)
+	req := withChiID(httptest.NewRequest(http.MethodPost, "/api/meetings/abc/stop", nil), "abc")
+	w := httptest.NewRecorder()
+	h.Stop(w, req)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("status = %d, want 422", w.Code)
+	}
+}
+
+func TestMeetingHandler_Process_Success(t *testing.T) {
+	fo := &fakeOrchestrator{}
+	h := newOrchHandler(t, fo)
+	req := withChiID(httptest.NewRequest(http.MethodPost, "/api/meetings/abc/process", nil), "abc")
+	w := httptest.NewRecorder()
+	h.Process(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Errorf("status = %d, want 202; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestMeetingHandler_Process_NoTranscript(t *testing.T) {
+	fo := &fakeOrchestrator{reprocessErr: &services.ValidationError{Message: "transcript is required for processing"}}
+	h := newOrchHandler(t, fo)
+	req := withChiID(httptest.NewRequest(http.MethodPost, "/api/meetings/abc/process", nil), "abc")
+	w := httptest.NewRecorder()
+	h.Process(w, req)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("status = %d, want 422", w.Code)
+	}
+}
+
+func TestMeetingHandler_SetTranscript_Success(t *testing.T) {
+	fo := &fakeOrchestrator{}
+	h := newOrchHandler(t, fo)
+	body := `{"transcript":"hello world"}`
+	req := withChiID(httptest.NewRequest(http.MethodPost, "/api/meetings/abc/transcript", strings.NewReader(body)), "abc")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.SetTranscript(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Errorf("status = %d, want 202; body: %s", w.Code, w.Body.String())
+	}
+	if fo.lastTranscript != "hello world" {
+		t.Errorf("lastTranscript = %q, want %q", fo.lastTranscript, "hello world")
+	}
+}
+
+func TestMeetingHandler_SetTranscript_EmptyBody(t *testing.T) {
+	fo := &fakeOrchestrator{setTranscriptErr: &services.ValidationError{Message: "transcript is required"}}
+	h := newOrchHandler(t, fo)
+	body := `{}`
+	req := withChiID(httptest.NewRequest(http.MethodPost, "/api/meetings/abc/transcript", strings.NewReader(body)), "abc")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.SetTranscript(w, req)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("status = %d, want 422", w.Code)
+	}
+}
+
+func TestMeetingHandler_SetTranscript_BadJSON(t *testing.T) {
+	fo := &fakeOrchestrator{}
+	h := newOrchHandler(t, fo)
+	req := withChiID(httptest.NewRequest(http.MethodPost, "/api/meetings/abc/transcript", strings.NewReader("not json")), "abc")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.SetTranscript(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", w.Code)
 	}
 }

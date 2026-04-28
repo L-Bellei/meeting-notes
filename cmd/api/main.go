@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/cors"
 
 	"meeting-notes/internal/ai"
+	"meeting-notes/internal/audio"
 	"meeting-notes/internal/config"
 	"meeting-notes/internal/database"
 	"meeting-notes/internal/handlers"
@@ -49,9 +50,13 @@ func main() {
 	keyPointSvc := services.NewKeyPointService(keyPointRepo, aiClient)
 	taskSvc := services.NewTaskService(taskRepo, aiClient)
 
+	// Audio + Orchestrator
+	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
+	orchestrator := services.NewOrchestrator(meetingRepo, summarySvc, keyPointSvc, taskSvc, audioClient, cfg.WhisperModel)
+
 	// Handlers
 	themeHandler := handlers.NewThemeHandler(themeSvc)
-	meetingHandler := handlers.NewMeetingHandler(meetingSvc, summaryRepo, keyPointRepo, taskRepo)
+	meetingHandler := handlers.NewMeetingHandler(meetingSvc, summaryRepo, keyPointRepo, taskRepo, orchestrator)
 	summaryHandler := handlers.NewSummaryHandler(summarySvc, meetingSvc)
 	keyPointHandler := handlers.NewKeyPointHandler(keyPointSvc, meetingSvc)
 	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc)
@@ -81,6 +86,11 @@ func main() {
 		r.Get("/{id}", meetingHandler.GetByID)
 		r.Put("/{id}", meetingHandler.Update)
 		r.Delete("/{id}", meetingHandler.Delete)
+
+		r.Post("/{id}/start", meetingHandler.Start)
+		r.Post("/{id}/stop", meetingHandler.Stop)
+		r.Post("/{id}/process", meetingHandler.Process)
+		r.Post("/{id}/transcript", meetingHandler.SetTranscript)
 
 		r.Route("/{id}/summary", func(r chi.Router) {
 			r.Get("/", summaryHandler.Get)
