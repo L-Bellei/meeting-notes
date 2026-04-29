@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { X } from "lucide-react"
 import { Button } from "../ui/button"
-import { useCardDetail, useUpdateCard } from "../../hooks/useBoard"
+import { useCardDetail, useUpdateCard, type BoardCardDetail } from "../../hooks/useBoard"
 import { useUpdateTask } from "../../hooks/useMeeting"
 
 interface Props {
@@ -10,10 +10,13 @@ interface Props {
   onClose: () => void
 }
 
+type TaskItem = BoardCardDetail["tasks"][number]
+
 export function CardDetailModal({ cardId, onClose }: Props) {
-  const { data: card } = useCardDetail(cardId)
+  const { data: card, isLoading } = useCardDetail(cardId)
   const updateCard = useUpdateCard()
   const [description, setDescription] = useState("")
+  const [descriptionAtEditStart, setDescriptionAtEditStart] = useState("")
   const [editing, setEditing] = useState(false)
 
   useEffect(() => {
@@ -22,20 +25,35 @@ export function CardDetailModal({ cardId, onClose }: Props) {
 
   if (!cardId) return null
 
+  function startEditing() {
+    setDescriptionAtEditStart(description)
+    setEditing(true)
+  }
+
+  function cancelEditing() {
+    setDescription(descriptionAtEditStart)
+    setEditing(false)
+  }
+
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="bg-background border border-border rounded-lg w-[640px] max-h-[80vh] flex flex-col shadow-xl"
+        className="bg-background border border-border rounded-lg w-[640px] max-h-[80vh] flex flex-col shadow-xl overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border flex-shrink-0">
+          {isLoading && <span className="text-xs text-muted-foreground flex-1">Carregando...</span>}
           {card && (
             <>
               <span className="text-xs text-muted-foreground">#{card.number}</span>
-              {card.theme_color && (
+              {card.theme_name && (
                 <span
                   className="text-xs px-1.5 py-0.5 rounded-full"
-                  style={{ background: card.theme_color + "22", color: card.theme_color }}
+                  style={
+                    card.theme_color
+                      ? { background: card.theme_color + "22", color: card.theme_color }
+                      : undefined
+                  }
                 >
                   {card.theme_name}
                 </span>
@@ -62,16 +80,13 @@ export function CardDetailModal({ cardId, onClose }: Props) {
                   <Button size="sm" onClick={() => {
                     if (cardId) updateCard.mutate({ id: cardId, description }, { onSuccess: () => setEditing(false) })
                   }}>Salvar</Button>
-                  <Button variant="ghost" size="sm" onClick={() => {
-                    setDescription(card?.description ?? "")
-                    setEditing(false)
-                  }}>Cancelar</Button>
+                  <Button variant="ghost" size="sm" onClick={cancelEditing}>Cancelar</Button>
                 </div>
               </div>
             ) : (
               <p
                 className="text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors min-h-8"
-                onClick={() => setEditing(true)}
+                onClick={startEditing}
               >
                 {description || <span className="italic">Clique para editar...</span>}
               </p>
@@ -118,10 +133,7 @@ export function CardDetailModal({ cardId, onClose }: Props) {
   )
 }
 
-function TaskRow({ task, meetingId }: {
-  task: { id: string; description: string; completed: boolean; priority: string }
-  meetingId: string
-}) {
+function TaskRow({ task, meetingId }: { task: TaskItem; meetingId: string }) {
   const updateTask = useUpdateTask(meetingId, task.id)
   return (
     <label className="flex items-start gap-2 cursor-pointer">
