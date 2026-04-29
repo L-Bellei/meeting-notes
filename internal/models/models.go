@@ -99,8 +99,11 @@ type BoardCard struct {
 }
 
 func (c *BoardCard) DisplayTitle(meeting *Meeting) string {
-	if c.MeetingID != nil && meeting != nil {
-		return meeting.Title
+	if c.MeetingID != nil {
+		if meeting != nil {
+			return meeting.Title
+		}
+		return ""
 	}
 	return c.Title
 }
