@@ -138,10 +138,9 @@ func (r *BoardCardRepository) Create(ctx context.Context, meetingID, columnID, d
 	}
 
 	now := time.Now().UTC()
-	mid := meetingID
 	card := &models.BoardCard{
 		ID:          uuid.New().String(),
-		MeetingID:   &mid,
+		MeetingID:   &meetingID,
 		ColumnID:    columnID,
 		Number:      maxNum + 1,
 		Position:    position,
@@ -155,8 +154,9 @@ func (r *BoardCardRepository) Create(ctx context.Context, meetingID, columnID, d
 
 	_, err = tx.ExecContext(ctx,
 		`INSERT INTO board_cards (id, meeting_id, column_id, number, position, title, description, tasks, source, updated_at, created_at)
-		 VALUES (?, ?, ?, ?, ?, '', ?, '[]', 'meeting', ?, ?)`,
-		card.ID, card.MeetingID, card.ColumnID, card.Number, card.Position, card.Description,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?)`,
+		card.ID, card.MeetingID, card.ColumnID, card.Number, card.Position,
+		card.Title, card.Description, card.Source,
 		card.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		card.CreatedAt.UTC().Format(time.RFC3339Nano),
 	)

@@ -75,22 +75,27 @@ func (s *BoardCardService) GetDetail(ctx context.Context, id string) (*models.Bo
 	if err != nil {
 		return nil, err
 	}
-	if sum, err := s.summaryRepo.GetByMeetingID(ctx, detail.MeetingID); err == nil {
-		detail.Summary = sum
-	}
-	kps, err := s.keyPointRepo.ListByMeetingID(ctx, detail.MeetingID)
-	if err == nil {
-		detail.KeyPoints = kps
-	}
-	tasks, err := s.taskRepo.ListByMeetingID(ctx, detail.MeetingID)
-	if err == nil {
-		detail.Tasks = tasks
+	if detail.MeetingID != nil {
+		if sum, err := s.summaryRepo.GetByMeetingID(ctx, *detail.MeetingID); err == nil {
+			detail.Summary = sum
+		}
+		kps, err := s.keyPointRepo.ListByMeetingID(ctx, *detail.MeetingID)
+		if err == nil {
+			detail.KeyPoints = kps
+		}
+		tasks, err := s.taskRepo.ListByMeetingID(ctx, *detail.MeetingID)
+		if err == nil {
+			detail.Tasks = tasks
+		}
 	}
 	if detail.KeyPoints == nil {
 		detail.KeyPoints = []models.KeyPoint{}
 	}
 	if detail.Tasks == nil {
 		detail.Tasks = []models.Task{}
+	}
+	if detail.ManualTasks == nil {
+		detail.ManualTasks = []string{}
 	}
 	return detail, nil
 }

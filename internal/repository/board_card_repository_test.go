@@ -268,7 +268,7 @@ func TestBoardCardRepository_DeleteNotFound(t *testing.T) {
 	}
 }
 
-func TestBoardCardRepository_UpdateDescription(t *testing.T) {
+func TestBoardCardRepository_UpdateExisting(t *testing.T) {
 	db := openBoardTestDB(t)
 	meetingRepo := repository.NewMeetingRepository(db)
 	cardRepo := repository.NewBoardCardRepository(db)
