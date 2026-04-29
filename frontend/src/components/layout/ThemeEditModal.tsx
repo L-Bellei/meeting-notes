@@ -15,6 +15,7 @@ export function ThemeEditModal({ theme, onClose }: Props) {
   const [description, setDescription] = useState("")
   const [color, setColor] = useState("#7c3aed")
   const [customPrompt, setCustomPrompt] = useState("")
+  const [autoAddToBoard, setAutoAddToBoard] = useState(false)
 
   useEffect(() => {
     if (theme) {
@@ -22,6 +23,7 @@ export function ThemeEditModal({ theme, onClose }: Props) {
       setDescription(theme.description)
       setColor(theme.color)
       setCustomPrompt(theme.custom_prompt)
+      setAutoAddToBoard(theme.auto_add_to_board)
     }
   }, [theme])
 
@@ -36,6 +38,7 @@ export function ThemeEditModal({ theme, onClose }: Props) {
       color,
       parent_id: theme.parent_id,
       custom_prompt: customPrompt,
+      auto_add_to_board: autoAddToBoard,
     })
     onClose()
   }
@@ -94,6 +97,19 @@ export function ThemeEditModal({ theme, onClose }: Props) {
               className="w-full text-sm rounded-lg px-3 py-2 bg-[#111] border border-border focus:outline-none focus:ring-1 focus:ring-primary resize-none"
               placeholder="Ex: Foque em oportunidades comerciais, objeções e próximos passos. Deixe em branco para usar o comportamento padrão."
             />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="auto_add_to_board"
+              checked={autoAddToBoard}
+              onChange={e => setAutoAddToBoard(e.target.checked)}
+              className="w-4 h-4 rounded border-border accent-primary cursor-pointer"
+            />
+            <label htmlFor="auto_add_to_board" className="text-xs text-muted-foreground cursor-pointer select-none">
+              Adicionar ao board automaticamente após processamento
+            </label>
           </div>
         </div>
 

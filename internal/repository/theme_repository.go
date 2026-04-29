@@ -26,7 +26,7 @@ func NewThemeRepository(db *sql.DB) *ThemeRepository {
 
 func (r *ThemeRepository) List(ctx context.Context) ([]models.Theme, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, parent_id, name, description, color, custom_prompt, created_at FROM themes ORDER BY name`)
+		`SELECT id, parent_id, name, description, color, custom_prompt, auto_add_to_board, created_at FROM themes ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("list themes: %w", err)
 	}
@@ -48,8 +48,9 @@ func (r *ThemeRepository) Create(ctx context.Context, theme *models.Theme) error
 		theme.CreatedAt = time.Now().UTC()
 	}
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO themes (id, parent_id, name, description, color, custom_prompt, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO themes (id, parent_id, name, description, color, custom_prompt, auto_add_to_board, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		theme.ID, theme.ParentID, theme.Name, theme.Description, theme.Color, theme.CustomPrompt,
+		theme.AutoAddToBoard,
 		theme.CreatedAt.UTC().Format(time.RFC3339Nano),
 	)
 	if err != nil {
@@ -63,7 +64,7 @@ func (r *ThemeRepository) Create(ctx context.Context, theme *models.Theme) error
 
 func (r *ThemeRepository) GetByID(ctx context.Context, id string) (*models.Theme, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, parent_id, name, description, color, custom_prompt, created_at FROM themes WHERE id = ?`, id)
+		`SELECT id, parent_id, name, description, color, custom_prompt, auto_add_to_board, created_at FROM themes WHERE id = ?`, id)
 	t, err := scanTheme(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -94,8 +95,8 @@ func (r *ThemeRepository) ChildIDs(ctx context.Context, parentID string) ([]stri
 
 func (r *ThemeRepository) Update(ctx context.Context, theme *models.Theme) error {
 	result, err := r.db.ExecContext(ctx,
-		`UPDATE themes SET parent_id = ?, name = ?, description = ?, color = ?, custom_prompt = ? WHERE id = ?`,
-		theme.ParentID, theme.Name, theme.Description, theme.Color, theme.CustomPrompt, theme.ID,
+		`UPDATE themes SET parent_id = ?, name = ?, description = ?, color = ?, custom_prompt = ?, auto_add_to_board = ? WHERE id = ?`,
+		theme.ParentID, theme.Name, theme.Description, theme.Color, theme.CustomPrompt, theme.AutoAddToBoard, theme.ID,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -136,7 +137,7 @@ func scanTheme(row themeScanner) (*models.Theme, error) {
 	var t models.Theme
 	var parentID sql.NullString
 	var createdAt string
-	if err := row.Scan(&t.ID, &parentID, &t.Name, &t.Description, &t.Color, &t.CustomPrompt, &createdAt); err != nil {
+	if err := row.Scan(&t.ID, &parentID, &t.Name, &t.Description, &t.Color, &t.CustomPrompt, &t.AutoAddToBoard, &createdAt); err != nil {
 		return nil, err
 	}
 	if parentID.Valid {

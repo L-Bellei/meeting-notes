@@ -3,13 +3,14 @@ package models
 import "time"
 
 type Theme struct {
-	ID          string    `json:"id"`
-	ParentID    *string   `json:"parent_id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Color        string    `json:"color"`
-	CustomPrompt string    `json:"custom_prompt"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID             string    `json:"id"`
+	ParentID       *string   `json:"parent_id"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description"`
+	Color          string    `json:"color"`
+	CustomPrompt   string    `json:"custom_prompt"`
+	AutoAddToBoard bool      `json:"auto_add_to_board"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type MeetingStatus string

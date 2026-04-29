@@ -54,7 +54,7 @@ func main() {
 
 	// Audio + Orchestrator
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
-	orchestrator := services.NewOrchestrator(meetingRepo, themeRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo)
+	orchestrator := services.NewOrchestrator(meetingRepo, themeRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo, boardCardSvc)
 
 	// Handlers
 	boardHandler := handlers.NewBoardHandler(boardColumnSvc, boardCardSvc)

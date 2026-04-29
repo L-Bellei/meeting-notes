@@ -20,15 +20,16 @@ type orchestratorSettings interface {
 }
 
 type Orchestrator struct {
-	repo        *repository.MeetingRepository
-	themeRepo   *repository.ThemeRepository
-	summarySvc  *SummaryService
-	keyPointSvc *KeyPointService
-	taskSvc     *TaskService
-	audio       audio.Client
-	settings    orchestratorSettings
-	pipelineWG  sync.WaitGroup
-	notifyFn    func(meetingID, status string)
+	repo         *repository.MeetingRepository
+	themeRepo    *repository.ThemeRepository
+	summarySvc   *SummaryService
+	keyPointSvc  *KeyPointService
+	taskSvc      *TaskService
+	boardCardSvc *BoardCardService
+	audio        audio.Client
+	settings     orchestratorSettings
+	pipelineWG   sync.WaitGroup
+	notifyFn     func(meetingID, status string)
 }
 
 func NewOrchestrator(
@@ -39,15 +40,17 @@ func NewOrchestrator(
 	taskSvc *TaskService,
 	audioClient audio.Client,
 	settings orchestratorSettings,
+	boardCardSvc *BoardCardService,
 ) *Orchestrator {
 	return &Orchestrator{
-		repo:        repo,
-		themeRepo:   themeRepo,
-		summarySvc:  summarySvc,
-		keyPointSvc: keyPointSvc,
-		taskSvc:     taskSvc,
-		audio:       audioClient,
-		settings:    settings,
+		repo:         repo,
+		themeRepo:    themeRepo,
+		summarySvc:   summarySvc,
+		keyPointSvc:  keyPointSvc,
+		taskSvc:      taskSvc,
+		boardCardSvc: boardCardSvc,
+		audio:        audioClient,
+		settings:     settings,
 	}
 }
 
@@ -240,6 +243,13 @@ func (o *Orchestrator) runAIGeneration(ctx context.Context, m *models.Meeting) e
 	}
 	if _, err := o.taskSvc.Generate(ctx, m, customPrompt); err != nil {
 		return fmt.Errorf("tasks: %w", err)
+	}
+	if m.ThemeID != nil && o.boardCardSvc != nil {
+		if theme, err := o.themeRepo.GetByID(ctx, *m.ThemeID); err == nil && theme.AutoAddToBoard {
+			if _, err := o.boardCardSvc.Create(ctx, m.ID, ""); err != nil {
+				log.Printf("auto-add to board %s: %v", m.ID, err)
+			}
+		}
 	}
 	return nil
 }
