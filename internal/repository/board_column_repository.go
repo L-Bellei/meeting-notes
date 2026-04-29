@@ -122,6 +122,16 @@ func (r *BoardColumnRepository) DeleteWithMove(ctx context.Context, id, moveTo s
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback()
+
+	// Verify moveTo column exists
+	var exists int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM board_columns WHERE id = ?`, moveTo).Scan(&exists); err != nil {
+		return fmt.Errorf("check moveTo column: %w", err)
+	}
+	if exists == 0 {
+		return ErrNotFound
+	}
+
 	if _, err := tx.ExecContext(ctx,
 		`UPDATE board_cards SET column_id = ? WHERE column_id = ?`, moveTo, id,
 	); err != nil {

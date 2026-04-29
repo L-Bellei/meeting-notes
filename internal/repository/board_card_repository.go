@@ -269,8 +269,14 @@ func (r *BoardCardRepository) UpdateDescription(ctx context.Context, id, descrip
 }
 
 func (r *BoardCardRepository) Move(ctx context.Context, id, columnID string, position float64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	result, err := r.db.ExecContext(ctx,
+	result, err := tx.ExecContext(ctx,
 		`UPDATE board_cards SET column_id = ?, position = ?, updated_at = ? WHERE id = ?`,
 		columnID, position, now, id,
 	)
@@ -281,11 +287,14 @@ func (r *BoardCardRepository) Move(ctx context.Context, id, columnID string, pos
 	if n == 0 {
 		return ErrNotFound
 	}
-	return r.rebalanceIfNeeded(ctx, columnID)
+	if err := r.rebalanceIfNeeded(ctx, tx, columnID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
-func (r *BoardCardRepository) rebalanceIfNeeded(ctx context.Context, columnID string) error {
-	rows, err := r.db.QueryContext(ctx,
+func (r *BoardCardRepository) rebalanceIfNeeded(ctx context.Context, tx *sql.Tx, columnID string) error {
+	rows, err := tx.QueryContext(ctx,
 		`SELECT position FROM board_cards WHERE column_id = ? ORDER BY position`, columnID)
 	if err != nil {
 		return fmt.Errorf("check rebalance: %w", err)
@@ -304,19 +313,18 @@ func (r *BoardCardRepository) rebalanceIfNeeded(ctx context.Context, columnID st
 		}
 		prev = &pos
 	}
-	rowsErr := rows.Err()
 	rows.Close()
-	if rowsErr != nil {
-		return rowsErr
+	if err := rows.Err(); err != nil {
+		return err
 	}
 	if !needs {
 		return nil
 	}
-	return r.rebalanceColumn(ctx, columnID)
+	return r.rebalanceColumn(ctx, tx, columnID)
 }
 
-func (r *BoardCardRepository) rebalanceColumn(ctx context.Context, columnID string) error {
-	rows, err := r.db.QueryContext(ctx,
+func (r *BoardCardRepository) rebalanceColumn(ctx context.Context, tx *sql.Tx, columnID string) error {
+	rows, err := tx.QueryContext(ctx,
 		`SELECT id FROM board_cards WHERE column_id = ? ORDER BY position`, columnID)
 	if err != nil {
 		return fmt.Errorf("list for rebalance: %w", err)
@@ -330,13 +338,12 @@ func (r *BoardCardRepository) rebalanceColumn(ctx context.Context, columnID stri
 		}
 		ids = append(ids, id)
 	}
-	rowsErr := rows.Err()
 	rows.Close()
-	if rowsErr != nil {
-		return rowsErr
+	if err := rows.Err(); err != nil {
+		return err
 	}
 	for i, id := range ids {
-		if _, err := r.db.ExecContext(ctx,
+		if _, err := tx.ExecContext(ctx,
 			`UPDATE board_cards SET position = ? WHERE id = ?`, float64((i+1)*1000), id,
 		); err != nil {
 			return fmt.Errorf("rebalance card %s: %w", id, err)

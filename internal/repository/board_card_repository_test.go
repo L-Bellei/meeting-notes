@@ -294,6 +294,81 @@ func TestBoardCardRepository_UpdateDescription(t *testing.T) {
 	}
 }
 
+func TestBoardCardRepository_GetByMeetingID(t *testing.T) {
+	db := openBoardTestDB(t)
+	meetingRepo := repository.NewMeetingRepository(db)
+	cardRepo := repository.NewBoardCardRepository(db)
+	ctx := context.Background()
+
+	createTestMeeting(t, meetingRepo, "meeting-byid", "Meeting ByMeetingID")
+
+	card, err := cardRepo.Create(ctx, "meeting-byid", "col-backlog", "desc for meeting", 1000)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := cardRepo.GetByMeetingID(ctx, "meeting-byid")
+	if err != nil {
+		t.Fatalf("GetByMeetingID: %v", err)
+	}
+	if got.ID != card.ID {
+		t.Errorf("ID = %q, want %q", got.ID, card.ID)
+	}
+	if got.MeetingID != "meeting-byid" {
+		t.Errorf("MeetingID = %q, want 'meeting-byid'", got.MeetingID)
+	}
+
+	_, err = cardRepo.GetByMeetingID(ctx, "nonexistent-meeting")
+	if !errors.Is(err, repository.ErrNotFound) {
+		t.Errorf("GetByMeetingID nonexistent err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestBoardCardRepository_GetDetail(t *testing.T) {
+	db := openBoardTestDB(t)
+	meetingRepo := repository.NewMeetingRepository(db)
+	cardRepo := repository.NewBoardCardRepository(db)
+	colRepo := repository.NewBoardColumnRepository(db)
+	ctx := context.Background()
+
+	cols, err := colRepo.List(ctx)
+	if err != nil {
+		t.Fatalf("List columns: %v", err)
+	}
+	if len(cols) == 0 {
+		t.Fatal("expected seed columns")
+	}
+
+	createTestMeeting(t, meetingRepo, "meeting-detail", "Detail Meeting")
+
+	card, err := cardRepo.Create(ctx, "meeting-detail", cols[0].ID, "detail desc", 1000)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	detail, err := cardRepo.GetDetail(ctx, card.ID)
+	if err != nil {
+		t.Fatalf("GetDetail: %v", err)
+	}
+	if detail.ID != card.ID {
+		t.Errorf("ID = %q, want %q", detail.ID, card.ID)
+	}
+	if detail.Status != cols[0].Name {
+		t.Errorf("Status = %q, want %q (board column name)", detail.Status, cols[0].Name)
+	}
+	if detail.MeetingTitle != "Detail Meeting" {
+		t.Errorf("MeetingTitle = %q, want 'Detail Meeting'", detail.MeetingTitle)
+	}
+	if detail.ThemeID != nil {
+		t.Errorf("ThemeID = %v, want nil (no theme on meeting)", detail.ThemeID)
+	}
+
+	_, err = cardRepo.GetDetail(ctx, "nonexistent-card")
+	if !errors.Is(err, repository.ErrNotFound) {
+		t.Errorf("GetDetail nonexistent err = %v, want ErrNotFound", err)
+	}
+}
+
 func TestBoardCardRepository_LastPositionInColumn(t *testing.T) {
 	db := openBoardTestDB(t)
 	meetingRepo := repository.NewMeetingRepository(db)
