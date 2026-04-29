@@ -9,7 +9,7 @@ import {
 } from "../../hooks/useMeeting"
 import { useDeleteMeeting } from "../../hooks/useMeetings"
 import { useSettings } from "../../hooks/useSettings"
-import { useCards, useCreateCard } from "../../hooks/useBoard"
+import { useCardForMeeting, useCreateCard } from "../../hooks/useBoard"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Spinner } from "../ui/spinner"
@@ -59,8 +59,7 @@ export function MeetingDetail({ meetingId, onDeleted }: Props) {
     generateTasks,
   ])
 
-  const { data: allCards = [] } = useCards()
-  const existingCard = meetingId ? allCards.find(c => c.meeting_id === meetingId) : undefined
+  const { data: existingCard } = useCardForMeeting(meetingId)
   const createCard = useCreateCard()
 
   if (!meetingId || !meeting) {

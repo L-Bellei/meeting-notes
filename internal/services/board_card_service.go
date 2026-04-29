@@ -113,7 +113,8 @@ func (s *BoardCardService) Delete(ctx context.Context, id string) error {
 	return s.cardRepo.Delete(ctx, id)
 }
 
-func (s *BoardCardService) GetByMeetingID(ctx context.Context, meetingID string) (*models.BoardCard, error) {
+// FindByMeetingID returns nil, nil when no card exists for the meeting (not-found is not an error for callers).
+func (s *BoardCardService) FindByMeetingID(ctx context.Context, meetingID string) (*models.BoardCard, error) {
 	card, err := s.cardRepo.GetByMeetingID(ctx, meetingID)
 	if errors.Is(err, repository.ErrNotFound) {
 		return nil, nil

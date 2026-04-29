@@ -112,6 +112,18 @@ export function useUpdateCard() {
   })
 }
 
+export function useCardForMeeting(meetingId: string | null) {
+  const result = useQuery({
+    queryKey: ["board-cards", {}],
+    queryFn: () => api<BoardCardSummary[]>("/api/board/cards"),
+    enabled: !!meetingId,
+  })
+  return {
+    ...result,
+    data: meetingId ? result.data?.find(c => c.meeting_id === meetingId) : undefined,
+  }
+}
+
 export function useMoveCard() {
   const qc = useQueryClient()
   return useMutation({

@@ -15,7 +15,7 @@ import (
 
 type BoardHandler struct {
 	columnSvc *services.BoardColumnService
-	cardSvc   *services.BoardCardService // wired in Task 3
+	cardSvc   *services.BoardCardService
 }
 
 func NewBoardHandler(columnSvc *services.BoardColumnService, cardSvc *services.BoardCardService) *BoardHandler {

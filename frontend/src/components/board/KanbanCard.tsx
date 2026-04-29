@@ -8,6 +8,7 @@ interface Props {
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diff / 60000)
+  if (mins <= 0) return "agora"
   if (mins < 60) return `há ${mins}m`
   const hours = Math.floor(mins / 60)
   if (hours < 24) return `há ${hours}h`
