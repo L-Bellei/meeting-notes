@@ -24,7 +24,7 @@ func TestThemeService_Create(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 
-	theme, err := svc.Create(ctx, "Produto", "Reuniões de produto", "#8b5cf6", nil, "")
+	theme, err := svc.Create(ctx, "Produto", "Reuniões de produto", "#8b5cf6", nil, "", false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestThemeService_Create(t *testing.T) {
 func TestThemeService_Create_DefaultColor(t *testing.T) {
 	svc := newTestService(t)
 
-	theme, err := svc.Create(context.Background(), "Sem cor", "", "", nil, "")
+	theme, err := svc.Create(context.Background(), "Sem cor", "", "", nil, "", false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestThemeService_Create_DefaultColor(t *testing.T) {
 func TestThemeService_Create_NameRequired(t *testing.T) {
 	svc := newTestService(t)
 
-	_, err := svc.Create(context.Background(), "", "", "", nil, "")
+	_, err := svc.Create(context.Background(), "", "", "", nil, "", false)
 	var ve *services.ValidationError
 	if !errors.As(err, &ve) {
 		t.Errorf("expected ValidationError, got %T: %v", err, err)
@@ -68,8 +68,8 @@ func TestThemeService_Create_DuplicateName(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 
-	svc.Create(ctx, "Dup", "", "", nil, "")
-	_, err := svc.Create(ctx, "Dup", "", "", nil, "")
+	svc.Create(ctx, "Dup", "", "", nil, "", false)
+	_, err := svc.Create(ctx, "Dup", "", "", nil, "", false)
 	if !errors.Is(err, repository.ErrDuplicate) {
 		t.Errorf("expected ErrDuplicate, got %v", err)
 	}
@@ -79,7 +79,7 @@ func TestThemeService_GetByID(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 
-	created, _ := svc.Create(ctx, "Eng", "", "", nil, "")
+	created, _ := svc.Create(ctx, "Eng", "", "", nil, "", false)
 	got, err := svc.GetByID(ctx, created.ID)
 	if err != nil {
 		t.Fatalf("GetByID: %v", err)
@@ -102,8 +102,8 @@ func TestThemeService_Update(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 
-	created, _ := svc.Create(ctx, "Original", "", "", nil, "")
-	updated, err := svc.Update(ctx, created.ID, "Novo Nome", "nova desc", "#ff0000", nil, "")
+	created, _ := svc.Create(ctx, "Original", "", "", nil, "", false)
+	updated, err := svc.Update(ctx, created.ID, "Novo Nome", "nova desc", "#ff0000", nil, "", false)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -119,8 +119,8 @@ func TestThemeService_Update_NameRequired(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 
-	created, _ := svc.Create(ctx, "Original", "", "", nil, "")
-	_, err := svc.Update(ctx, created.ID, "", "", "", nil, "")
+	created, _ := svc.Create(ctx, "Original", "", "", nil, "", false)
+	_, err := svc.Update(ctx, created.ID, "", "", "", nil, "", false)
 	var ve *services.ValidationError
 	if !errors.As(err, &ve) {
 		t.Errorf("expected ValidationError, got %T: %v", err, err)
@@ -131,7 +131,7 @@ func TestThemeService_Delete(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 
-	created, _ := svc.Create(ctx, "Para deletar", "", "", nil, "")
+	created, _ := svc.Create(ctx, "Para deletar", "", "", nil, "", false)
 	if err := svc.Delete(ctx, created.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
@@ -145,8 +145,8 @@ func TestThemeService_List(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 
-	svc.Create(ctx, "B", "", "", nil, "")
-	svc.Create(ctx, "A", "", "", nil, "")
+	svc.Create(ctx, "B", "", "", nil, "", false)
+	svc.Create(ctx, "A", "", "", nil, "", false)
 
 	themes, err := svc.List(ctx)
 	if err != nil {
