@@ -24,7 +24,9 @@ Tudo fica armazenado localmente em SQLite. Nenhum dado é enviado a servidores e
 | Transcrição Whisper | Modelos `tiny` → `large`, suporte a PT / EN / ES / auto |
 | Geração por IA | Resumo, pontos-chave e tarefas via Anthropic ou OpenAI |
 | Auto-geração | Dispara os três itens automaticamente ao parar a gravação |
-| Temas | Categorize reuniões em temas com cor e descrição |
+| Temas | Categorize reuniões com cor, descrição e prompt personalizado |
+| Kanban Board | Visualize reuniões como cards em colunas configuráveis com drag-and-drop |
+| Auto-add ao board | Por tema: reuniões entram automaticamente no board após processamento |
 | Notas em Markdown | Editor com preview e toolbar de formatação |
 | Configurações | Provedor de IA, chaves de API, modelo, idioma e Whisper — tudo via modal, sem editar `.env` |
 | Transcrição manual | Cole ou edite transcrições sem precisar gravar |
@@ -79,6 +81,7 @@ Ao parar uma gravação o `Orchestrator` executa em goroutine:
 StopRecording (audio service)
   → Transcribe (Whisper)
   → [se auto_generate = true] GenerateSummary + GenerateKeyPoints + GenerateTasks
+      → [se theme.auto_add_to_board = true] CreateBoardCard
   → status = completed
 ```
 
@@ -88,9 +91,12 @@ Notificações de status são emitidas via eventos Wails em tempo real para o fr
 
 ```
 src/
-  hooks/        → useApi, useMeetings, useMeeting, useSettings, usePipeline, …
+  hooks/        → useApi, useMeetings, useMeeting, useSettings, usePipeline,
+                  useBoard, useBoardColumns, …
   components/
     layout/     → Toolbar, Sidebar, MeetingList, MeetingDetail
+    board/      → BoardView, KanbanColumn, KanbanCard, CardDetailModal,
+                  BoardFilters, ColumnSettingsPanel
     recording/  → RecordingModal
     settings/   → SettingsModal
     ui/         → Button, Spinner, componentes reutilizáveis
@@ -124,6 +130,7 @@ Gerenciamento de estado via **React Query v5** — todas as chamadas REST são q
 | Vite | 8 | Build tool |
 | [@tanstack/react-query](https://tanstack.com/query) | v5 | Server state / cache |
 | [Tailwind CSS](https://tailwindcss.com) | v4 | Estilização |
+| [@dnd-kit/core + sortable](https://dndkit.com) | v6/v10 | Drag-and-drop do Kanban |
 | [lucide-react](https://lucide.dev) | — | Ícones |
 | [react-markdown](https://github.com/remarkjs/react-markdown) | — | Renderização Markdown |
 | [remark-gfm](https://github.com/remarkjs/remark-gfm) | — | GitHub Flavored Markdown |
@@ -145,7 +152,8 @@ Gerenciamento de estado via **React Query v5** — todas as chamadas REST são q
 SQLite em `%AppData%\Meeting Notes\meeting-notes.db`. Migrations aplicadas automaticamente na inicialização.
 
 ```
-themes          id, name, description, color, parent_id, created_at
+themes          id, name, description, color, parent_id,
+                custom_prompt, auto_add_to_board, created_at
 meetings        id, theme_id, title, started_at, duration_seconds,
                 status, transcript, notes, created_at
 summaries       id, meeting_id, content, model_used, input_tokens,
@@ -154,6 +162,9 @@ key_points      id, meeting_id, position, content
 tasks           id, meeting_id, description, assignee, due_date,
                 priority, completed, created_at
 settings        key TEXT PRIMARY KEY, value TEXT
+board_columns   id, name, position, created_at
+board_cards     id, meeting_id, column_id, number, position,
+                description, updated_at, created_at
 ```
 
 **Settings padrão**
@@ -216,6 +227,22 @@ DELETE /api/meetings/{id}/summary
 POST   /api/meetings/{id}/summary/generate   ← chama a IA
 ```
 
+### Board
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/api/board/columns` | Listar colunas com contagem de cards |
+| POST | `/api/board/columns` | Criar coluna |
+| PUT | `/api/board/columns/{id}` | Renomear coluna |
+| DELETE | `/api/board/columns/{id}` | Remover coluna (com `?move_to={id}` para mover cards) |
+| PATCH | `/api/board/columns/reorder` | Reordenar colunas |
+| GET | `/api/board/cards` | Listar cards (filtros: `title`, `number`, `created_after`, `created_before`) |
+| POST | `/api/board/cards` | Adicionar reunião ao board |
+| GET | `/api/board/cards/{id}` | Detalhes do card (com resumo, pontos-chave e tasks) |
+| PUT | `/api/board/cards/{id}` | Atualizar descrição do card |
+| DELETE | `/api/board/cards/{id}` | Remover card do board |
+| PATCH | `/api/board/cards/{id}/move` | Mover card para outra coluna/posição |
+
 ### Configurações
 
 | Método | Rota | Descrição |
@@ -247,7 +274,7 @@ POST   /api/meetings/{id}/summary/generate   ← chama a IA
 ### 1. Clonar o repositório
 
 ```bash
-git clone <url-do-repo>
+git clone https://github.com/L-Bellei/meeting-notes.git
 cd meeting-notes
 ```
 
@@ -302,13 +329,13 @@ go run ./cmd/api/...
 $env:PATH += ";C:\Program Files (x86)\NSIS"
 
 # Build com versão específica
-.\build.ps1 -Version "0.2.0"
+.\build.ps1 -Version "2.0.0"
 
 # Build pulando os testes
-.\build.ps1 -Version "0.2.0" -SkipTests
+.\build.ps1 -Version "2.0.0" -SkipTests
 
 # Build sem NSIS (apenas o .exe portátil)
-.\build.ps1 -Version "0.2.0" -NoNSIS
+.\build.ps1 -Version "2.0.0" -NoNSIS
 ```
 
 O artefato é gerado em `dist/meeting-notes-{VERSION}-windows-amd64-installer.exe`.
@@ -366,8 +393,11 @@ meeting-notes/
 ├── frontend/
 │   └── src/
 │       ├── App.tsx
-│       ├── hooks/           # useApi, useSettings, useMeetings, usePipeline, …
+│       ├── hooks/           # useApi, useSettings, useMeetings, usePipeline,
+│       │                    # useBoard, useBoardColumns, …
 │       └── components/
+│           ├── board/       # BoardView, KanbanColumn, KanbanCard,
+│           │                # CardDetailModal, BoardFilters, ColumnSettingsPanel
 │           ├── layout/      # Toolbar, Sidebar, MeetingList, MeetingDetail
 │           ├── recording/   # RecordingModal
 │           ├── settings/    # SettingsModal
@@ -376,12 +406,14 @@ meeting-notes/
 │   ├── ai/                  # DynamicAIClient, AnthropicClient, OpenAIClient
 │   ├── audio/               # Cliente HTTP para o serviço Python
 │   ├── config/              # Config + carregamento de .env
-│   ├── database/            # Conexão SQLite + migrations (001–005)
-│   ├── handlers/            # Handlers HTTP (meetings, themes, settings, …)
-│   ├── models/              # Meeting, Theme, Summary, KeyPoint, Task
+│   ├── database/            # Conexão SQLite + migrations (001–007)
+│   ├── handlers/            # Handlers HTTP (meetings, themes, settings, board)
+│   ├── models/              # Meeting, Theme, Summary, KeyPoint, Task,
+│   │                        # BoardColumn, BoardCard, BoardCardSummary, …
 │   ├── repository/          # Camada de acesso ao banco
-│   └── services/            # Orchestrator, MeetingService, SettingsService, …
-├── docs/                    # Specs e planos de implementação
+│   └── services/            # Orchestrator, SummaryService, BoardColumnService,
+│                            # BoardCardService, …
+├── docs/                    # Specs e planos de implementação (Superpowers)
 ├── build.ps1                # Script de build PowerShell
 ├── go.mod
 └── .env.example
@@ -393,6 +425,7 @@ meeting-notes/
 
 | Versão | Principais mudanças |
 |---|---|
+| **2.0.0** | Kanban Board global com drag-and-drop, colunas configuráveis, CardDetailModal, filtros, auto-add por tema |
 | **0.2.0** | Configurações via modal (provedor IA, chaves, Whisper), suporte a OpenAI, auto-geração ao gravar, DynamicAIClient |
 | **0.1.1** | Fix: banco de dados criado em `%AppData%` em vez de diretório da instalação |
 | **0.1.0** | Lançamento inicial: gravação, transcrição, geração com Claude, temas, notas em Markdown |
