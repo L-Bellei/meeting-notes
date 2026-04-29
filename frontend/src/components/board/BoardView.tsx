@@ -6,7 +6,7 @@ import {
 } from "@dnd-kit/core"
 import { Button } from "../ui/button"
 import { useColumns } from "../../hooks/useBoardColumns"
-import { useCards, useMoveCard, type BoardCardSummary, type BoardCardFilters } from "../../hooks/useBoard"
+import { useCards, useMoveCard, EMPTY_FILTERS, type BoardCardSummary } from "../../hooks/useBoard"
 import { KanbanColumn } from "./KanbanColumn"
 import { KanbanCard } from "./KanbanCard"
 import { ColumnSettingsPanel } from "./ColumnSettingsPanel"
@@ -14,8 +14,7 @@ import { useQueryClient } from "@tanstack/react-query"
 
 export function BoardView() {
   const { data: columns = [] } = useColumns()
-  const [filters] = useState<BoardCardFilters>({})
-  const { data: cards = [] } = useCards(filters)
+  const { data: cards = [] } = useCards(EMPTY_FILTERS)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null)
   const [activeCard, setActiveCard] = useState<BoardCardSummary | null>(null)
@@ -35,7 +34,7 @@ export function BoardView() {
 
   function onDragEnd({ active, over }: DragEndEvent) {
     setActiveCard(null)
-    if (!over) return
+    if (!over || active.id === over.id) return
 
     const card = cards.find(c => c.id === active.id)
     if (!card) return
@@ -58,7 +57,7 @@ export function BoardView() {
       newPosition = (targetColumnCards[overCardIdx - 1].position + targetColumnCards[overCardIdx].position) / 2
     }
 
-    qc.setQueryData(["board-cards", filters], (old: BoardCardSummary[] | undefined) =>
+    qc.setQueryData(["board-cards", EMPTY_FILTERS], (old: BoardCardSummary[] | undefined) =>
       (old ?? []).map(c =>
         c.id === card.id ? { ...c, column_id: targetColumnId, position: newPosition } : c
       )

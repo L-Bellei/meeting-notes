@@ -18,7 +18,7 @@ export function KanbanColumn({ column, cards, onCardClick }: Props) {
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border flex-shrink-0">
         <span className="text-sm font-medium">{column.name}</span>
         <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
-          {column.card_count}
+          {cards.length}
         </span>
       </div>
       <div ref={setNodeRef} className="flex flex-col gap-2 p-2 overflow-y-auto flex-1 min-h-16">

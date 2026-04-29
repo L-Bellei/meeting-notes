@@ -48,7 +48,9 @@ export interface BoardCardFilters {
   updated_before?: string
 }
 
-export function useCards(filters: BoardCardFilters = {}) {
+export const EMPTY_FILTERS: BoardCardFilters = {}
+
+export function useCards(filters: BoardCardFilters = EMPTY_FILTERS) {
   const params = new URLSearchParams()
   if (filters.title) params.set("title", filters.title)
   if (filters.number != null) params.set("number", String(filters.number))
@@ -114,7 +116,7 @@ export function useUpdateCard() {
 
 export function useCardForMeeting(meetingId: string | null) {
   const result = useQuery({
-    queryKey: ["board-cards", {}],
+    queryKey: ["board-cards", EMPTY_FILTERS],
     queryFn: () => api<BoardCardSummary[]>("/api/board/cards"),
     enabled: !!meetingId,
   })
