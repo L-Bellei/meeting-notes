@@ -1,7 +1,8 @@
 import { useState } from "react"
-import { Plus, Tag, X, Trash2, ChevronRight } from "lucide-react"
+import { Plus, Tag, X, Trash2, ChevronRight, Pencil } from "lucide-react"
 import { useThemes, useCreateTheme, useDeleteTheme, type Theme } from "../../hooks/useThemes"
 import { useMeetings } from "../../hooks/useMeetings"
+import { ThemeEditModal } from "./ThemeEditModal"
 import { Button } from "../ui/button"
 import { cn } from "../../lib/utils"
 
@@ -22,6 +23,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
   const [creating, setCreating] = useState<"root" | string | null>(null) // "root" or parent theme ID
   const [newName, setNewName] = useState("")
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [editingTheme, setEditingTheme] = useState<Theme | null>(null)
 
   const parents = themes.filter(t => !t.parent_id)
   const childrenOf = (id: string) => themes.filter(t => t.parent_id === id)
@@ -97,7 +99,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
 
           <span className="text-xs text-muted-foreground mr-1">{countForTheme(theme.id)}</span>
 
-          {/* actions: add sub-theme + delete */}
+          {/* actions: add sub-theme + edit + delete */}
           <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
             <button
               title="Nova subcategoria"
@@ -105,6 +107,13 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
               className="p-0.5 rounded hover:bg-primary/20 text-muted-foreground hover:text-primary"
             >
               <Plus size={11} />
+            </button>
+            <button
+              title="Editar tema"
+              onClick={e => { e.stopPropagation(); setEditingTheme(theme) }}
+              className="p-0.5 rounded hover:bg-primary/20 text-muted-foreground hover:text-primary"
+            >
+              <Pencil size={11} />
             </button>
             <button
               title={isConfirming ? "Clique novamente para confirmar" : "Excluir tema"}
@@ -197,6 +206,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
           )}
         </div>
       </div>
+      <ThemeEditModal theme={editingTheme} onClose={() => setEditingTheme(null)} />
     </>
   )
 }

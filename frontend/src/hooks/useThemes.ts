@@ -7,6 +7,7 @@ export interface Theme {
   name: string
   description: string
   color: string
+  custom_prompt: string
   created_at: string
 }
 
@@ -19,6 +20,15 @@ export function useCreateTheme() {
   return useMutation({
     mutationFn: (data: { name: string; description: string; color: string; parent_id?: string | null }) =>
       api<Theme>("/api/themes", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["themes"] }),
+  })
+}
+
+export function useUpdateTheme() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { id: string; name: string; description: string; color: string; parent_id?: string | null; custom_prompt: string }) =>
+      api<Theme>(`/api/themes/${data.id}`, { method: "PUT", body: JSON.stringify(data) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["themes"] }),
   })
 }
