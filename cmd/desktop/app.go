@@ -49,24 +49,21 @@ func (a *App) OnStartup(ctx context.Context) {
 	}
 	a.db = db
 
-	var aiClient ai.AIClient
-	if cfg.AnthropicAPIKey != "" {
-		aiClient = ai.NewAnthropicClient(cfg.AnthropicAPIKey, cfg.AnthropicModel)
-	}
-
 	themeRepo := repository.NewThemeRepository(db)
 	meetingRepo := repository.NewMeetingRepository(db)
 	summaryRepo := repository.NewSummaryRepository(db)
 	keyPointRepo := repository.NewKeyPointRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
+	settingsRepo := repository.NewSettingsRepository(db)
+
+	aiClient := ai.NewDynamicAIClient(settingsRepo)
 
 	themeSvc := services.NewThemeService(themeRepo)
 	meetingSvc := services.NewMeetingService(meetingRepo, themeRepo)
 	summarySvc := services.NewSummaryService(summaryRepo, aiClient)
 	keyPointSvc := services.NewKeyPointService(keyPointRepo, aiClient)
 	taskSvc := services.NewTaskService(taskRepo, aiClient)
-
-	settingsRepo := repository.NewSettingsRepository(db)
+	settingsSvc := services.NewSettingsService(settingsRepo)
 
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
 	orch := services.NewOrchestrator(meetingRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo)
@@ -85,6 +82,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	summaryHandler := handlers.NewSummaryHandler(summarySvc, meetingSvc)
 	keyPointHandler := handlers.NewKeyPointHandler(keyPointSvc, meetingSvc)
 	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc)
+	settingsHandler := handlers.NewSettingsHandler(settingsSvc)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
@@ -138,6 +136,11 @@ func (a *App) OnStartup(ctx context.Context) {
 			r.Put("/{taskId}", taskHandler.Update)
 			r.Delete("/{taskId}", taskHandler.Delete)
 		})
+	})
+
+	r.Route("/api/settings", func(r chi.Router) {
+		r.Get("/", settingsHandler.Get)
+		r.Put("/", settingsHandler.Update)
 	})
 
 	ln, err := net.Listen("tcp", ":0")
