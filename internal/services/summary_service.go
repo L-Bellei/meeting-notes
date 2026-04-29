@@ -48,7 +48,7 @@ func (s *SummaryService) Delete(ctx context.Context, meetingID string) error {
 	return s.repo.Delete(ctx, meetingID)
 }
 
-func (s *SummaryService) Generate(ctx context.Context, meeting *models.Meeting) (*models.Summary, error) {
+func (s *SummaryService) Generate(ctx context.Context, meeting *models.Meeting, customPrompt string) (*models.Summary, error) {
 	if s.ai == nil {
 		return nil, ErrAINotConfigured
 	}
@@ -59,7 +59,7 @@ func (s *SummaryService) Generate(ctx context.Context, meeting *models.Meeting) 
 	if meeting.Notes != nil {
 		notes = *meeting.Notes
 	}
-	content, inputTokens, outputTokens, err := s.ai.GenerateSummary(ctx, *meeting.Transcript, notes)
+	content, inputTokens, outputTokens, err := s.ai.GenerateSummary(ctx, *meeting.Transcript, notes, customPrompt)
 	if err != nil {
 		return nil, err
 	}

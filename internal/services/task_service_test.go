@@ -140,7 +140,7 @@ func TestTaskService_Generate(t *testing.T) {
 		{Description: "Task 2", Assignee: "", Priority: "low"},
 	}}
 	svc, meeting := newTaskTestService(t, fake)
-	got, err := svc.Generate(context.Background(), meeting)
+	got, err := svc.Generate(context.Background(), meeting, "")
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestTaskService_Generate_ReplacesExisting(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	if _, err := svc.Generate(ctx, meeting); err != nil {
+	if _, err := svc.Generate(ctx, meeting, ""); err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
 	all, _ := svc.List(ctx, "m-1")
@@ -185,7 +185,7 @@ func TestTaskService_Generate_NoTranscript(t *testing.T) {
 	fake := &fakeAI{tasks: []ai.TaskSuggestion{{Description: "x"}}}
 	svc, meeting := newTaskTestService(t, fake)
 	meeting.Transcript = nil
-	_, err := svc.Generate(context.Background(), meeting)
+	_, err := svc.Generate(context.Background(), meeting, "")
 	var ve *services.ValidationError
 	if !errors.As(err, &ve) {
 		t.Errorf("expected ValidationError, got %T: %v", err, err)
@@ -194,7 +194,7 @@ func TestTaskService_Generate_NoTranscript(t *testing.T) {
 
 func TestTaskService_Generate_AINotConfigured(t *testing.T) {
 	svc, meeting := newTaskTestService(t, nil)
-	_, err := svc.Generate(context.Background(), meeting)
+	_, err := svc.Generate(context.Background(), meeting, "")
 	if !errors.Is(err, services.ErrAINotConfigured) {
 		t.Errorf("expected ErrAINotConfigured, got %v", err)
 	}

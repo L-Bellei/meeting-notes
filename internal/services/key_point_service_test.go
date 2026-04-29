@@ -111,7 +111,7 @@ func TestKeyPointService_Delete(t *testing.T) {
 func TestKeyPointService_Generate(t *testing.T) {
 	fake := &fakeAI{keyPoints: []string{"Primeiro", "Segundo", "Terceiro"}}
 	svc, meeting := newKeyPointTestService(t, fake)
-	got, err := svc.Generate(context.Background(), meeting)
+	got, err := svc.Generate(context.Background(), meeting, "")
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestKeyPointService_Generate_ReplacesExisting(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	got, err := svc.Generate(ctx, meeting)
+	got, err := svc.Generate(ctx, meeting, "")
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestKeyPointService_Generate_NoTranscript(t *testing.T) {
 	fake := &fakeAI{keyPoints: []string{"x"}}
 	svc, meeting := newKeyPointTestService(t, fake)
 	meeting.Transcript = nil
-	_, err := svc.Generate(context.Background(), meeting)
+	_, err := svc.Generate(context.Background(), meeting, "")
 	var ve *services.ValidationError
 	if !errors.As(err, &ve) {
 		t.Errorf("expected ValidationError, got %T: %v", err, err)
@@ -161,7 +161,7 @@ func TestKeyPointService_Generate_NoTranscript(t *testing.T) {
 
 func TestKeyPointService_Generate_AINotConfigured(t *testing.T) {
 	svc, meeting := newKeyPointTestService(t, nil)
-	_, err := svc.Generate(context.Background(), meeting)
+	_, err := svc.Generate(context.Background(), meeting, "")
 	if !errors.Is(err, services.ErrAINotConfigured) {
 		t.Errorf("expected ErrAINotConfigured, got %v", err)
 	}

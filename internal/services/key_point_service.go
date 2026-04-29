@@ -59,7 +59,7 @@ func (s *KeyPointService) Delete(ctx context.Context, id string) error {
 	return s.repo.Delete(ctx, id)
 }
 
-func (s *KeyPointService) Generate(ctx context.Context, meeting *models.Meeting) ([]models.KeyPoint, error) {
+func (s *KeyPointService) Generate(ctx context.Context, meeting *models.Meeting, customPrompt string) ([]models.KeyPoint, error) {
 	if s.ai == nil {
 		return nil, ErrAINotConfigured
 	}
@@ -70,7 +70,7 @@ func (s *KeyPointService) Generate(ctx context.Context, meeting *models.Meeting)
 	if meeting.Notes != nil {
 		notes = *meeting.Notes
 	}
-	points, _, _, err := s.ai.GenerateKeyPoints(ctx, *meeting.Transcript, notes)
+	points, _, _, err := s.ai.GenerateKeyPoints(ctx, *meeting.Transcript, notes, customPrompt)
 	if err != nil {
 		return nil, err
 	}

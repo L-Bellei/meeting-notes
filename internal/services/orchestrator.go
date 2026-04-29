@@ -21,6 +21,7 @@ type orchestratorSettings interface {
 
 type Orchestrator struct {
 	repo        *repository.MeetingRepository
+	themeRepo   *repository.ThemeRepository
 	summarySvc  *SummaryService
 	keyPointSvc *KeyPointService
 	taskSvc     *TaskService
@@ -32,6 +33,7 @@ type Orchestrator struct {
 
 func NewOrchestrator(
 	repo *repository.MeetingRepository,
+	themeRepo *repository.ThemeRepository,
 	summarySvc *SummaryService,
 	keyPointSvc *KeyPointService,
 	taskSvc *TaskService,
@@ -40,6 +42,7 @@ func NewOrchestrator(
 ) *Orchestrator {
 	return &Orchestrator{
 		repo:        repo,
+		themeRepo:   themeRepo,
 		summarySvc:  summarySvc,
 		keyPointSvc: keyPointSvc,
 		taskSvc:     taskSvc,
@@ -223,13 +226,19 @@ func (o *Orchestrator) RunAIPipeline(ctx context.Context, meetingID string) erro
 }
 
 func (o *Orchestrator) runAIGeneration(ctx context.Context, m *models.Meeting) error {
-	if _, err := o.summarySvc.Generate(ctx, m); err != nil {
+	customPrompt := ""
+	if m.ThemeID != nil {
+		if theme, err := o.themeRepo.GetByID(ctx, *m.ThemeID); err == nil {
+			customPrompt = theme.CustomPrompt
+		}
+	}
+	if _, err := o.summarySvc.Generate(ctx, m, customPrompt); err != nil {
 		return fmt.Errorf("summary: %w", err)
 	}
-	if _, err := o.keyPointSvc.Generate(ctx, m); err != nil {
+	if _, err := o.keyPointSvc.Generate(ctx, m, customPrompt); err != nil {
 		return fmt.Errorf("key_points: %w", err)
 	}
-	if _, err := o.taskSvc.Generate(ctx, m); err != nil {
+	if _, err := o.taskSvc.Generate(ctx, m, customPrompt); err != nil {
 		return fmt.Errorf("tasks: %w", err)
 	}
 	return nil

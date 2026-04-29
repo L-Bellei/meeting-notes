@@ -68,12 +68,13 @@ func newOrchTest(t *testing.T, audioClient audio.Client, aiClient ai.AIClient) (
 	sr := repository.NewSummaryRepository(db)
 	kpr := repository.NewKeyPointRepository(db)
 	tr := repository.NewTaskRepository(db)
+	thr := repository.NewThemeRepository(db)
 
 	summarySvc := services.NewSummaryService(sr, aiClient)
 	keyPointSvc := services.NewKeyPointService(kpr, aiClient)
 	taskSvc := services.NewTaskService(tr, aiClient)
 
-	orch := services.NewOrchestrator(mr, summarySvc, keyPointSvc, taskSvc, audioClient, &fakeSettings{})
+	orch := services.NewOrchestrator(mr, thr, summarySvc, keyPointSvc, taskSvc, audioClient, &fakeSettings{})
 
 	now := time.Now().UTC()
 	m := &models.Meeting{ID: "m-1", Title: "R", StartedAt: &now, Status: models.StatusPending}

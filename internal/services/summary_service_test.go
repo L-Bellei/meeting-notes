@@ -14,25 +14,27 @@ import (
 )
 
 type fakeAI struct {
-	summaryText string
-	keyPoints   []string
-	tasks       []ai.TaskSuggestion
-	err         error
+	summaryText      string
+	keyPoints        []string
+	tasks            []ai.TaskSuggestion
+	err              error
+	lastCustomPrompt string
 }
 
-func (f *fakeAI) GenerateSummary(ctx context.Context, transcript, notes string) (string, int, int, error) {
+func (f *fakeAI) GenerateSummary(ctx context.Context, transcript, notes, customPrompt string) (string, int, int, error) {
+	f.lastCustomPrompt = customPrompt
 	if f.err != nil {
 		return "", 0, 0, f.err
 	}
 	return f.summaryText, 100, 50, nil
 }
-func (f *fakeAI) GenerateKeyPoints(ctx context.Context, transcript, notes string) ([]string, int, int, error) {
+func (f *fakeAI) GenerateKeyPoints(ctx context.Context, transcript, notes, customPrompt string) ([]string, int, int, error) {
 	if f.err != nil {
 		return nil, 0, 0, f.err
 	}
 	return f.keyPoints, 100, 50, nil
 }
-func (f *fakeAI) GenerateTasks(ctx context.Context, transcript, notes string) ([]ai.TaskSuggestion, int, int, error) {
+func (f *fakeAI) GenerateTasks(ctx context.Context, transcript, notes, customPrompt string) ([]ai.TaskSuggestion, int, int, error) {
 	if f.err != nil {
 		return nil, 0, 0, f.err
 	}
@@ -123,7 +125,7 @@ func TestSummaryService_Delete(t *testing.T) {
 func TestSummaryService_Generate(t *testing.T) {
 	fake := &fakeAI{summaryText: "Resumo gerado pela AI"}
 	svc, meeting := newSummaryTestService(t, fake)
-	got, err := svc.Generate(context.Background(), meeting)
+	got, err := svc.Generate(context.Background(), meeting, "")
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -139,7 +141,7 @@ func TestSummaryService_Generate_NoTranscript(t *testing.T) {
 	fake := &fakeAI{summaryText: "x"}
 	svc, meeting := newSummaryTestService(t, fake)
 	meeting.Transcript = nil
-	_, err := svc.Generate(context.Background(), meeting)
+	_, err := svc.Generate(context.Background(), meeting, "")
 	var ve *services.ValidationError
 	if !errors.As(err, &ve) {
 		t.Errorf("expected ValidationError, got %T: %v", err, err)
@@ -148,8 +150,19 @@ func TestSummaryService_Generate_NoTranscript(t *testing.T) {
 
 func TestSummaryService_Generate_AINotConfigured(t *testing.T) {
 	svc, meeting := newSummaryTestService(t, nil)
-	_, err := svc.Generate(context.Background(), meeting)
+	_, err := svc.Generate(context.Background(), meeting, "")
 	if !errors.Is(err, services.ErrAINotConfigured) {
 		t.Errorf("expected ErrAINotConfigured, got %v", err)
+	}
+}
+
+func TestSummaryService_Generate_CustomPromptPassedThrough(t *testing.T) {
+	fake := &fakeAI{summaryText: "Resumo"}
+	svc, meeting := newSummaryTestService(t, fake)
+	if _, err := svc.Generate(context.Background(), meeting, "Foque em decisões técnicas"); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if fake.lastCustomPrompt != "Foque em decisões técnicas" {
+		t.Errorf("customPrompt = %q, want %q", fake.lastCustomPrompt, "Foque em decisões técnicas")
 	}
 }

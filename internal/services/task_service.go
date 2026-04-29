@@ -83,7 +83,7 @@ func (s *TaskService) Delete(ctx context.Context, id string) error {
 	return s.repo.Delete(ctx, id)
 }
 
-func (s *TaskService) Generate(ctx context.Context, meeting *models.Meeting) ([]models.Task, error) {
+func (s *TaskService) Generate(ctx context.Context, meeting *models.Meeting, customPrompt string) ([]models.Task, error) {
 	if s.ai == nil {
 		return nil, ErrAINotConfigured
 	}
@@ -94,7 +94,7 @@ func (s *TaskService) Generate(ctx context.Context, meeting *models.Meeting) ([]
 	if meeting.Notes != nil {
 		notes = *meeting.Notes
 	}
-	suggestions, _, _, err := s.ai.GenerateTasks(ctx, *meeting.Transcript, notes)
+	suggestions, _, _, err := s.ai.GenerateTasks(ctx, *meeting.Transcript, notes, customPrompt)
 	if err != nil {
 		return nil, err
 	}
