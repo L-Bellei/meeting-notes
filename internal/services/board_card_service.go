@@ -96,7 +96,7 @@ func (s *BoardCardService) GetDetail(ctx context.Context, id string) (*models.Bo
 }
 
 func (s *BoardCardService) UpdateDescription(ctx context.Context, id, description string) (*models.BoardCard, error) {
-	if err := s.cardRepo.UpdateDescription(ctx, id, description); err != nil {
+	if err := s.cardRepo.Update(ctx, id, description, []string{}); err != nil {
 		return nil, err
 	}
 	return s.cardRepo.GetByID(ctx, id)

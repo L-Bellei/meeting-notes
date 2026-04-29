@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -34,14 +35,15 @@ func (r *BoardCardRepository) List(ctx context.Context, f BoardCardFilters) ([]m
 	q := `
 		SELECT
 			c.id, c.meeting_id, c.column_id, c.number, c.position, c.description,
-			c.updated_at, c.created_at,
-			m.title, m.theme_id,
+			c.source, c.updated_at, c.created_at,
+			COALESCE(m.title, c.title, '') as meeting_title,
+			m.theme_id,
 			t.name, t.color,
 			col.name,
-			COUNT(tk.id),
-			COALESCE(SUM(CASE WHEN tk.completed = 1 THEN 1 ELSE 0 END), 0)
+			CASE WHEN c.meeting_id IS NULL THEN json_array_length(c.tasks) ELSE COUNT(tk.id) END,
+			CASE WHEN c.meeting_id IS NULL THEN 0 ELSE COALESCE(SUM(CASE WHEN tk.completed = 1 THEN 1 ELSE 0 END), 0) END
 		FROM board_cards c
-		JOIN meetings m ON c.meeting_id = m.id
+		LEFT JOIN meetings m ON c.meeting_id = m.id
 		JOIN board_columns col ON c.column_id = col.id
 		LEFT JOIN themes t ON m.theme_id = t.id
 		LEFT JOIN tasks tk ON m.id = tk.meeting_id
@@ -49,7 +51,7 @@ func (r *BoardCardRepository) List(ctx context.Context, f BoardCardFilters) ([]m
 
 	var args []any
 	if f.Title != "" {
-		q += ` AND m.title LIKE ?`
+		q += ` AND COALESCE(m.title, c.title, '') LIKE ?`
 		args = append(args, "%"+f.Title+"%")
 	}
 	if f.Number != nil {
@@ -84,16 +86,20 @@ func (r *BoardCardRepository) List(ctx context.Context, f BoardCardFilters) ([]m
 	for rows.Next() {
 		var card models.BoardCardSummary
 		var updatedAt, createdAt string
-		var themeID, themeName, themeColor sql.NullString
+		var meetingID, themeID, themeName, themeColor sql.NullString
 		if err := rows.Scan(
-			&card.ID, &card.MeetingID, &card.ColumnID, &card.Number, &card.Position, &card.Description,
-			&updatedAt, &createdAt,
+			&card.ID, &meetingID, &card.ColumnID, &card.Number, &card.Position, &card.Description,
+			&card.Source, &updatedAt, &createdAt,
 			&card.MeetingTitle, &themeID,
 			&themeName, &themeColor,
 			&card.Status,
 			&card.TaskProgress.Total, &card.TaskProgress.Completed,
 		); err != nil {
 			return nil, fmt.Errorf("scan board card: %w", err)
+		}
+		if meetingID.Valid {
+			s := meetingID.String
+			card.MeetingID = &s
 		}
 		var parseErr error
 		if card.UpdatedAt, parseErr = parseTime(updatedAt); parseErr != nil {
@@ -132,20 +138,24 @@ func (r *BoardCardRepository) Create(ctx context.Context, meetingID, columnID, d
 	}
 
 	now := time.Now().UTC()
+	mid := meetingID
 	card := &models.BoardCard{
 		ID:          uuid.New().String(),
-		MeetingID:   meetingID,
+		MeetingID:   &mid,
 		ColumnID:    columnID,
 		Number:      maxNum + 1,
 		Position:    position,
+		Title:       "",
 		Description: description,
+		Tasks:       []string{},
+		Source:      "meeting",
 		UpdatedAt:   now,
 		CreatedAt:   now,
 	}
 
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO board_cards (id, meeting_id, column_id, number, position, description, updated_at, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO board_cards (id, meeting_id, column_id, number, position, title, description, tasks, source, updated_at, created_at)
+		 VALUES (?, ?, ?, ?, ?, '', ?, '[]', 'meeting', ?, ?)`,
 		card.ID, card.MeetingID, card.ColumnID, card.Number, card.Position, card.Description,
 		card.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		card.CreatedAt.UTC().Format(time.RFC3339Nano),
@@ -161,15 +171,25 @@ func (r *BoardCardRepository) Create(ctx context.Context, meetingID, columnID, d
 
 func (r *BoardCardRepository) GetByID(ctx context.Context, id string) (*models.BoardCard, error) {
 	var card models.BoardCard
-	var updatedAt, createdAt string
+	var updatedAt, createdAt, tasksJSON string
+	var meetingID sql.NullString
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, meeting_id, column_id, number, position, description, updated_at, created_at FROM board_cards WHERE id = ?`, id,
-	).Scan(&card.ID, &card.MeetingID, &card.ColumnID, &card.Number, &card.Position, &card.Description, &updatedAt, &createdAt)
+		`SELECT id, meeting_id, column_id, number, position, title, description, tasks, source, updated_at, created_at
+		 FROM board_cards WHERE id = ?`, id,
+	).Scan(&card.ID, &meetingID, &card.ColumnID, &card.Number, &card.Position,
+		&card.Title, &card.Description, &tasksJSON, &card.Source, &updatedAt, &createdAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get board card: %w", err)
+	}
+	if meetingID.Valid {
+		s := meetingID.String
+		card.MeetingID = &s
+	}
+	if err := json.Unmarshal([]byte(tasksJSON), &card.Tasks); err != nil {
+		card.Tasks = []string{}
 	}
 	var parseErr error
 	if card.UpdatedAt, parseErr = parseTime(updatedAt); parseErr != nil {
@@ -183,15 +203,25 @@ func (r *BoardCardRepository) GetByID(ctx context.Context, id string) (*models.B
 
 func (r *BoardCardRepository) GetByMeetingID(ctx context.Context, meetingID string) (*models.BoardCard, error) {
 	var card models.BoardCard
-	var updatedAt, createdAt string
+	var updatedAt, createdAt, tasksJSON string
+	var mid sql.NullString
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, meeting_id, column_id, number, position, description, updated_at, created_at FROM board_cards WHERE meeting_id = ?`, meetingID,
-	).Scan(&card.ID, &card.MeetingID, &card.ColumnID, &card.Number, &card.Position, &card.Description, &updatedAt, &createdAt)
+		`SELECT id, meeting_id, column_id, number, position, title, description, tasks, source, updated_at, created_at
+		 FROM board_cards WHERE meeting_id = ?`, meetingID,
+	).Scan(&card.ID, &mid, &card.ColumnID, &card.Number, &card.Position,
+		&card.Title, &card.Description, &tasksJSON, &card.Source, &updatedAt, &createdAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get board card by meeting: %w", err)
+	}
+	if mid.Valid {
+		s := mid.String
+		card.MeetingID = &s
+	}
+	if err := json.Unmarshal([]byte(tasksJSON), &card.Tasks); err != nil {
+		card.Tasks = []string{}
 	}
 	var parseErr error
 	if card.UpdatedAt, parseErr = parseTime(updatedAt); parseErr != nil {
@@ -205,22 +235,23 @@ func (r *BoardCardRepository) GetByMeetingID(ctx context.Context, meetingID stri
 
 func (r *BoardCardRepository) GetDetail(ctx context.Context, id string) (*models.BoardCardDetail, error) {
 	var d models.BoardCardDetail
-	var updatedAt, createdAt string
-	var themeID, themeName, themeColor sql.NullString
+	var updatedAt, createdAt, tasksJSON string
+	var meetingID, themeID, themeName, themeColor sql.NullString
 	err := r.db.QueryRowContext(ctx, `
-		SELECT c.id, c.meeting_id, c.column_id, c.number, c.position, c.description,
-		       c.updated_at, c.created_at,
+		SELECT c.id, c.meeting_id, c.column_id, c.number, c.position, c.title, c.description,
+		       c.tasks, c.source, c.updated_at, c.created_at,
 		       col.name,
-		       m.title, m.theme_id,
+		       COALESCE(m.title, c.title, ''),
+		       m.theme_id,
 		       t.name, t.color
 		FROM board_cards c
-		JOIN meetings m ON c.meeting_id = m.id
+		LEFT JOIN meetings m ON c.meeting_id = m.id
 		JOIN board_columns col ON c.column_id = col.id
 		LEFT JOIN themes t ON m.theme_id = t.id
 		WHERE c.id = ?`, id,
 	).Scan(
-		&d.ID, &d.MeetingID, &d.ColumnID, &d.Number, &d.Position, &d.Description,
-		&updatedAt, &createdAt,
+		&d.ID, &meetingID, &d.ColumnID, &d.Number, &d.Position, &d.Title, &d.Description,
+		&tasksJSON, &d.Source, &updatedAt, &createdAt,
 		&d.Status,
 		&d.MeetingTitle, &themeID,
 		&themeName, &themeColor,
@@ -230,6 +261,13 @@ func (r *BoardCardRepository) GetDetail(ctx context.Context, id string) (*models
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get board card detail: %w", err)
+	}
+	if meetingID.Valid {
+		s := meetingID.String
+		d.MeetingID = &s
+	}
+	if err := json.Unmarshal([]byte(tasksJSON), &d.ManualTasks); err != nil {
+		d.ManualTasks = []string{}
 	}
 	var parseErr error
 	if d.UpdatedAt, parseErr = parseTime(updatedAt); parseErr != nil {
@@ -253,13 +291,18 @@ func (r *BoardCardRepository) GetDetail(ctx context.Context, id string) (*models
 	return &d, nil
 }
 
-func (r *BoardCardRepository) UpdateDescription(ctx context.Context, id, description string) error {
+func (r *BoardCardRepository) Update(ctx context.Context, id, description string, tasks []string) error {
+	tasksJSON, err := json.Marshal(tasks)
+	if err != nil {
+		return fmt.Errorf("marshal tasks: %w", err)
+	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	result, err := r.db.ExecContext(ctx,
-		`UPDATE board_cards SET description = ?, updated_at = ? WHERE id = ?`, description, now, id,
+		`UPDATE board_cards SET description = ?, tasks = ?, updated_at = ? WHERE id = ?`,
+		description, string(tasksJSON), now, id,
 	)
 	if err != nil {
-		return fmt.Errorf("update board card description: %w", err)
+		return fmt.Errorf("update board card: %w", err)
 	}
 	n, _ := result.RowsAffected()
 	if n == 0 {

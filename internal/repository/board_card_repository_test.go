@@ -281,7 +281,7 @@ func TestBoardCardRepository_UpdateDescription(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	if err := cardRepo.UpdateDescription(ctx, card.ID, "updated"); err != nil {
+	if err := cardRepo.Update(ctx, card.ID, "updated", []string{}); err != nil {
 		t.Fatalf("UpdateDescription: %v", err)
 	}
 
@@ -314,8 +314,8 @@ func TestBoardCardRepository_GetByMeetingID(t *testing.T) {
 	if got.ID != card.ID {
 		t.Errorf("ID = %q, want %q", got.ID, card.ID)
 	}
-	if got.MeetingID != "meeting-byid" {
-		t.Errorf("MeetingID = %q, want 'meeting-byid'", got.MeetingID)
+	if got.MeetingID == nil || *got.MeetingID != "meeting-byid" {
+		t.Errorf("MeetingID = %v, want 'meeting-byid'", got.MeetingID)
 	}
 
 	_, err = cardRepo.GetByMeetingID(ctx, "nonexistent-meeting")
@@ -396,5 +396,54 @@ func TestBoardCardRepository_LastPositionInColumn(t *testing.T) {
 	}
 	if pos2 != 1500 {
 		t.Errorf("LastPositionInColumn = %f, want 1500", pos2)
+	}
+}
+
+func TestBoardCardRepository_MeetingIDIsPointer(t *testing.T) {
+	db := openBoardTestDB(t)
+	meetingRepo := repository.NewMeetingRepository(db)
+	cardRepo := repository.NewBoardCardRepository(db)
+	ctx := context.Background()
+
+	createTestMeeting(t, meetingRepo, "meeting-ptr", "Meeting Pointer")
+
+	card, err := cardRepo.Create(ctx, "meeting-ptr", "col-backlog", "", 1000)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if card.MeetingID == nil {
+		t.Error("MeetingID should not be nil for a meeting card")
+	}
+	if *card.MeetingID != "meeting-ptr" {
+		t.Errorf("MeetingID = %q, want 'meeting-ptr'", *card.MeetingID)
+	}
+	if card.Source != "meeting" {
+		t.Errorf("Source = %q, want 'meeting'", card.Source)
+	}
+}
+
+func TestBoardCardRepository_Update(t *testing.T) {
+	db := openBoardTestDB(t)
+	meetingRepo := repository.NewMeetingRepository(db)
+	cardRepo := repository.NewBoardCardRepository(db)
+	ctx := context.Background()
+
+	createTestMeeting(t, meetingRepo, "meeting-upd", "Meeting Update")
+
+	card, err := cardRepo.Create(ctx, "meeting-upd", "col-backlog", "original", 1000)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := cardRepo.Update(ctx, card.ID, "updated desc", []string{}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	got, err := cardRepo.GetByID(ctx, card.ID)
+	if err != nil {
+		t.Fatalf("GetByID after Update: %v", err)
+	}
+	if got.Description != "updated desc" {
+		t.Errorf("Description = %q, want 'updated desc'", got.Description)
 	}
 }
