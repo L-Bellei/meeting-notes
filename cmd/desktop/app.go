@@ -66,7 +66,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	settingsSvc := services.NewSettingsService(settingsRepo)
 
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
-	orch := services.NewOrchestrator(meetingRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo)
+	orch := services.NewOrchestrator(meetingRepo, themeRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo)
 	orch.SetNotifyFn(func(meetingID, status string) {
 		if isWailsContext(ctx) {
 			type payload struct {
@@ -79,9 +79,9 @@ func (a *App) OnStartup(ctx context.Context) {
 
 	themeHandler := handlers.NewThemeHandler(themeSvc)
 	meetingHandler := handlers.NewMeetingHandler(meetingSvc, summaryRepo, keyPointRepo, taskRepo, orch)
-	summaryHandler := handlers.NewSummaryHandler(summarySvc, meetingSvc)
-	keyPointHandler := handlers.NewKeyPointHandler(keyPointSvc, meetingSvc)
-	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc)
+	summaryHandler := handlers.NewSummaryHandler(summarySvc, meetingSvc, themeRepo)
+	keyPointHandler := handlers.NewKeyPointHandler(keyPointSvc, meetingSvc, themeRepo)
+	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc, themeRepo)
 	settingsHandler := handlers.NewSettingsHandler(settingsSvc)
 
 	r := chi.NewRouter()

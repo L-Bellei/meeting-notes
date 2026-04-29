@@ -50,14 +50,14 @@ func main() {
 
 	// Audio + Orchestrator
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
-	orchestrator := services.NewOrchestrator(meetingRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo)
+	orchestrator := services.NewOrchestrator(meetingRepo, themeRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo)
 
 	// Handlers
 	themeHandler := handlers.NewThemeHandler(themeSvc)
 	meetingHandler := handlers.NewMeetingHandler(meetingSvc, summaryRepo, keyPointRepo, taskRepo, orchestrator)
-	summaryHandler := handlers.NewSummaryHandler(summarySvc, meetingSvc)
-	keyPointHandler := handlers.NewKeyPointHandler(keyPointSvc, meetingSvc)
-	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc)
+	summaryHandler := handlers.NewSummaryHandler(summarySvc, meetingSvc, themeRepo)
+	keyPointHandler := handlers.NewKeyPointHandler(keyPointSvc, meetingSvc, themeRepo)
+	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc, themeRepo)
 	settingsH := handlers.NewSettingsHandler(settingsSvc)
 
 	r := chi.NewRouter()
