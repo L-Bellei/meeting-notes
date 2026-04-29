@@ -9,7 +9,23 @@ api.exe
 /audio-service/.venv/
 __pycache__/
 *.pyc
-/cmd/desktop/frontend/dist/.gitkeep
+
+# Wails build artifacts
+/cmd/desktop/build/
+/cmd/desktop/frontend/dist/
 /dist/
-/cmd/desktop/build/bin/
 desktop.exe
+
+# Frontend generated
+/frontend/package.json.md5
+/frontend/src/wailsjs/wailsjs/
+
+# Superpowers plugin artifacts
+/.superpowers/
+
+# Claude local settings
+/.claude/settings.local.json
+
+# Stray files
+/docs/estado-da-conversa-*.md
+/migrations/
