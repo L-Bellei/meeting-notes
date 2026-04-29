@@ -230,9 +230,11 @@ func (o *Orchestrator) RunAIPipeline(ctx context.Context, meetingID string) erro
 
 func (o *Orchestrator) runAIGeneration(ctx context.Context, m *models.Meeting) error {
 	customPrompt := ""
+	var theme *models.Theme
 	if m.ThemeID != nil {
-		if theme, err := o.themeRepo.GetByID(ctx, *m.ThemeID); err == nil {
-			customPrompt = theme.CustomPrompt
+		if t, err := o.themeRepo.GetByID(ctx, *m.ThemeID); err == nil {
+			theme = t
+			customPrompt = t.CustomPrompt
 		}
 	}
 	if _, err := o.summarySvc.Generate(ctx, m, customPrompt); err != nil {
@@ -244,11 +246,9 @@ func (o *Orchestrator) runAIGeneration(ctx context.Context, m *models.Meeting) e
 	if _, err := o.taskSvc.Generate(ctx, m, customPrompt); err != nil {
 		return fmt.Errorf("tasks: %w", err)
 	}
-	if m.ThemeID != nil && o.boardCardSvc != nil {
-		if theme, err := o.themeRepo.GetByID(ctx, *m.ThemeID); err == nil && theme.AutoAddToBoard {
-			if _, err := o.boardCardSvc.Create(ctx, m.ID, ""); err != nil {
-				log.Printf("auto-add to board %s: %v", m.ID, err)
-			}
+	if theme != nil && o.boardCardSvc != nil && theme.AutoAddToBoard {
+		if _, err := o.boardCardSvc.Create(ctx, m.ID, ""); err != nil {
+			log.Printf("auto-add to board %s: %v", m.ID, err)
 		}
 	}
 	return nil
