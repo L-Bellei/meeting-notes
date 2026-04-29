@@ -86,13 +86,23 @@ type BoardColumnWithCount struct {
 
 type BoardCard struct {
 	ID          string    `json:"id"`
-	MeetingID   string    `json:"meeting_id"`
+	MeetingID   *string   `json:"meeting_id"`
 	ColumnID    string    `json:"column_id"`
 	Number      int       `json:"number"`
 	Position    float64   `json:"position"`
+	Title       string    `json:"title"`
 	Description string    `json:"description"`
+	Tasks       []string  `json:"tasks"`
+	Source      string    `json:"source"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (c *BoardCard) DisplayTitle(meeting *Meeting) string {
+	if c.MeetingID != nil && meeting != nil {
+		return meeting.Title
+	}
+	return c.Title
 }
 
 type TaskProgress struct {
@@ -102,11 +112,12 @@ type TaskProgress struct {
 
 type BoardCardSummary struct {
 	ID           string       `json:"id"`
-	MeetingID    string       `json:"meeting_id"`
+	MeetingID    *string      `json:"meeting_id"`
 	ColumnID     string       `json:"column_id"`
 	Number       int          `json:"number"`
 	Position     float64      `json:"position"`
 	Description  string       `json:"description"`
+	Source       string       `json:"source"`
 	UpdatedAt    time.Time    `json:"updated_at"`
 	CreatedAt    time.Time    `json:"created_at"`
 	MeetingTitle string       `json:"meeting_title"`
@@ -119,11 +130,14 @@ type BoardCardSummary struct {
 
 type BoardCardDetail struct {
 	ID           string     `json:"id"`
-	MeetingID    string     `json:"meeting_id"`
+	MeetingID    *string    `json:"meeting_id"`
 	ColumnID     string     `json:"column_id"`
 	Number       int        `json:"number"`
 	Position     float64    `json:"position"`
+	Title        string     `json:"title"`
 	Description  string     `json:"description"`
+	Source       string     `json:"source"`
+	ManualTasks  []string   `json:"manual_tasks"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 	CreatedAt    time.Time  `json:"created_at"`
 	Status       string     `json:"status"`
