@@ -22,13 +22,13 @@ type fakeTaskAI struct {
 	tasks []ai.TaskSuggestion
 }
 
-func (f *fakeTaskAI) GenerateSummary(ctx context.Context, transcript, notes string) (string, int, int, error) {
+func (f *fakeTaskAI) GenerateSummary(ctx context.Context, transcript, notes, customPrompt string) (string, int, int, error) {
 	return "", 0, 0, nil
 }
-func (f *fakeTaskAI) GenerateKeyPoints(ctx context.Context, transcript, notes string) ([]string, int, int, error) {
+func (f *fakeTaskAI) GenerateKeyPoints(ctx context.Context, transcript, notes, customPrompt string) ([]string, int, int, error) {
 	return nil, 0, 0, nil
 }
-func (f *fakeTaskAI) GenerateTasks(ctx context.Context, transcript, notes string) ([]ai.TaskSuggestion, int, int, error) {
+func (f *fakeTaskAI) GenerateTasks(ctx context.Context, transcript, notes, customPrompt string) ([]ai.TaskSuggestion, int, int, error) {
 	return f.tasks, 100, 50, nil
 }
 
@@ -59,7 +59,7 @@ func newTestTaskHandler(t *testing.T, aiClient ai.AIClient) (*handlers.TaskHandl
 	}
 
 	taskSvc := services.NewTaskService(repository.NewTaskRepository(db), aiClient)
-	return handlers.NewTaskHandler(taskSvc, meetingSvc), m.ID
+	return handlers.NewTaskHandler(taskSvc, meetingSvc, repository.NewThemeRepository(db)), m.ID
 }
 
 func TestTaskHandler_List_Empty(t *testing.T) {

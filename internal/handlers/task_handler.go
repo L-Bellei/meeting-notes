@@ -15,10 +15,11 @@ import (
 type TaskHandler struct {
 	svc        *services.TaskService
 	meetingSvc *services.MeetingService
+	themeRepo  *repository.ThemeRepository
 }
 
-func NewTaskHandler(svc *services.TaskService, meetingSvc *services.MeetingService) *TaskHandler {
-	return &TaskHandler{svc: svc, meetingSvc: meetingSvc}
+func NewTaskHandler(svc *services.TaskService, meetingSvc *services.MeetingService, themeRepo *repository.ThemeRepository) *TaskHandler {
+	return &TaskHandler{svc: svc, meetingSvc: meetingSvc, themeRepo: themeRepo}
 }
 
 type createTaskRequest struct {
@@ -124,7 +125,13 @@ func (h *TaskHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to get meeting")
 		return
 	}
-	tasks, err := h.svc.Generate(r.Context(), meeting)
+	customPrompt := ""
+	if meeting.ThemeID != nil {
+		if theme, err := h.themeRepo.GetByID(r.Context(), *meeting.ThemeID); err == nil {
+			customPrompt = theme.CustomPrompt
+		}
+	}
+	tasks, err := h.svc.Generate(r.Context(), meeting, customPrompt)
 	if err != nil {
 		if errors.Is(err, services.ErrAINotConfigured) {
 			writeError(w, http.StatusServiceUnavailable, "AI service not configured")

@@ -14,10 +14,11 @@ import (
 type KeyPointHandler struct {
 	svc        *services.KeyPointService
 	meetingSvc *services.MeetingService
+	themeRepo  *repository.ThemeRepository
 }
 
-func NewKeyPointHandler(svc *services.KeyPointService, meetingSvc *services.MeetingService) *KeyPointHandler {
-	return &KeyPointHandler{svc: svc, meetingSvc: meetingSvc}
+func NewKeyPointHandler(svc *services.KeyPointService, meetingSvc *services.MeetingService, themeRepo *repository.ThemeRepository) *KeyPointHandler {
+	return &KeyPointHandler{svc: svc, meetingSvc: meetingSvc, themeRepo: themeRepo}
 }
 
 type keyPointRequest struct {
@@ -103,7 +104,13 @@ func (h *KeyPointHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to get meeting")
 		return
 	}
-	kps, err := h.svc.Generate(r.Context(), meeting)
+	customPrompt := ""
+	if meeting.ThemeID != nil {
+		if theme, err := h.themeRepo.GetByID(r.Context(), *meeting.ThemeID); err == nil {
+			customPrompt = theme.CustomPrompt
+		}
+	}
+	kps, err := h.svc.Generate(r.Context(), meeting, customPrompt)
 	if err != nil {
 		if errors.Is(err, services.ErrAINotConfigured) {
 			writeError(w, http.StatusServiceUnavailable, "AI service not configured")

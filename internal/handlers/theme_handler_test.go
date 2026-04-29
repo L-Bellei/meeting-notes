@@ -188,6 +188,36 @@ func TestThemeHandler_Delete(t *testing.T) {
 	}
 }
 
+func TestThemeHandler_Update_WithCustomPrompt(t *testing.T) {
+	h := newTestThemeHandler(t)
+
+	body := `{"name":"Vendas"}`
+	reqC := httptest.NewRequest(http.MethodPost, "/api/themes", bytes.NewBufferString(body))
+	reqC.Header.Set("Content-Type", "application/json")
+	wC := httptest.NewRecorder()
+	h.Create(wC, reqC)
+	var created models.Theme
+	json.NewDecoder(wC.Body).Decode(&created)
+
+	updateBody := `{"name":"Vendas","color":"#ff0000","custom_prompt":"Foque em oportunidades comerciais."}`
+	req := withChiID(
+		httptest.NewRequest(http.MethodPut, "/api/themes/"+created.ID, bytes.NewBufferString(updateBody)),
+		created.ID,
+	)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Update(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var updated models.Theme
+	json.NewDecoder(w.Body).Decode(&updated)
+	if updated.CustomPrompt != "Foque em oportunidades comerciais." {
+		t.Errorf("CustomPrompt = %q", updated.CustomPrompt)
+	}
+}
+
 func TestThemeHandler_Delete_NotFound(t *testing.T) {
 	h := newTestThemeHandler(t)
 

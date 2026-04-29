@@ -14,10 +14,11 @@ import (
 type SummaryHandler struct {
 	svc        *services.SummaryService
 	meetingSvc *services.MeetingService
+	themeRepo  *repository.ThemeRepository
 }
 
-func NewSummaryHandler(svc *services.SummaryService, meetingSvc *services.MeetingService) *SummaryHandler {
-	return &SummaryHandler{svc: svc, meetingSvc: meetingSvc}
+func NewSummaryHandler(svc *services.SummaryService, meetingSvc *services.MeetingService, themeRepo *repository.ThemeRepository) *SummaryHandler {
+	return &SummaryHandler{svc: svc, meetingSvc: meetingSvc, themeRepo: themeRepo}
 }
 
 type createSummaryRequest struct {
@@ -103,7 +104,13 @@ func (h *SummaryHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to get meeting")
 		return
 	}
-	s, err := h.svc.Generate(r.Context(), meeting)
+	customPrompt := ""
+	if meeting.ThemeID != nil {
+		if theme, err := h.themeRepo.GetByID(r.Context(), *meeting.ThemeID); err == nil {
+			customPrompt = theme.CustomPrompt
+		}
+	}
+	s, err := h.svc.Generate(r.Context(), meeting, customPrompt)
 	if err != nil {
 		if errors.Is(err, services.ErrAINotConfigured) {
 			writeError(w, http.StatusServiceUnavailable, "AI service not configured")
