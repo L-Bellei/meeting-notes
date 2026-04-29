@@ -100,7 +100,9 @@ CREATE INDEX idx_board_cards_number ON board_cards(number);
 
 Query params for `GET /api/board/cards`: `?title=&number=&created_after=&created_before=&updated_after=&updated_before=`
 
-`GET /api/board/cards` returns one query with JOINs (no N+1); each item includes `task_progress: {total, completed}`.
+`GET /api/board/cards` returns one query with JOINs (no N+1); each item includes `task_progress: {total, completed}` and `status` (derived from `column.name` — not stored in the table).
+
+`PATCH /api/board/columns/reorder` — chi routes literal segments before parameterized ones, so `/reorder` correctly takes priority over `/{id}`.
 
 ### Theme (extension)
 
