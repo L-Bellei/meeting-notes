@@ -17,9 +17,9 @@ Itens fora do escopo das features já implementadas. Para features com plano ati
 ## Débitos técnicos
 
 - **Chunk size warning no build do frontend** — bundle JS de ~518 kB. Considerar code-splitting com `React.lazy` para BoardView e modais pesados.
-- **`cmd/desktop/build/` e `cmd/desktop/frontend/dist/` não estão no `.gitignore`** — esses artefatos de build aparecem como untracked. Adicionar ao `.gitignore`.
-- **`frontend/dist/` duplicado** — existe `frontend/dist/` com arquivos obsoletos além do `cmd/desktop/frontend/dist/` que é o correto. Remover o diretório obsoleto.
-- **productVersion no wails.json** — atualmente `2.0.0`, deve ser atualizado a cada release. Considerar automatizar via script ou Makefile.
+- **`frontend/dist/` duplicado** — existe `frontend/dist/` com arquivos obsoletos além do `cmd/desktop/frontend/dist/` que é o correto. Remover o diretório obsoleto (já no `.gitignore`, mas o diretório físico ainda existe).
+- **productVersion no wails.json** — atualmente `2.0.0`, deve ser atualizado a cada release. Considerar automatizar via `build.ps1`.
+- **`makensis` fora do PATH** — em novas sessões de terminal, adicionar `/c/Program Files (x86)/NSIS` ao PATH antes de `wails build -nsis`. Ver DECISIONS.md.
 
 ---
 
