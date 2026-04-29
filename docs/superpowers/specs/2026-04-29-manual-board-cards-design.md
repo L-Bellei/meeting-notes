@@ -159,12 +159,16 @@ Hook: `useCreateManualCard` → `POST /api/board/cards/manual`
 Em sucesso: invalida query do board, fecha modal.
 Em erro: toast de erro, modal permanece aberto.
 
+### `CardDetailModal` — edição de tasks manuais
+
+Para cards com `source === 'manual'`, as tasks exibidas e editadas no modal são lidas de `board_cards.tasks` (JSON array). A UI de edição de tasks é a mesma já existente para cards de reunião — sem novo componente necessário.
+
 ### `CardDetailModal` — associar a reunião
 
 Exibido apenas para `source === 'manual'` sem `meeting_id`:
 - Botão "Associar a reunião" abre selector searchable de reuniões existentes
 - Ao confirmar: `PATCH /api/board/cards/{id}/link` → invalida queries do board
-- Após associar: card passa a exibir título e tasks da reunião; ícone de lápis desaparece
+- Após associar: card passa a exibir título e tasks da reunião; ícone de lápis desaparece; `board_cards.tasks` é ignorado
 
 ---
 
