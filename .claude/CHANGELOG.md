@@ -2,6 +2,27 @@
 
 ---
 
+## [2026-04-29] Publicação v2.0.0 e infraestrutura do repositório
+
+**Feature:** Nenhuma nova — sessão de publicação e organização.
+
+**Fase do workflow Superpowers:** N/A (pós-finishing).
+
+**O que foi feito:**
+- Vinculação ao repositório remoto `https://github.com/L-Bellei/meeting-notes`
+- Repositório tornado público com branch protection (`protect-master` ruleset)
+- PR #1: `chore/gitignore-e-cleanup` — `.gitignore` expandido para artefatos de build
+- PR #2: `docs/update-readme-v2` — README atualizado para v2.0.0
+- Release de desenvolvimento `v2.0.0` publicada no GitHub com installer anexado
+- Documentação de continuidade criada (`.claude/`, `CLAUDE.md`)
+
+**Decisões transversais:** nenhuma nova (ver `DECISIONS.md`).
+
+**Bloqueios encontrados:**
+- Primeiro installer copiado para dist era pré-existente (build anterior sem kanban); corrigido forçando rebuild com `wails build -nsis` e NSIS no PATH
+
+---
+
 ## [2026-04-29] Kanban Board — v2.0.0
 
 **Feature:** Global Kanban Board com drag-and-drop, colunas configuráveis, CardDetailModal, filtros e auto-add por tema.
