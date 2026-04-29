@@ -61,7 +61,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	aiClient := ai.NewDynamicAIClient(settingsRepo)
 
 	boardColumnSvc := services.NewBoardColumnService(boardColumnRepo)
-	_ = boardCardRepo // wired in Task 3
+	boardCardSvc := services.NewBoardCardService(boardCardRepo, boardColumnRepo, meetingRepo, summaryRepo, keyPointRepo, taskRepo)
 	themeSvc := services.NewThemeService(themeRepo)
 	meetingSvc := services.NewMeetingService(meetingRepo, themeRepo)
 	summarySvc := services.NewSummaryService(summaryRepo, aiClient)
@@ -81,7 +81,7 @@ func (a *App) OnStartup(ctx context.Context) {
 		}
 	})
 
-	boardHandler := handlers.NewBoardHandler(boardColumnSvc, nil)
+	boardHandler := handlers.NewBoardHandler(boardColumnSvc, boardCardSvc)
 	themeHandler := handlers.NewThemeHandler(themeSvc)
 	meetingHandler := handlers.NewMeetingHandler(meetingSvc, summaryRepo, keyPointRepo, taskRepo, orch)
 	summaryHandler := handlers.NewSummaryHandler(summarySvc, meetingSvc, themeRepo)
@@ -154,6 +154,12 @@ func (a *App) OnStartup(ctx context.Context) {
 		r.Patch("/columns/reorder", boardHandler.ReorderColumns)
 		r.Put("/columns/{id}", boardHandler.UpdateColumn)
 		r.Delete("/columns/{id}", boardHandler.DeleteColumn)
+		r.Get("/cards", boardHandler.ListCards)
+		r.Post("/cards", boardHandler.CreateCard)
+		r.Get("/cards/{id}", boardHandler.GetCard)
+		r.Put("/cards/{id}", boardHandler.UpdateCard)
+		r.Delete("/cards/{id}", boardHandler.DeleteCard)
+		r.Patch("/cards/{id}/move", boardHandler.MoveCard)
 	})
 
 	ln, err := net.Listen("tcp", ":0")

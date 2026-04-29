@@ -9,6 +9,7 @@ import {
 } from "../../hooks/useMeeting"
 import { useDeleteMeeting } from "../../hooks/useMeetings"
 import { useSettings } from "../../hooks/useSettings"
+import { useCards, useCreateCard } from "../../hooks/useBoard"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Spinner } from "../ui/spinner"
@@ -58,6 +59,10 @@ export function MeetingDetail({ meetingId, onDeleted }: Props) {
     generateTasks,
   ])
 
+  const { data: allCards = [] } = useCards()
+  const existingCard = meetingId ? allCards.find(c => c.meeting_id === meetingId) : undefined
+  const createCard = useCreateCard()
+
   if (!meetingId || !meeting) {
     return (
       <div className="flex-1 h-full flex items-center justify-center text-sm text-muted-foreground animate-fade-in">
@@ -73,6 +78,25 @@ export function MeetingDetail({ meetingId, onDeleted }: Props) {
   return (
     <div className="flex-1 h-full flex flex-col overflow-hidden animate-fade-in">
       <MeetingHeader meeting={meeting} onDeleted={onDeleted} />
+      {meetingId && !existingCard && meeting?.status === "completed" && (
+        <div className="px-4 pb-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => createCard.mutate({ meeting_id: meetingId })}
+            disabled={createCard.isPending}
+          >
+            Adicionar ao Board
+          </Button>
+        </div>
+      )}
+      {existingCard && (
+        <div className="px-4 pb-2">
+          <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
+            #{existingCard.number} · {existingCard.status}
+          </span>
+        </div>
+      )}
       <div className="px-4 pt-3 pb-0 border-b border-border flex-shrink-0">
         <div className="flex gap-1">
           {(["transcript", "summary", "keypoints", "tasks", "notes"] as Tab[]).map(t => (

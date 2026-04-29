@@ -10,6 +10,7 @@ import { Toolbar } from "./components/layout/Toolbar"
 import { RecordingModal } from "./components/recording/RecordingModal"
 import { SettingsModal } from "./components/settings/SettingsModal"
 import { Spinner } from "./components/ui/spinner"
+import { BoardView } from "./components/board/BoardView"
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10_000 } },
@@ -22,6 +23,7 @@ function AppInner() {
   const [recordingModalOpen, setRecordingModalOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [activeView, setActiveView] = useState<"meetings" | "board">("meetings")
 
   useEffect(() => {
     GetPort().then(port => {
@@ -47,6 +49,8 @@ function AppInner() {
         onToggleSidebar={() => setSidebarOpen(o => !o)}
         onRecord={() => setRecordingModalOpen(true)}
         onSettings={() => setSettingsOpen(true)}
+        activeView={activeView}
+        onChangeView={setActiveView}
       />
       <Sidebar
         open={sidebarOpen}
@@ -55,16 +59,22 @@ function AppInner() {
         onSelectTheme={setSelectedThemeId}
       />
       <div className="flex flex-1 overflow-hidden">
-        <MeetingList
-          themeId={selectedThemeId}
-          selectedMeetingId={selectedMeetingId}
-          onSelectMeeting={setSelectedMeetingId}
-          onMeetingDeleted={id => { if (selectedMeetingId === id) setSelectedMeetingId(null) }}
-        />
-        <MeetingDetail
-          meetingId={selectedMeetingId}
-          onDeleted={() => setSelectedMeetingId(null)}
-        />
+        {activeView === "board" ? (
+          <BoardView />
+        ) : (
+          <>
+            <MeetingList
+              themeId={selectedThemeId}
+              selectedMeetingId={selectedMeetingId}
+              onSelectMeeting={setSelectedMeetingId}
+              onMeetingDeleted={id => { if (selectedMeetingId === id) setSelectedMeetingId(null) }}
+            />
+            <MeetingDetail
+              meetingId={selectedMeetingId}
+              onDeleted={() => setSelectedMeetingId(null)}
+            />
+          </>
+        )}
       </div>
       <RecordingModal
         open={recordingModalOpen}
