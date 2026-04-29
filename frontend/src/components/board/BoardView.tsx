@@ -10,6 +10,7 @@ import { useCards, useMoveCard, EMPTY_FILTERS, type BoardCardSummary } from "../
 import { KanbanColumn } from "./KanbanColumn"
 import { KanbanCard } from "./KanbanCard"
 import { ColumnSettingsPanel } from "./ColumnSettingsPanel"
+import { CardDetailModal } from "./CardDetailModal"
 import { useQueryClient } from "@tanstack/react-query"
 
 export function BoardView() {
@@ -95,8 +96,7 @@ export function BoardView() {
         </DragOverlay>
       </div>
       {settingsOpen && <ColumnSettingsPanel onClose={() => setSettingsOpen(false)} />}
-      {/* CardDetailModal wired in Task 5 */}
-      {selectedCardId && null}
+      <CardDetailModal cardId={selectedCardId} onClose={() => setSelectedCardId(null)} />
     </DndContext>
   )
 }
