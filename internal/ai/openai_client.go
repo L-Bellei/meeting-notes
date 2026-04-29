@@ -20,11 +20,10 @@ func NewOpenAIClient(apiKey, model string) *OpenAIClient {
 	return &OpenAIClient{client: c, model: model}
 }
 
-func (c *OpenAIClient) GenerateSummary(ctx context.Context, transcript, notes string) (string, int, int, error) {
-	prompt := fmt.Sprintf(`Summarize the following meeting content in 2-3 paragraphs, in the same language as the content. Return ONLY a JSON object with the shape {"summary":"..."} and no extra text.
-
-Content:
-%s`, buildContext(transcript, notes))
+func (c *OpenAIClient) GenerateSummary(ctx context.Context, transcript, notes, customPrompt string) (string, int, int, error) {
+	const jsonFmt = `Return ONLY a JSON object with the shape {"summary":"..."} and no extra text.`
+	const def = `Summarize the following meeting content in 2-3 paragraphs, in the same language as the content.`
+	prompt := fmt.Sprintf("%s %s\n\nContent:\n%s", buildInstruction(def, customPrompt), jsonFmt, buildContext(transcript, notes))
 
 	text, in, out, err := c.callJSON(ctx, prompt, 1024)
 	if err != nil {
@@ -39,11 +38,10 @@ Content:
 	return result.Summary, in, out, nil
 }
 
-func (c *OpenAIClient) GenerateKeyPoints(ctx context.Context, transcript, notes string) ([]string, int, int, error) {
-	prompt := fmt.Sprintf(`Extract the key points discussed in the following meeting content, in the same language as the content. Return ONLY a JSON array of strings: ["point 1","point 2",...] and no extra text.
-
-Content:
-%s`, buildContext(transcript, notes))
+func (c *OpenAIClient) GenerateKeyPoints(ctx context.Context, transcript, notes, customPrompt string) ([]string, int, int, error) {
+	const jsonFmt = `Return ONLY a JSON array of strings: ["point 1","point 2",...] and no extra text.`
+	const def = `Extract the key points discussed in the following meeting content, in the same language as the content.`
+	prompt := fmt.Sprintf("%s %s\n\nContent:\n%s", buildInstruction(def, customPrompt), jsonFmt, buildContext(transcript, notes))
 
 	text, in, out, err := c.callJSON(ctx, prompt, 1024)
 	if err != nil {
@@ -56,11 +54,10 @@ Content:
 	return points, in, out, nil
 }
 
-func (c *OpenAIClient) GenerateTasks(ctx context.Context, transcript, notes string) ([]TaskSuggestion, int, int, error) {
-	prompt := fmt.Sprintf(`Extract action items from the following meeting content, in the same language as the content. Return ONLY a JSON array with the shape [{"description":"...","assignee":"name or empty string","priority":"low|medium|high"},...] and no extra text.
-
-Content:
-%s`, buildContext(transcript, notes))
+func (c *OpenAIClient) GenerateTasks(ctx context.Context, transcript, notes, customPrompt string) ([]TaskSuggestion, int, int, error) {
+	const jsonFmt = `Return ONLY a JSON array with the shape [{"description":"...","assignee":"name or empty string","priority":"low|medium|high"},...] and no extra text.`
+	const def = `Extract action items from the following meeting content, in the same language as the content.`
+	prompt := fmt.Sprintf("%s %s\n\nContent:\n%s", buildInstruction(def, customPrompt), jsonFmt, buildContext(transcript, notes))
 
 	text, in, out, err := c.callJSON(ctx, prompt, 2048)
 	if err != nil {

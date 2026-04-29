@@ -22,7 +22,7 @@ func TestDynamicClient_NoAPIKey_ReturnsError(t *testing.T) {
 		"anthropic_model":   "claude-sonnet-4-6",
 	}}
 	c := ai.NewDynamicAIClient(repo)
-	_, _, _, err := c.GenerateSummary(context.Background(), "transcript", "")
+	_, _, _, err := c.GenerateSummary(context.Background(), "transcript", "", "")
 	if err == nil {
 		t.Fatal("expected error when API key is empty, got nil")
 	}
@@ -33,7 +33,7 @@ func TestDynamicClient_UnknownProvider_ReturnsError(t *testing.T) {
 		"ai_provider": "gemini",
 	}}
 	c := ai.NewDynamicAIClient(repo)
-	_, _, _, err := c.GenerateSummary(context.Background(), "transcript", "")
+	_, _, _, err := c.GenerateSummary(context.Background(), "transcript", "", "")
 	if err == nil {
 		t.Fatal("expected error for unknown provider, got nil")
 	}

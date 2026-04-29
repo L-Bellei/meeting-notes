@@ -50,26 +50,26 @@ func (d *DynamicAIClient) resolve(ctx context.Context) (AIClient, error) {
 	}
 }
 
-func (d *DynamicAIClient) GenerateSummary(ctx context.Context, transcript, notes string) (string, int, int, error) {
+func (d *DynamicAIClient) GenerateSummary(ctx context.Context, transcript, notes, customPrompt string) (string, int, int, error) {
 	c, err := d.resolve(ctx)
 	if err != nil {
 		return "", 0, 0, err
 	}
-	return c.GenerateSummary(ctx, transcript, notes)
+	return c.GenerateSummary(ctx, transcript, notes, customPrompt)
 }
 
-func (d *DynamicAIClient) GenerateKeyPoints(ctx context.Context, transcript, notes string) ([]string, int, int, error) {
+func (d *DynamicAIClient) GenerateKeyPoints(ctx context.Context, transcript, notes, customPrompt string) ([]string, int, int, error) {
 	c, err := d.resolve(ctx)
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	return c.GenerateKeyPoints(ctx, transcript, notes)
+	return c.GenerateKeyPoints(ctx, transcript, notes, customPrompt)
 }
 
-func (d *DynamicAIClient) GenerateTasks(ctx context.Context, transcript, notes string) ([]TaskSuggestion, int, int, error) {
+func (d *DynamicAIClient) GenerateTasks(ctx context.Context, transcript, notes, customPrompt string) ([]TaskSuggestion, int, int, error) {
 	c, err := d.resolve(ctx)
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	return c.GenerateTasks(ctx, transcript, notes)
+	return c.GenerateTasks(ctx, transcript, notes, customPrompt)
 }
