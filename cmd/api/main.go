@@ -37,10 +37,14 @@ func main() {
 	keyPointRepo := repository.NewKeyPointRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
 	settingsRepo := repository.NewSettingsRepository(db)
+	boardColumnRepo := repository.NewBoardColumnRepository(db)
+	boardCardRepo := repository.NewBoardCardRepository(db)
 
 	aiClient := ai.NewDynamicAIClient(settingsRepo)
 
 	// Services
+	boardColumnSvc := services.NewBoardColumnService(boardColumnRepo)
+	_ = boardCardRepo // wired in Task 3
 	themeSvc := services.NewThemeService(themeRepo)
 	meetingSvc := services.NewMeetingService(meetingRepo, themeRepo)
 	summarySvc := services.NewSummaryService(summaryRepo, aiClient)
@@ -53,6 +57,7 @@ func main() {
 	orchestrator := services.NewOrchestrator(meetingRepo, themeRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo)
 
 	// Handlers
+	boardHandler := handlers.NewBoardHandler(boardColumnSvc, nil)
 	themeHandler := handlers.NewThemeHandler(themeSvc)
 	meetingHandler := handlers.NewMeetingHandler(meetingSvc, summaryRepo, keyPointRepo, taskRepo, orchestrator)
 	summaryHandler := handlers.NewSummaryHandler(summarySvc, meetingSvc, themeRepo)
@@ -119,6 +124,14 @@ func main() {
 	r.Route("/api/settings", func(r chi.Router) {
 		r.Get("/", settingsH.Get)
 		r.Put("/", settingsH.Update)
+	})
+
+	r.Route("/api/board", func(r chi.Router) {
+		r.Get("/columns", boardHandler.ListColumns)
+		r.Post("/columns", boardHandler.CreateColumn)
+		r.Patch("/columns/reorder", boardHandler.ReorderColumns)
+		r.Put("/columns/{id}", boardHandler.UpdateColumn)
+		r.Delete("/columns/{id}", boardHandler.DeleteColumn)
 	})
 
 	log.Printf("server listening on :%s", cfg.HTTPPort)
