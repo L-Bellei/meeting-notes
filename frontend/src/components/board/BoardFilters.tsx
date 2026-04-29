@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Search } from "lucide-react"
 import { Button } from "../ui/button"
 import type { BoardCardFilters } from "../../hooks/useBoard"
@@ -10,18 +10,28 @@ interface Props {
 
 export function BoardFilters({ filters, onChange }: Props) {
   const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const hasFilters = !!(filters.title || filters.number != null ||
-    filters.created_after || filters.created_before ||
-    filters.updated_after || filters.updated_before)
+    filters.created_after || filters.created_before)
+
+  useEffect(() => {
+    if (!open) return
+    function handleOutsideClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick)
+    return () => document.removeEventListener("mousedown", handleOutsideClick)
+  }, [open])
 
   function clear() {
     onChange({})
-    setOpen(false)
   }
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <Button
         variant={hasFilters ? "outline" : "ghost"}
         size="sm"
@@ -57,6 +67,8 @@ export function BoardFilters({ filters, onChange }: Props) {
             <label className="text-xs text-muted-foreground">Número (#)</label>
             <input
               type="number"
+              min={1}
+              step={1}
               className="w-full text-sm bg-input border border-border rounded px-2 py-1 mt-1"
               placeholder="ex: 5"
               value={filters.number ?? ""}
