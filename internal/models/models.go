@@ -70,3 +70,67 @@ type Task struct {
 	Completed   bool         `json:"completed"`
 	CreatedAt   time.Time    `json:"created_at"`
 }
+
+type BoardColumn struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Position  float64   `json:"position"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type BoardColumnWithCount struct {
+	BoardColumn
+	CardCount int `json:"card_count"`
+}
+
+type BoardCard struct {
+	ID          string    `json:"id"`
+	MeetingID   string    `json:"meeting_id"`
+	ColumnID    string    `json:"column_id"`
+	Number      int       `json:"number"`
+	Position    float64   `json:"position"`
+	Description string    `json:"description"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type TaskProgress struct {
+	Total     int `json:"total"`
+	Completed int `json:"completed"`
+}
+
+type BoardCardSummary struct {
+	ID           string       `json:"id"`
+	MeetingID    string       `json:"meeting_id"`
+	ColumnID     string       `json:"column_id"`
+	Number       int          `json:"number"`
+	Position     float64      `json:"position"`
+	Description  string       `json:"description"`
+	UpdatedAt    time.Time    `json:"updated_at"`
+	CreatedAt    time.Time    `json:"created_at"`
+	MeetingTitle string       `json:"meeting_title"`
+	ThemeID      *string      `json:"theme_id"`
+	ThemeName    *string      `json:"theme_name"`
+	ThemeColor   *string      `json:"theme_color"`
+	Status       string       `json:"status"`
+	TaskProgress TaskProgress `json:"task_progress"`
+}
+
+type BoardCardDetail struct {
+	ID           string     `json:"id"`
+	MeetingID    string     `json:"meeting_id"`
+	ColumnID     string     `json:"column_id"`
+	Number       int        `json:"number"`
+	Position     float64    `json:"position"`
+	Description  string     `json:"description"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	Status       string     `json:"status"`
+	MeetingTitle string     `json:"meeting_title"`
+	ThemeID      *string    `json:"theme_id"`
+	ThemeName    *string    `json:"theme_name"`
+	ThemeColor   *string    `json:"theme_color"`
+	Summary      *Summary   `json:"summary"`
+	KeyPoints    []KeyPoint `json:"key_points"`
+	Tasks        []Task     `json:"tasks"`
+}
