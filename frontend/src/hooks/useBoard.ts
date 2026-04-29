@@ -132,6 +132,7 @@ export function useMoveCard() {
         method: "PATCH",
         body: JSON.stringify({ column_id, position }),
       }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["board-cards"] }),
     onError: () => qc.invalidateQueries({ queryKey: ["board-cards"] }),
   })
 }

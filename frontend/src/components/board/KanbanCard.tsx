@@ -1,3 +1,5 @@
+import { useSortable } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import type { BoardCardSummary } from "../../hooks/useBoard"
 
 interface Props {
@@ -16,10 +18,20 @@ function relativeTime(iso: string): string {
 }
 
 export function KanbanCard({ card, onClick }: Props) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: card.id,
+    data: { columnId: card.column_id, position: card.position },
+  })
+  const style = { transform: CSS.Transform.toString(transform), transition }
   const { total, completed } = card.task_progress
+
   return (
     <div
-      className="bg-card border border-border rounded-md p-3 cursor-pointer hover:border-primary/50 transition-colors select-none"
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={`bg-card border border-border rounded-md p-3 cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors select-none ${isDragging ? "opacity-50" : ""}`}
       onClick={onClick}
     >
       <div className="flex items-center justify-between mb-1">
