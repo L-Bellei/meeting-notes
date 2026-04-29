@@ -151,3 +151,63 @@ func TestThemeRepository_GetByID_NotFound(t *testing.T) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
+
+func TestThemeRepository_Create_CustomPrompt(t *testing.T) {
+	repo := openTestDB(t)
+	ctx := context.Background()
+
+	theme := &models.Theme{ID: "id-cp1", Name: "CP Test", Color: "#fff", CustomPrompt: "Focus on technical decisions"}
+	if err := repo.Create(ctx, theme); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got, err := repo.GetByID(ctx, "id-cp1")
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if got.CustomPrompt != "Focus on technical decisions" {
+		t.Errorf("CustomPrompt = %q, want %q", got.CustomPrompt, "Focus on technical decisions")
+	}
+}
+
+func TestThemeRepository_Update_CustomPrompt(t *testing.T) {
+	repo := openTestDB(t)
+	ctx := context.Background()
+
+	repo.Create(ctx, &models.Theme{ID: "id-cp2", Name: "CP Update", Color: "#fff"})
+	got, _ := repo.GetByID(ctx, "id-cp2")
+	if got.CustomPrompt != "" {
+		t.Error("expected empty CustomPrompt after create")
+	}
+	got.CustomPrompt = "Updated prompt"
+	if err := repo.Update(ctx, got); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	updated, _ := repo.GetByID(ctx, "id-cp2")
+	if updated.CustomPrompt != "Updated prompt" {
+		t.Errorf("CustomPrompt = %q, want %q", updated.CustomPrompt, "Updated prompt")
+	}
+}
+
+func TestThemeRepository_List_IncludesCustomPrompt(t *testing.T) {
+	repo := openTestDB(t)
+	ctx := context.Background()
+
+	repo.Create(ctx, &models.Theme{ID: "cp-a", Name: "CP A", Color: "#fff", CustomPrompt: "prompt-a"})
+	repo.Create(ctx, &models.Theme{ID: "cp-b", Name: "CP B", Color: "#000"})
+	themes, err := repo.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(themes) != 2 {
+		t.Fatalf("expected 2 themes, got %d", len(themes))
+	}
+	found := false
+	for _, th := range themes {
+		if th.ID == "cp-a" && th.CustomPrompt == "prompt-a" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("List did not return custom_prompt for theme cp-a")
+	}
+}

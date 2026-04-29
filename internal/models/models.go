@@ -7,8 +7,9 @@ type Theme struct {
 	ParentID    *string   `json:"parent_id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
-	Color       string    `json:"color"`
-	CreatedAt   time.Time `json:"created_at"`
+	Color        string    `json:"color"`
+	CustomPrompt string    `json:"custom_prompt"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type MeetingStatus string
