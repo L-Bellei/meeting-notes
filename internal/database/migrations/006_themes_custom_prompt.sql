@@ -1,0 +1,1 @@
+ALTER TABLE themes ADD COLUMN custom_prompt TEXT NOT NULL DEFAULT '';
