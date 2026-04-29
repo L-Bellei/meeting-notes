@@ -99,7 +99,11 @@ func (h *BoardHandler) DeleteColumn(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, repository.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "column not found")
+			msg := "column not found"
+			if moveTo != "" {
+				msg = "move_to column not found"
+			}
+			writeError(w, http.StatusNotFound, msg)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to delete column")

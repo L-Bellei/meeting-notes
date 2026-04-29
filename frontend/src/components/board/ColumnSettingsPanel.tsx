@@ -72,15 +72,17 @@ export function ColumnSettingsPanel({ onClose }: Props) {
                     onChange={e => setEditName(e.target.value)}
                     onKeyDown={e => {
                       if (e.key === "Enter") {
-                        updateCol.mutate({ id: col.id, name: editName }, { onSuccess: () => setEditingId(null) })
+                        if (!editName.trim()) return
+                        updateCol.mutate({ id: col.id, name: editName.trim() }, { onSuccess: () => setEditingId(null) })
                       }
                       if (e.key === "Escape") setEditingId(null)
                     }}
                     autoFocus
                   />
-                  <Button variant="ghost" size="icon" onClick={() =>
-                    updateCol.mutate({ id: col.id, name: editName }, { onSuccess: () => setEditingId(null) })
-                  }><Check size={14} /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => {
+                    if (!editName.trim()) return
+                    updateCol.mutate({ id: col.id, name: editName.trim() }, { onSuccess: () => setEditingId(null) })
+                  }}><Check size={14} /></Button>
                 </>
               ) : (
                 <>
