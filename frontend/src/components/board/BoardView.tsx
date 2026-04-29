@@ -6,16 +6,18 @@ import {
 } from "@dnd-kit/core"
 import { Button } from "../ui/button"
 import { useColumns } from "../../hooks/useBoardColumns"
-import { useCards, useMoveCard, EMPTY_FILTERS, type BoardCardSummary } from "../../hooks/useBoard"
+import { useCards, useMoveCard, EMPTY_FILTERS, type BoardCardSummary, type BoardCardFilters } from "../../hooks/useBoard"
 import { KanbanColumn } from "./KanbanColumn"
 import { KanbanCard } from "./KanbanCard"
 import { ColumnSettingsPanel } from "./ColumnSettingsPanel"
 import { CardDetailModal } from "./CardDetailModal"
+import { BoardFilters } from "./BoardFilters"
 import { useQueryClient } from "@tanstack/react-query"
 
 export function BoardView() {
   const { data: columns = [] } = useColumns()
-  const { data: cards = [] } = useCards(EMPTY_FILTERS)
+  const [filters, setFilters] = useState<BoardCardFilters>(EMPTY_FILTERS)
+  const { data: cards = [] } = useCards(filters)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null)
   const [activeCard, setActiveCard] = useState<BoardCardSummary | null>(null)
@@ -58,7 +60,7 @@ export function BoardView() {
       newPosition = (targetColumnCards[overCardIdx - 1].position + targetColumnCards[overCardIdx].position) / 2
     }
 
-    qc.setQueryData(["board-cards", EMPTY_FILTERS], (old: BoardCardSummary[] | undefined) =>
+    qc.setQueryData(["board-cards", filters], (old: BoardCardSummary[] | undefined) =>
       (old ?? []).map(c =>
         c.id === card.id ? { ...c, column_id: targetColumnId, position: newPosition } : c
       )
@@ -72,6 +74,7 @@ export function BoardView() {
       <div className="flex flex-col flex-1 overflow-hidden">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border flex-shrink-0">
           <span className="font-semibold text-sm flex-1">Board</span>
+          <BoardFilters filters={filters} onChange={setFilters} />
           <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)}>
             <Settings2 size={16} />
           </Button>
