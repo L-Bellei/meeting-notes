@@ -19,6 +19,8 @@ func Open(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 
+	db.SetMaxOpenConns(1)
+
 	if err := db.Ping(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("ping sqlite: %w", err)
@@ -27,6 +29,11 @@ func Open(path string) (*sql.DB, error) {
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("enable foreign keys: %w", err)
+	}
+
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("set busy timeout: %w", err)
 	}
 
 	if err := runMigrations(db); err != nil {

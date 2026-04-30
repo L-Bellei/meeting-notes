@@ -95,6 +95,11 @@ func (s *MeetingService) Create(ctx context.Context, title, themeID, status stri
 	if err := s.repo.Create(ctx, m); err != nil {
 		return nil, err
 	}
+	if s.searchRepo != nil {
+		go func() {
+			_ = s.searchRepo.UpsertMeeting(context.Background(), m.ID, m.Title, "", "", "", "")
+		}()
+	}
 	return m, nil
 }
 
