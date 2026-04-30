@@ -82,3 +82,47 @@ func TestSettingsHandler_Update_UnknownKey(t *testing.T) {
 		t.Fatalf("status = %d, want 422", w.Code)
 	}
 }
+
+func TestSettingsHandler_SetOnUpdate(t *testing.T) {
+	db, err := database.Open(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	settingsRepo := repository.NewSettingsRepository(db)
+	settingsSvc := services.NewSettingsService(settingsRepo)
+	h := handlers.NewSettingsHandler(settingsSvc)
+
+	var called map[string]string
+	h.SetOnUpdate(func(s map[string]string) { called = s })
+
+	body, _ := json.Marshal(map[string]string{"recording_hotkey": "ctrl+alt+r"})
+	req := httptest.NewRequest(http.MethodPut, "/api/settings", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Update(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if called == nil {
+		t.Fatal("onUpdate was not called")
+	}
+	if called["recording_hotkey"] != "ctrl+alt+r" {
+		t.Fatalf("expected ctrl+alt+r, got %q", called["recording_hotkey"])
+	}
+}
+
+func TestSettingsHandler_NoOnUpdate(t *testing.T) {
+	h := newSettingsHandler(t)
+
+	body, _ := json.Marshal(map[string]string{"recording_hotkey": "ctrl+shift+r"})
+	req := httptest.NewRequest(http.MethodPut, "/api/settings", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Update(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}

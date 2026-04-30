@@ -93,6 +93,11 @@ func (a *App) OnStartup(ctx context.Context) {
 	keyPointHandler := handlers.NewKeyPointHandler(keyPointSvc, meetingSvc, themeRepo)
 	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc, themeRepo)
 	settingsHandler := handlers.NewSettingsHandler(settingsSvc)
+	settingsHandler.SetOnUpdate(func(s map[string]string) {
+		if a.tray != nil {
+			a.tray.ApplySettings(s)
+		}
+	})
 	searchHandler := handlers.NewSearchHandler(searchSvc)
 
 	r := chi.NewRouter()
