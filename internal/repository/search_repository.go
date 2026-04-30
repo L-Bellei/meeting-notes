@@ -7,6 +7,8 @@ import (
 	"fmt"
 )
 
+const searchLimit = 20
+
 type SearchResult struct {
 	MeetingID string
 	Snippet   string
@@ -25,11 +27,11 @@ func (r *SearchRepository) Search(ctx context.Context, q string) ([]SearchResult
 		return nil, errors.New("query must not be empty")
 	}
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT meeting_id, snippet(meetings_fts, -1, '<b>', '</b>', '...', 15) AS snippet
+		fmt.Sprintf(`SELECT meeting_id, snippet(meetings_fts, -1, '<b>', '</b>', '...', 15) AS snippet
 		 FROM meetings_fts
 		 WHERE meetings_fts MATCH ?
 		 ORDER BY rank
-		 LIMIT 20`,
+		 LIMIT %d`, searchLimit),
 		q,
 	)
 	if err != nil {
@@ -39,11 +41,11 @@ func (r *SearchRepository) Search(ctx context.Context, q string) ([]SearchResult
 
 	var results []SearchResult
 	for rows.Next() {
-		var r SearchResult
-		if err := rows.Scan(&r.MeetingID, &r.Snippet); err != nil {
+		var result SearchResult
+		if err := rows.Scan(&result.MeetingID, &result.Snippet); err != nil {
 			return nil, fmt.Errorf("scan search result: %w", err)
 		}
-		results = append(results, r)
+		results = append(results, result)
 	}
 	return results, rows.Err()
 }
@@ -69,6 +71,7 @@ func (r *SearchRepository) UpsertMeeting(ctx context.Context, meetingID, title, 
 }
 
 func (r *SearchRepository) DeleteMeeting(ctx context.Context, meetingID string) error {
+	// Deleting a non-existent entry is a no-op; meetings may not be indexed yet.
 	_, err := r.db.ExecContext(ctx, `DELETE FROM meetings_fts WHERE meeting_id = ?`, meetingID)
 	return err
 }
