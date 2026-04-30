@@ -142,9 +142,6 @@ func (s *BoardCardService) Update(ctx context.Context, id, description string, t
 	return s.cardRepo.GetByID(ctx, id)
 }
 
-func (s *BoardCardService) UpdateDescription(ctx context.Context, id, description string) (*models.BoardCard, error) {
-	return s.Update(ctx, id, description, []string{})
-}
 
 func (s *BoardCardService) Move(ctx context.Context, id, columnID string, position float64) error {
 	if _, err := s.columnRepo.GetByID(ctx, columnID); err != nil {
