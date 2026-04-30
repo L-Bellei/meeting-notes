@@ -156,10 +156,12 @@ func (a *App) OnStartup(ctx context.Context) {
 		r.Delete("/columns/{id}", boardHandler.DeleteColumn)
 		r.Get("/cards", boardHandler.ListCards)
 		r.Post("/cards", boardHandler.CreateCard)
+		r.Post("/cards/manual", boardHandler.CreateManualCard)
 		r.Get("/cards/{id}", boardHandler.GetCard)
 		r.Put("/cards/{id}", boardHandler.UpdateCard)
 		r.Delete("/cards/{id}", boardHandler.DeleteCard)
 		r.Patch("/cards/{id}/move", boardHandler.MoveCard)
+		r.Patch("/cards/{id}/link", boardHandler.LinkCardToMeeting)
 	})
 
 	ln, err := net.Listen("tcp", ":0")

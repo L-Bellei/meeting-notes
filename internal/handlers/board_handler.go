@@ -218,13 +218,17 @@ func (h *BoardHandler) GetCard(w http.ResponseWriter, r *http.Request) {
 func (h *BoardHandler) UpdateCard(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req struct {
-		Description string `json:"description"`
+		Description string   `json:"description"`
+		Tasks       []string `json:"tasks"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	card, err := h.cardSvc.UpdateDescription(r.Context(), id, req.Description)
+	if req.Tasks == nil {
+		req.Tasks = []string{}
+	}
+	card, err := h.cardSvc.Update(r.Context(), id, req.Description, req.Tasks)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "card not found")
@@ -265,6 +269,57 @@ func (h *BoardHandler) MoveCard(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to move card")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *BoardHandler) CreateManualCard(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ColumnID    string `json:"column_id"`
+		Title       string `json:"title"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	card, err := h.cardSvc.CreateManualCard(r.Context(), req.ColumnID, req.Title, req.Description)
+	if err != nil {
+		var ve *services.ValidationError
+		if errors.As(err, &ve) {
+			writeError(w, http.StatusBadRequest, ve.Message)
+			return
+		}
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "column not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to create manual card")
+		return
+	}
+	writeJSON(w, http.StatusCreated, card)
+}
+
+func (h *BoardHandler) LinkCardToMeeting(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req struct {
+		MeetingID string `json:"meeting_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := h.cardSvc.LinkCardToMeeting(r.Context(), id, req.MeetingID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "card or meeting not found")
+			return
+		}
+		if errors.Is(err, repository.ErrDuplicate) {
+			writeError(w, http.StatusConflict, "card already linked to a meeting")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to link card to meeting")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
