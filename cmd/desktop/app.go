@@ -186,7 +186,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	a.server = &http.Server{Handler: r}
 	go a.server.Serve(ln)
 
-	a.tray = NewTrayManager(a, orch, meetingRepo, meetingSvc)
+	a.tray = NewTrayManager(a, orch, meetingRepo, meetingSvc, settingsRepo)
 	if err := a.tray.Start(ctx); err != nil {
 		log.Printf("tray: %v", err)
 	}
