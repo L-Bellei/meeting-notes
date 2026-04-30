@@ -13,6 +13,8 @@ import { SettingsModal } from "./components/settings/SettingsModal"
 import { Spinner } from "./components/ui/spinner"
 import { BoardView } from "./components/board/BoardView"
 import { SearchModal } from "./components/search/SearchModal"
+import { useSettings } from "./hooks/useSettings"
+import { formatHotkey } from "./lib/formatHotkey"
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10_000 } },
@@ -28,6 +30,9 @@ function AppInner() {
   const [activeView, setActiveView] = useState<"meetings" | "board">("meetings")
   const [searchOpen, setSearchOpen] = useState(false)
   const [highlightQuery, setHighlightQuery] = useState<string | undefined>(undefined)
+
+  const { data: settings } = useSettings()
+  const recordingHotkey = formatHotkey(settings?.recording_hotkey ?? "ctrl+shift+r")
 
   useEffect(() => {
     GetPort().then(port => {
@@ -79,6 +84,8 @@ function AppInner() {
         onToggleSidebar={() => setSidebarOpen(o => !o)}
         onRecord={() => setRecordingModalOpen(true)}
         onSettings={() => setSettingsOpen(true)}
+        onSearch={() => setSearchOpen(true)}
+        recordingHotkey={recordingHotkey}
         activeView={activeView}
         onChangeView={setActiveView}
       />

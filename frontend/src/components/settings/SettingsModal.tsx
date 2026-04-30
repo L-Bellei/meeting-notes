@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { createPortal } from "react-dom"
 import { X, Eye, EyeOff } from "lucide-react"
 import { useSettings, useUpdateSettings, type Settings } from "../../hooks/useSettings"
 import { Button } from "../ui/button"
 import { cn } from "../../lib/utils"
+import { formatHotkey } from "../../lib/formatHotkey"
 
 interface Props {
   open: boolean
@@ -37,6 +38,59 @@ const WHISPER_MODELS = [
   { value: "large",  label: "large — máxima precisão, mais lento" },
 ]
 
+function HotkeyCapture({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [listening, setListening] = useState(false)
+
+  useEffect(() => {
+    if (!listening) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault()
+        setListening(false)
+        return
+      }
+      e.preventDefault()
+      const parts: string[] = []
+      if (e.ctrlKey)  parts.push("ctrl")
+      if (e.shiftKey) parts.push("shift")
+      if (e.altKey)   parts.push("alt")
+      const key = e.key.toLowerCase()
+      if (!["control", "shift", "alt", "meta"].includes(key) && key.length === 1) {
+        parts.push(key)
+        onChange(parts.join("+"))
+        setListening(false)
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [listening, onChange])
+
+  const display = formatHotkey(value)
+
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <button
+        onClick={() => setListening(l => !l)}
+        className={cn(
+          "flex-1 text-sm rounded-xl px-3 py-2 text-left border transition-colors font-mono",
+          listening
+            ? "bg-primary/10 border-primary text-primary animate-pulse"
+            : "bg-[#111111] border-border text-foreground hover:border-primary/50"
+        )}
+      >
+        {listening ? "Pressione o atalho..." : display}
+      </button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => { onChange("ctrl+shift+r"); setListening(false) }}
+      >
+        Restaurar
+      </Button>
+    </div>
+  )
+}
+
 export function SettingsModal({ open, onClose }: Props) {
   const { data: settings } = useSettings()
   const update = useUpdateSettings()
@@ -64,6 +118,11 @@ export function SettingsModal({ open, onClose }: Props) {
       setError(e.message ?? "Erro ao salvar")
     }
   }
+
+  const handleHotkeyChange = useCallback(
+    (v: string) => setForm(f => ({ ...f, recording_hotkey: v })),
+    []
+  )
 
   const provider = form.ai_provider ?? "anthropic"
   const models = provider === "anthropic" ? ANTHROPIC_MODELS : OPENAI_MODELS
@@ -203,6 +262,21 @@ export function SettingsModal({ open, onClose }: Props) {
               ))}
             </select>
             <p className="text-[10px] text-muted-foreground/60 mt-1">Modelos maiores transcrevem melhor, mas demoram mais. Requer reinício do serviço de áudio para ter efeito.</p>
+          </div>
+        </div>
+
+        {/* Atalhos */}
+        <div className="px-5 py-4 border-b border-border space-y-3">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Atalhos</p>
+          <div>
+            <label className="text-xs text-muted-foreground">Atalho de gravação rápida</label>
+            <HotkeyCapture
+              value={form.recording_hotkey ?? "ctrl+shift+r"}
+              onChange={handleHotkeyChange}
+            />
+            <p className="text-[10px] text-muted-foreground/60 mt-1">
+              Padrão: Ctrl+Shift+R — funciona com o app em segundo plano
+            </p>
           </div>
         </div>
 
