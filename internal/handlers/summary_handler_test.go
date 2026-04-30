@@ -41,7 +41,7 @@ func newTestSummaryHandler(t *testing.T, aiClient ai.AIClient) (*handlers.Summar
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	meetingSvc := services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db))
+	meetingSvc := services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db), nil, nil, nil, nil)
 	transcript := "Falamos sobre o roadmap."
 	m, err := meetingSvc.Create(context.Background(), "Reunião", "", "completed", nil)
 	if err != nil {

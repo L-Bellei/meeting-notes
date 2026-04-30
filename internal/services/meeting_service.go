@@ -139,29 +139,31 @@ func (s *MeetingService) Update(ctx context.Context, id, title string, themeID *
 	if err := s.repo.Update(ctx, m); err != nil {
 		return nil, err
 	}
-	go func() {
-		bgCtx := context.Background()
-		transcript := ""
-		if m.Transcript != nil {
-			transcript = *m.Transcript
-		}
-		summary := ""
-		if sm, err2 := s.summaryRepo.GetByMeetingID(bgCtx, m.ID); err2 == nil && sm != nil {
-			summary = sm.Content
-		}
-		kps, _ := s.keyPointRepo.ListByMeetingID(bgCtx, m.ID)
-		var kpContents []string
-		for _, kp := range kps {
-			kpContents = append(kpContents, kp.Content)
-		}
-		tasks, _ := s.taskRepo.ListByMeetingID(bgCtx, m.ID)
-		var taskContents []string
-		for _, tk := range tasks {
-			taskContents = append(taskContents, tk.Description)
-		}
-		_ = s.searchRepo.UpsertMeeting(bgCtx, m.ID, m.Title, transcript, summary,
-			strings.Join(kpContents, "\n"), strings.Join(taskContents, "\n"))
-	}()
+	if s.searchRepo != nil {
+		go func() {
+			bgCtx := context.Background()
+			transcript := ""
+			if m.Transcript != nil {
+				transcript = *m.Transcript
+			}
+			summary := ""
+			if sm, err2 := s.summaryRepo.GetByMeetingID(bgCtx, m.ID); err2 == nil && sm != nil {
+				summary = sm.Content
+			}
+			kps, _ := s.keyPointRepo.ListByMeetingID(bgCtx, m.ID)
+			var kpContents []string
+			for _, kp := range kps {
+				kpContents = append(kpContents, kp.Content)
+			}
+			tasks, _ := s.taskRepo.ListByMeetingID(bgCtx, m.ID)
+			var taskContents []string
+			for _, tk := range tasks {
+				taskContents = append(taskContents, tk.Description)
+			}
+			_ = s.searchRepo.UpsertMeeting(bgCtx, m.ID, m.Title, transcript, summary,
+				strings.Join(kpContents, "\n"), strings.Join(taskContents, "\n"))
+		}()
+	}
 	return m, nil
 }
 
@@ -169,8 +171,10 @@ func (s *MeetingService) Delete(ctx context.Context, id string) error {
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return err
 	}
-	go func() {
-		_ = s.searchRepo.DeleteMeeting(context.Background(), id)
-	}()
+	if s.searchRepo != nil {
+		go func() {
+			_ = s.searchRepo.DeleteMeeting(context.Background(), id)
+		}()
+	}
 	return nil
 }
