@@ -62,6 +62,7 @@ export function MeetingDetail({ meetingId, onDeleted, highlightQuery }: Props) {
 
   const { data: existingCard } = useCardForMeeting(meetingId)
   const createCard = useCreateCard()
+  const query = highlightQuery ?? ""
 
   if (!meetingId || !meeting) {
     return (
@@ -77,7 +78,7 @@ export function MeetingDetail({ meetingId, onDeleted, highlightQuery }: Props) {
 
   return (
     <div className="flex-1 h-full flex flex-col overflow-hidden animate-fade-in">
-      <MeetingHeader meeting={meeting} onDeleted={onDeleted} highlightQuery={highlightQuery ?? ""} />
+      <MeetingHeader meeting={meeting} onDeleted={onDeleted} highlightQuery={query} />
       {meetingId && !existingCard && meeting?.status === "completed" && (
         <div className="px-4 pb-2">
           <Button
@@ -117,9 +118,9 @@ export function MeetingDetail({ meetingId, onDeleted, highlightQuery }: Props) {
       </div>
       <div className="flex-1 overflow-y-auto p-4">
         {tab === "transcript" && <TranscriptTab meeting={meeting} />}
-        {tab === "summary" && <SummaryTab meeting={meeting} highlightQuery={highlightQuery ?? ""} />}
-        {tab === "keypoints" && <KeyPointsTab meeting={meeting} highlightQuery={highlightQuery ?? ""} />}
-        {tab === "tasks" && <TasksTab meeting={meeting} highlightQuery={highlightQuery ?? ""} />}
+        {tab === "summary" && <SummaryTab meeting={meeting} highlightQuery={query} />}
+        {tab === "keypoints" && <KeyPointsTab meeting={meeting} highlightQuery={query} />}
+        {tab === "tasks" && <TasksTab meeting={meeting} highlightQuery={query} />}
         {tab === "notes" && <NotesTab meeting={meeting} />}
       </div>
     </div>
@@ -228,7 +229,7 @@ function SummaryTab({ meeting, highlightQuery }: { meeting: any; highlightQuery:
         </Button>
       </div>
       {meeting.summary ? (
-        <p className="text-sm leading-relaxed whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: highlightText(meeting.summary.content, highlightQuery) }} />
+        <p className="text-sm leading-relaxed whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: highlightText(meeting.summary.content ?? "", highlightQuery) }} />
       ) : (
         <p className="text-sm text-muted-foreground">Nenhum resumo ainda.</p>
       )}
