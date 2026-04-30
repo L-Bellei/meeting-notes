@@ -268,7 +268,7 @@ func TestBoardCardRepository_DeleteNotFound(t *testing.T) {
 	}
 }
 
-func TestBoardCardRepository_UpdateDescription(t *testing.T) {
+func TestBoardCardRepository_UpdateExisting(t *testing.T) {
 	db := openBoardTestDB(t)
 	meetingRepo := repository.NewMeetingRepository(db)
 	cardRepo := repository.NewBoardCardRepository(db)
@@ -281,7 +281,7 @@ func TestBoardCardRepository_UpdateDescription(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	if err := cardRepo.UpdateDescription(ctx, card.ID, "updated"); err != nil {
+	if err := cardRepo.Update(ctx, card.ID, "updated", []string{}); err != nil {
 		t.Fatalf("UpdateDescription: %v", err)
 	}
 
@@ -314,8 +314,8 @@ func TestBoardCardRepository_GetByMeetingID(t *testing.T) {
 	if got.ID != card.ID {
 		t.Errorf("ID = %q, want %q", got.ID, card.ID)
 	}
-	if got.MeetingID != "meeting-byid" {
-		t.Errorf("MeetingID = %q, want 'meeting-byid'", got.MeetingID)
+	if got.MeetingID == nil || *got.MeetingID != "meeting-byid" {
+		t.Errorf("MeetingID = %v, want 'meeting-byid'", got.MeetingID)
 	}
 
 	_, err = cardRepo.GetByMeetingID(ctx, "nonexistent-meeting")
@@ -396,5 +396,164 @@ func TestBoardCardRepository_LastPositionInColumn(t *testing.T) {
 	}
 	if pos2 != 1500 {
 		t.Errorf("LastPositionInColumn = %f, want 1500", pos2)
+	}
+}
+
+func TestBoardCardRepository_MeetingIDIsPointer(t *testing.T) {
+	db := openBoardTestDB(t)
+	meetingRepo := repository.NewMeetingRepository(db)
+	cardRepo := repository.NewBoardCardRepository(db)
+	ctx := context.Background()
+
+	createTestMeeting(t, meetingRepo, "meeting-ptr", "Meeting Pointer")
+
+	card, err := cardRepo.Create(ctx, "meeting-ptr", "col-backlog", "", 1000)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if card.MeetingID == nil {
+		t.Error("MeetingID should not be nil for a meeting card")
+	}
+	if *card.MeetingID != "meeting-ptr" {
+		t.Errorf("MeetingID = %q, want 'meeting-ptr'", *card.MeetingID)
+	}
+	if card.Source != "meeting" {
+		t.Errorf("Source = %q, want 'meeting'", card.Source)
+	}
+}
+
+func TestBoardCardRepository_Update(t *testing.T) {
+	db := openBoardTestDB(t)
+	meetingRepo := repository.NewMeetingRepository(db)
+	cardRepo := repository.NewBoardCardRepository(db)
+	ctx := context.Background()
+
+	createTestMeeting(t, meetingRepo, "meeting-upd", "Meeting Update")
+
+	card, err := cardRepo.Create(ctx, "meeting-upd", "col-backlog", "original", 1000)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := cardRepo.Update(ctx, card.ID, "updated desc", []string{}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	got, err := cardRepo.GetByID(ctx, card.ID)
+	if err != nil {
+		t.Fatalf("GetByID after Update: %v", err)
+	}
+	if got.Description != "updated desc" {
+		t.Errorf("Description = %q, want 'updated desc'", got.Description)
+	}
+}
+
+func TestBoardCardRepository_CreateManual(t *testing.T) {
+	db := openBoardTestDB(t)
+	cardRepo := repository.NewBoardCardRepository(db)
+	ctx := context.Background()
+
+	card, err := cardRepo.CreateManual(ctx, "col-backlog", "Revisar proposta", "Detalhe", []string{"Task A", "Task B"}, 1000)
+	if err != nil {
+		t.Fatalf("CreateManual: %v", err)
+	}
+	if card.MeetingID != nil {
+		t.Errorf("MeetingID should be nil, got %v", card.MeetingID)
+	}
+	if card.Source != "manual" {
+		t.Errorf("Source = %q, want 'manual'", card.Source)
+	}
+	if card.Title != "Revisar proposta" {
+		t.Errorf("Title = %q, want 'Revisar proposta'", card.Title)
+	}
+	if len(card.Tasks) != 2 || card.Tasks[0] != "Task A" {
+		t.Errorf("Tasks = %v, want [Task A Task B]", card.Tasks)
+	}
+	if card.Number < 1 {
+		t.Errorf("Number = %d, want >= 1", card.Number)
+	}
+}
+
+func TestBoardCardRepository_CreateManualSequentialNumber(t *testing.T) {
+	db := openBoardTestDB(t)
+	meetingRepo := repository.NewMeetingRepository(db)
+	cardRepo := repository.NewBoardCardRepository(db)
+	ctx := context.Background()
+
+	createTestMeeting(t, meetingRepo, "meeting-seq", "Meeting Seq")
+	m1, err := cardRepo.Create(ctx, "meeting-seq", "col-backlog", "", 1000)
+	if err != nil {
+		t.Fatalf("Create meeting card: %v", err)
+	}
+
+	m2, err := cardRepo.CreateManual(ctx, "col-backlog", "Manual card", "", []string{}, 2000)
+	if err != nil {
+		t.Fatalf("CreateManual: %v", err)
+	}
+	if m2.Number != m1.Number+1 {
+		t.Errorf("manual card number = %d, want %d", m2.Number, m1.Number+1)
+	}
+}
+
+func TestBoardCardRepository_CreateManualDuplicateTitleAllowed(t *testing.T) {
+	db := openBoardTestDB(t)
+	cardRepo := repository.NewBoardCardRepository(db)
+	ctx := context.Background()
+
+	_, err := cardRepo.CreateManual(ctx, "col-backlog", "Same title", "", []string{}, 1000)
+	if err != nil {
+		t.Fatalf("first CreateManual: %v", err)
+	}
+	_, err = cardRepo.CreateManual(ctx, "col-backlog", "Same title", "", []string{}, 2000)
+	if err != nil {
+		t.Fatalf("second CreateManual with same title: %v", err)
+	}
+}
+
+func TestBoardCardRepository_LinkToMeeting(t *testing.T) {
+	db := openBoardTestDB(t)
+	meetingRepo := repository.NewMeetingRepository(db)
+	cardRepo := repository.NewBoardCardRepository(db)
+	ctx := context.Background()
+
+	createTestMeeting(t, meetingRepo, "meeting-link", "Meeting Link")
+
+	card, err := cardRepo.CreateManual(ctx, "col-backlog", "Manual", "", []string{}, 1000)
+	if err != nil {
+		t.Fatalf("CreateManual: %v", err)
+	}
+
+	if err := cardRepo.LinkToMeeting(ctx, card.ID, "meeting-link"); err != nil {
+		t.Fatalf("LinkToMeeting: %v", err)
+	}
+
+	got, err := cardRepo.GetByID(ctx, card.ID)
+	if err != nil {
+		t.Fatalf("GetByID after link: %v", err)
+	}
+	if got.MeetingID == nil || *got.MeetingID != "meeting-link" {
+		t.Errorf("MeetingID = %v, want 'meeting-link'", got.MeetingID)
+	}
+	if got.Source != "meeting" {
+		t.Errorf("Source = %q, want 'meeting' after link", got.Source)
+	}
+}
+
+func TestBoardCardRepository_LinkToMeeting_AlreadyLinked(t *testing.T) {
+	db := openBoardTestDB(t)
+	meetingRepo := repository.NewMeetingRepository(db)
+	cardRepo := repository.NewBoardCardRepository(db)
+	ctx := context.Background()
+
+	createTestMeeting(t, meetingRepo, "meeting-already", "Meeting Already")
+	meetingCard, err := cardRepo.Create(ctx, "meeting-already", "col-backlog", "", 1000)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	createTestMeeting(t, meetingRepo, "meeting-other", "Meeting Other")
+	err = cardRepo.LinkToMeeting(ctx, meetingCard.ID, "meeting-other")
+	if !errors.Is(err, repository.ErrDuplicate) {
+		t.Errorf("LinkToMeeting on already-linked card = %v, want ErrDuplicate", err)
 	}
 }

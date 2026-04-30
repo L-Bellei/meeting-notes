@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
-import { X } from "lucide-react"
+import { X, Pencil, Plus, Trash2 } from "lucide-react"
 import { Button } from "../ui/button"
-import { useCardDetail, useUpdateCard, type BoardCardDetail } from "../../hooks/useBoard"
+import { useCardDetail, useUpdateCard, useLinkCardToMeeting, type BoardCardDetail } from "../../hooks/useBoard"
 import { useUpdateTask } from "../../hooks/useMeeting"
+import { useMeetings } from "../../hooks/useMeetings"
 
 interface Props {
   cardId: string | null
@@ -15,15 +16,27 @@ type TaskItem = BoardCardDetail["tasks"][number]
 export function CardDetailModal({ cardId, onClose }: Props) {
   const { data: card, isLoading } = useCardDetail(cardId)
   const updateCard = useUpdateCard()
+  const linkCard = useLinkCardToMeeting()
   const [description, setDescription] = useState("")
   const [descriptionAtEditStart, setDescriptionAtEditStart] = useState("")
   const [editing, setEditing] = useState(false)
+  const [newTask, setNewTask] = useState("")
+  const [linkingMeeting, setLinkingMeeting] = useState(false)
+  const [selectedMeetingId, setSelectedMeetingId] = useState("")
+  const { data: meetings = [] } = useMeetings()
 
   useEffect(() => {
-    if (card) setDescription(card.description)
+    if (card) {
+      setDescription(card.description)
+      setLinkingMeeting(false)
+      setSelectedMeetingId("")
+    }
   }, [card?.id])
 
   if (!cardId) return null
+
+  const isManual = card?.source === "manual"
+  const manualTasks = card?.manual_tasks ?? []
 
   function startEditing() {
     setDescriptionAtEditStart(description)
@@ -33,6 +46,32 @@ export function CardDetailModal({ cardId, onClose }: Props) {
   function cancelEditing() {
     setDescription(descriptionAtEditStart)
     setEditing(false)
+  }
+
+  function saveDescription() {
+    if (!cardId) return
+    updateCard.mutate(
+      { id: cardId, description, tasks: isManual ? manualTasks : [] },
+      { onSuccess: () => setEditing(false) },
+    )
+  }
+
+  function addTask() {
+    if (!cardId || !newTask.trim()) return
+    const updated = [...manualTasks, newTask.trim()]
+    updateCard.mutate({ id: cardId, description, tasks: updated })
+    setNewTask("")
+  }
+
+  function removeTask(index: number) {
+    if (!cardId) return
+    const updated = manualTasks.filter((_, i) => i !== index)
+    updateCard.mutate({ id: cardId, description, tasks: updated })
+  }
+
+  function handleLink() {
+    if (!cardId || !selectedMeetingId) return
+    linkCard.mutate({ cardId, meetingId: selectedMeetingId }, { onSuccess: onClose })
   }
 
   return createPortal(
@@ -45,15 +84,14 @@ export function CardDetailModal({ cardId, onClose }: Props) {
           {isLoading && <span className="text-xs text-muted-foreground flex-1">Carregando...</span>}
           {card && (
             <>
-              <span className="text-xs text-muted-foreground">#{card.number}</span>
-              {card.theme_name && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">#{card.number}</span>
+                {isManual && <Pencil size={11} className="text-muted-foreground/60" />}
+              </div>
+              {!isManual && card.theme_name && (
                 <span
                   className="text-xs px-1.5 py-0.5 rounded-full"
-                  style={
-                    card.theme_color
-                      ? { background: card.theme_color + "22", color: card.theme_color }
-                      : undefined
-                  }
+                  style={card.theme_color ? { background: card.theme_color + "22", color: card.theme_color } : undefined}
                 >
                   {card.theme_name}
                 </span>
@@ -77,9 +115,7 @@ export function CardDetailModal({ cardId, onClose }: Props) {
                   autoFocus
                 />
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={() => {
-                    if (cardId) updateCard.mutate({ id: cardId, description }, { onSuccess: () => setEditing(false) })
-                  }}>Salvar</Button>
+                  <Button size="sm" onClick={saveDescription}>Salvar</Button>
                   <Button variant="ghost" size="sm" onClick={cancelEditing}>Cancelar</Button>
                 </div>
               </div>
@@ -93,27 +129,58 @@ export function CardDetailModal({ cardId, onClose }: Props) {
             )}
           </section>
 
-          {card && card.tasks.length > 0 && (
+          {isManual && (
+            <section>
+              <h3 className="text-xs font-medium text-muted-foreground uppercase mb-2">Tasks</h3>
+              <div className="space-y-1.5 mb-2">
+                {manualTasks.map((task, i) => (
+                  <div key={i} className="flex items-center gap-2 group">
+                    <span className="text-sm text-foreground flex-1">{task}</span>
+                    <button
+                      onClick={() => removeTask(i)}
+                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 text-sm rounded-lg px-3 py-1.5 bg-input border border-border text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="Nova task..."
+                  value={newTask}
+                  onChange={e => setNewTask(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && addTask()}
+                />
+                <Button size="sm" variant="ghost" onClick={addTask} disabled={!newTask.trim()}>
+                  <Plus size={14} />
+                </Button>
+              </div>
+            </section>
+          )}
+
+          {!isManual && card && card.tasks.length > 0 && (
             <section>
               <h3 className="text-xs font-medium text-muted-foreground uppercase mb-2">
                 Tasks ({card.tasks.filter(t => t.completed).length}/{card.tasks.length})
               </h3>
               <div className="space-y-1.5">
                 {card.tasks.map(task => (
-                  <TaskRow key={task.id} task={task} meetingId={card.meeting_id} />
+                  <TaskRow key={task.id} task={task} meetingId={card.meeting_id ?? ""} />
                 ))}
               </div>
             </section>
           )}
 
-          {card?.summary && (
+          {!isManual && card?.summary && (
             <section>
               <h3 className="text-xs font-medium text-muted-foreground uppercase mb-2">Resumo</h3>
               <p className="text-sm text-muted-foreground whitespace-pre-wrap">{card.summary.content}</p>
             </section>
           )}
 
-          {card && card.key_points.length > 0 && (
+          {!isManual && card && card.key_points.length > 0 && (
             <section>
               <h3 className="text-xs font-medium text-muted-foreground uppercase mb-2">Pontos-chave</h3>
               <ul className="space-y-1">
@@ -124,6 +191,38 @@ export function CardDetailModal({ cardId, onClose }: Props) {
                   </li>
                 ))}
               </ul>
+            </section>
+          )}
+
+          {isManual && !card?.meeting_id && (
+            <section className="border-t border-border pt-4">
+              {!linkingMeeting ? (
+                <Button variant="ghost" size="sm" onClick={() => setLinkingMeeting(true)}>
+                  Associar a uma reunião
+                </Button>
+              ) : (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase">Associar a reunião</h3>
+                  <select
+                    className="w-full text-sm rounded-lg px-3 py-2 bg-input border border-border text-foreground focus:outline-none"
+                    value={selectedMeetingId}
+                    onChange={e => setSelectedMeetingId(e.target.value)}
+                  >
+                    <option value="">Selecionar reunião...</option>
+                    {meetings.map(m => (
+                      <option key={m.id} value={m.id}>{m.title}</option>
+                    ))}
+                  </select>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={handleLink} disabled={!selectedMeetingId || linkCard.isPending}>
+                      {linkCard.isPending ? "Associando..." : "Confirmar"}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => { setLinkingMeeting(false); setSelectedMeetingId("") }}>
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              )}
             </section>
           )}
         </div>

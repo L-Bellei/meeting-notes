@@ -75,16 +75,18 @@ func (s *BoardCardService) GetDetail(ctx context.Context, id string) (*models.Bo
 	if err != nil {
 		return nil, err
 	}
-	if sum, err := s.summaryRepo.GetByMeetingID(ctx, detail.MeetingID); err == nil {
-		detail.Summary = sum
-	}
-	kps, err := s.keyPointRepo.ListByMeetingID(ctx, detail.MeetingID)
-	if err == nil {
-		detail.KeyPoints = kps
-	}
-	tasks, err := s.taskRepo.ListByMeetingID(ctx, detail.MeetingID)
-	if err == nil {
-		detail.Tasks = tasks
+	if detail.MeetingID != nil {
+		if sum, err := s.summaryRepo.GetByMeetingID(ctx, *detail.MeetingID); err == nil {
+			detail.Summary = sum
+		}
+		kps, err := s.keyPointRepo.ListByMeetingID(ctx, *detail.MeetingID)
+		if err == nil {
+			detail.KeyPoints = kps
+		}
+		tasks, err := s.taskRepo.ListByMeetingID(ctx, *detail.MeetingID)
+		if err == nil {
+			detail.Tasks = tasks
+		}
 	}
 	if detail.KeyPoints == nil {
 		detail.KeyPoints = []models.KeyPoint{}
@@ -92,15 +94,54 @@ func (s *BoardCardService) GetDetail(ctx context.Context, id string) (*models.Bo
 	if detail.Tasks == nil {
 		detail.Tasks = []models.Task{}
 	}
+	if detail.ManualTasks == nil {
+		detail.ManualTasks = []string{}
+	}
 	return detail, nil
 }
 
-func (s *BoardCardService) UpdateDescription(ctx context.Context, id, description string) (*models.BoardCard, error) {
-	if err := s.cardRepo.UpdateDescription(ctx, id, description); err != nil {
+func (s *BoardCardService) CreateManualCard(ctx context.Context, columnID, title, description string) (*models.BoardCard, error) {
+	if title == "" {
+		return nil, &ValidationError{Message: "title is required"}
+	}
+	if columnID == "" {
+		cols, err := s.columnRepo.List(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(cols) == 0 {
+			return nil, &ValidationError{Message: "no columns exist; create a column first"}
+		}
+		columnID = cols[0].ID
+	} else {
+		if _, err := s.columnRepo.GetByID(ctx, columnID); err != nil {
+			return nil, err
+		}
+	}
+	lastPos, err := s.cardRepo.LastPositionInColumn(ctx, columnID)
+	if err != nil {
+		return nil, err
+	}
+	return s.cardRepo.CreateManual(ctx, columnID, title, description, []string{}, lastPos+1000)
+}
+
+func (s *BoardCardService) LinkCardToMeeting(ctx context.Context, cardID, meetingID string) error {
+	if _, err := s.cardRepo.GetByID(ctx, cardID); err != nil {
+		return err
+	}
+	if _, err := s.meetingRepo.GetByID(ctx, meetingID); err != nil {
+		return err
+	}
+	return s.cardRepo.LinkToMeeting(ctx, cardID, meetingID)
+}
+
+func (s *BoardCardService) Update(ctx context.Context, id, description string, tasks []string) (*models.BoardCard, error) {
+	if err := s.cardRepo.Update(ctx, id, description, tasks); err != nil {
 		return nil, err
 	}
 	return s.cardRepo.GetByID(ctx, id)
 }
+
 
 func (s *BoardCardService) Move(ctx context.Context, id, columnID string, position float64) error {
 	if _, err := s.columnRepo.GetByID(ctx, columnID); err != nil {

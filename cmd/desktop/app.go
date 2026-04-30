@@ -32,6 +32,8 @@ type App struct {
 	port      int
 	server    *http.Server
 	audioProc *exec.Cmd
+	allowQuit bool
+	tray      *TrayManager
 }
 
 func NewApp() *App { return &App{} }
@@ -57,20 +59,23 @@ func (a *App) OnStartup(ctx context.Context) {
 	settingsRepo := repository.NewSettingsRepository(db)
 	boardColumnRepo := repository.NewBoardColumnRepository(db)
 	boardCardRepo := repository.NewBoardCardRepository(db)
+	searchRepo := repository.NewSearchRepository(db)
 
 	aiClient := ai.NewDynamicAIClient(settingsRepo)
 
 	boardColumnSvc := services.NewBoardColumnService(boardColumnRepo)
 	boardCardSvc := services.NewBoardCardService(boardCardRepo, boardColumnRepo, meetingRepo, summaryRepo, keyPointRepo, taskRepo)
 	themeSvc := services.NewThemeService(themeRepo)
-	meetingSvc := services.NewMeetingService(meetingRepo, themeRepo)
+	meetingSvc := services.NewMeetingService(meetingRepo, themeRepo, searchRepo, keyPointRepo, taskRepo, summaryRepo)
 	summarySvc := services.NewSummaryService(summaryRepo, aiClient)
 	keyPointSvc := services.NewKeyPointService(keyPointRepo, aiClient)
 	taskSvc := services.NewTaskService(taskRepo, aiClient)
 	settingsSvc := services.NewSettingsService(settingsRepo)
+	searchSvc := services.NewSearchService(searchRepo, meetingRepo)
 
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
 	orch := services.NewOrchestrator(meetingRepo, themeRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo, boardCardSvc)
+	orch.SetSearchRepo(searchRepo)
 	orch.SetNotifyFn(func(meetingID, status string) {
 		if isWailsContext(ctx) {
 			type payload struct {
@@ -88,6 +93,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	keyPointHandler := handlers.NewKeyPointHandler(keyPointSvc, meetingSvc, themeRepo)
 	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc, themeRepo)
 	settingsHandler := handlers.NewSettingsHandler(settingsSvc)
+	searchHandler := handlers.NewSearchHandler(searchSvc)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
@@ -156,11 +162,15 @@ func (a *App) OnStartup(ctx context.Context) {
 		r.Delete("/columns/{id}", boardHandler.DeleteColumn)
 		r.Get("/cards", boardHandler.ListCards)
 		r.Post("/cards", boardHandler.CreateCard)
+		r.Post("/cards/manual", boardHandler.CreateManualCard)
 		r.Get("/cards/{id}", boardHandler.GetCard)
 		r.Put("/cards/{id}", boardHandler.UpdateCard)
 		r.Delete("/cards/{id}", boardHandler.DeleteCard)
 		r.Patch("/cards/{id}/move", boardHandler.MoveCard)
+		r.Patch("/cards/{id}/link", boardHandler.LinkCardToMeeting)
 	})
+
+	r.Get("/api/search", searchHandler.Search)
 
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -170,9 +180,25 @@ func (a *App) OnStartup(ctx context.Context) {
 	a.port = ln.Addr().(*net.TCPAddr).Port
 	a.server = &http.Server{Handler: r}
 	go a.server.Serve(ln)
+
+	a.tray = NewTrayManager(a, orch, meetingRepo, meetingSvc)
+	if err := a.tray.Start(ctx); err != nil {
+		log.Printf("tray: %v", err)
+	}
+}
+
+func (a *App) OnBeforeClose(ctx context.Context) bool {
+	if a.allowQuit {
+		return false
+	}
+	wailsruntime.Hide(ctx)
+	return true
 }
 
 func (a *App) OnShutdown(ctx context.Context) {
+	if a.tray != nil {
+		a.tray.Stop()
+	}
 	if a.server != nil {
 		a.server.Shutdown(context.Background())
 	}

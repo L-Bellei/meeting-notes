@@ -39,6 +39,7 @@ func main() {
 	settingsRepo := repository.NewSettingsRepository(db)
 	boardColumnRepo := repository.NewBoardColumnRepository(db)
 	boardCardRepo := repository.NewBoardCardRepository(db)
+	searchRepo := repository.NewSearchRepository(db)
 
 	aiClient := ai.NewDynamicAIClient(settingsRepo)
 
@@ -46,15 +47,17 @@ func main() {
 	boardColumnSvc := services.NewBoardColumnService(boardColumnRepo)
 	boardCardSvc := services.NewBoardCardService(boardCardRepo, boardColumnRepo, meetingRepo, summaryRepo, keyPointRepo, taskRepo)
 	themeSvc := services.NewThemeService(themeRepo)
-	meetingSvc := services.NewMeetingService(meetingRepo, themeRepo)
+	meetingSvc := services.NewMeetingService(meetingRepo, themeRepo, searchRepo, keyPointRepo, taskRepo, summaryRepo)
 	summarySvc := services.NewSummaryService(summaryRepo, aiClient)
 	keyPointSvc := services.NewKeyPointService(keyPointRepo, aiClient)
 	taskSvc := services.NewTaskService(taskRepo, aiClient)
 	settingsSvc := services.NewSettingsService(settingsRepo)
+	searchSvc := services.NewSearchService(searchRepo, meetingRepo)
 
 	// Audio + Orchestrator
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
 	orchestrator := services.NewOrchestrator(meetingRepo, themeRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo, boardCardSvc)
+	orchestrator.SetSearchRepo(searchRepo)
 
 	// Handlers
 	boardHandler := handlers.NewBoardHandler(boardColumnSvc, boardCardSvc)
@@ -64,6 +67,7 @@ func main() {
 	keyPointHandler := handlers.NewKeyPointHandler(keyPointSvc, meetingSvc, themeRepo)
 	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc, themeRepo)
 	settingsH := handlers.NewSettingsHandler(settingsSvc)
+	searchHandler := handlers.NewSearchHandler(searchSvc)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -134,11 +138,15 @@ func main() {
 		r.Delete("/columns/{id}", boardHandler.DeleteColumn)
 		r.Get("/cards", boardHandler.ListCards)
 		r.Post("/cards", boardHandler.CreateCard)
+		r.Post("/cards/manual", boardHandler.CreateManualCard)
 		r.Get("/cards/{id}", boardHandler.GetCard)
 		r.Put("/cards/{id}", boardHandler.UpdateCard)
 		r.Delete("/cards/{id}", boardHandler.DeleteCard)
 		r.Patch("/cards/{id}/move", boardHandler.MoveCard)
+		r.Patch("/cards/{id}/link", boardHandler.LinkCardToMeeting)
 	})
+
+	r.Get("/api/search", searchHandler.Search)
 
 	log.Printf("server listening on :%s", cfg.HTTPPort)
 	if err := http.ListenAndServe(":"+cfg.HTTPPort, r); err != nil {

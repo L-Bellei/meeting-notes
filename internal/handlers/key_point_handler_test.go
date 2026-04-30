@@ -46,7 +46,7 @@ func newTestKeyPointHandler(t *testing.T, aiClient ai.AIClient) (*handlers.KeyPo
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	meetingSvc := services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db))
+	meetingSvc := services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db), nil, nil, nil, nil)
 	transcript := "x"
 	m, _ := meetingSvc.Create(context.Background(), "R", "", "completed", nil)
 	m.Transcript = &transcript
