@@ -11,6 +11,7 @@ export interface Settings {
   auto_generate: string
   whisper_language: string
   whisper_model: string
+  recording_hotkey: string
 }
 
 export function useSettings() {

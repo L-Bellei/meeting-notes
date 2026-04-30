@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -59,6 +60,8 @@ const (
 	menuRecord = 1002
 	menuQuit   = 1003
 )
+
+const defaultHotkey = "ctrl+shift+r"
 
 // ---------------------------------------------------------------------------
 // Win32 structs
@@ -163,6 +166,35 @@ func loadEmbeddedIcon() uintptr {
 	return hIcon
 }
 
+// parseHotkey parses "ctrl+shift+r" into Win32 modifier flags and virtual key code.
+// Supported modifiers: ctrl, shift, alt, win. Key must be a single letter a-z.
+func parseHotkey(s string) (mods, vk uint32, err error) {
+	parts := strings.Split(strings.ToLower(strings.TrimSpace(s)), "+")
+	if len(parts) < 2 {
+		return 0, 0, fmt.Errorf("hotkey requires modifier+key, got %q", s)
+	}
+	keyPart := parts[len(parts)-1]
+	for _, mod := range parts[:len(parts)-1] {
+		switch mod {
+		case "ctrl":
+			mods |= 0x0002
+		case "shift":
+			mods |= 0x0004
+		case "alt":
+			mods |= 0x0001
+		case "win":
+			mods |= 0x0008
+		default:
+			return 0, 0, fmt.Errorf("unknown modifier %q", mod)
+		}
+	}
+	if len(keyPart) != 1 || keyPart[0] < 'a' || keyPart[0] > 'z' {
+		return 0, 0, fmt.Errorf("key must be a single letter a-z, got %q", keyPart)
+	}
+	vk = uint32(keyPart[0]-'a') + 0x41
+	return mods, vk, nil
+}
+
 // ---------------------------------------------------------------------------
 // Package-level WndProc callback — syscall.NewCallback must be called once
 // ---------------------------------------------------------------------------
@@ -177,24 +209,36 @@ var globalTray *TrayManager
 // ---------------------------------------------------------------------------
 
 type TrayManager struct {
-	ctx         context.Context
-	orch        *services.Orchestrator
-	meetingRepo *repository.MeetingRepository
-	meetingSvc  *services.MeetingService
-	app         *App
-	hwnd        uintptr
-	hIcon       uintptr
-	running     atomic.Bool
-	isRecording bool
+	ctx            context.Context
+	orch           *services.Orchestrator
+	meetingRepo    *repository.MeetingRepository
+	meetingSvc     *services.MeetingService
+	settingsRepo   *repository.SettingsRepository
+	app            *App
+	hwnd           uintptr
+	hIcon          uintptr
+	running        atomic.Bool
+	isRecording    bool
+	hotkeyMods     uint32
+	hotkeyVK       uint32
+	hotkeyUpdateCh chan string
 }
 
 func NewTrayManager(
-	app *App,
-	orch *services.Orchestrator,
-	meetingRepo *repository.MeetingRepository,
-	meetingSvc  *services.MeetingService,
+	app          *App,
+	orch         *services.Orchestrator,
+	meetingRepo  *repository.MeetingRepository,
+	meetingSvc   *services.MeetingService,
+	settingsRepo *repository.SettingsRepository,
 ) *TrayManager {
-	return &TrayManager{app: app, orch: orch, meetingRepo: meetingRepo, meetingSvc: meetingSvc}
+	return &TrayManager{
+		app:            app,
+		orch:           orch,
+		meetingRepo:    meetingRepo,
+		meetingSvc:     meetingSvc,
+		settingsRepo:   settingsRepo,
+		hotkeyUpdateCh: make(chan string, 1),
+	}
 }
 
 // Start registers the hotkey, adds the tray icon, and launches the message loop goroutine.
@@ -227,8 +271,26 @@ func (t *TrayManager) Start(ctx context.Context) error {
 	}
 	t.hwnd = hwnd
 
-	if ret, _, err = procRegisterHotKey.Call(hwnd, hotkeyID, modCtrl|modShift, vkR); ret == 0 {
-		log.Printf("tray: RegisterHotKey Ctrl+Shift+R: %v", err)
+	hotkeyStr := defaultHotkey
+	if t.settingsRepo != nil {
+		if all, err2 := t.settingsRepo.GetAll(ctx); err2 == nil {
+			if v := all["recording_hotkey"]; v != "" {
+				hotkeyStr = v
+			}
+		}
+	}
+	mods, vk, err2 := parseHotkey(hotkeyStr)
+	if err2 != nil {
+		log.Printf("tray: invalid hotkey %q, using default: %v", hotkeyStr, err2)
+		mods, vk, err2 = parseHotkey(defaultHotkey)
+		if err2 != nil {
+			panic(fmt.Sprintf("tray: built-in defaultHotkey is invalid: %v", err2))
+		}
+	}
+	t.hotkeyMods = mods
+	t.hotkeyVK = vk
+	if ret, _, err = procRegisterHotKey.Call(hwnd, hotkeyID, uintptr(mods), uintptr(vk)); ret == 0 {
+		log.Printf("tray: RegisterHotKey %q: %v", hotkeyStr, err)
 	}
 
 	if err := t.addTrayIcon(); err != nil {
@@ -258,6 +320,32 @@ func (t *TrayManager) UpdateState(isRecording bool) {
 	t.updateTooltip()
 }
 
+// ApplySettings re-registers the hotkey when recording_hotkey setting changes.
+// It must not call Win32 APIs directly because RegisterHotKey/UnregisterHotKey
+// are thread-affine and must run on the message-loop OS thread. Instead, the
+// new key is queued to hotkeyUpdateCh and applied by the message loop.
+func (t *TrayManager) ApplySettings(settings map[string]string) {
+	key := settings["recording_hotkey"]
+	if key == "" {
+		key = defaultHotkey
+	}
+	if _, _, err := parseHotkey(key); err != nil {
+		log.Printf("tray: invalid hotkey %q: %v", key, err)
+		return
+	}
+	for {
+		select {
+		case t.hotkeyUpdateCh <- key:
+			return
+		default:
+			select {
+			case <-t.hotkeyUpdateCh:
+			default:
+			}
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Message loop — locked to one OS thread for Win32 correctness
 // ---------------------------------------------------------------------------
@@ -274,6 +362,21 @@ func (t *TrayManager) messageLoop() {
 		}
 		procTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
 		procDispatchMessageW.Call(uintptr(unsafe.Pointer(&msg)))
+
+		// Apply any pending hotkey update on the message-loop thread
+		select {
+		case newKey := <-t.hotkeyUpdateCh:
+			mods2, vk2, err2 := parseHotkey(newKey)
+			if err2 == nil && (mods2 != t.hotkeyMods || vk2 != t.hotkeyVK) {
+				procUnregisterHotKey.Call(t.hwnd, hotkeyID)
+				t.hotkeyMods = mods2
+				t.hotkeyVK = vk2
+				if ret2, _, regErr := procRegisterHotKey.Call(t.hwnd, hotkeyID, uintptr(mods2), uintptr(vk2)); ret2 == 0 {
+					log.Printf("tray: RegisterHotKey %q: %v", newKey, regErr)
+				}
+			}
+		default:
+		}
 	}
 }
 

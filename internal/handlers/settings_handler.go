@@ -9,11 +9,16 @@ import (
 )
 
 type SettingsHandler struct {
-	svc *services.SettingsService
+	svc      *services.SettingsService
+	onUpdate func(map[string]string)
 }
 
 func NewSettingsHandler(svc *services.SettingsService) *SettingsHandler {
 	return &SettingsHandler{svc: svc}
+}
+
+func (h *SettingsHandler) SetOnUpdate(fn func(map[string]string)) {
+	h.onUpdate = fn
 }
 
 func (h *SettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +49,9 @@ func (h *SettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to read updated settings")
 		return
+	}
+	if h.onUpdate != nil {
+		h.onUpdate(settings)
 	}
 	writeJSON(w, http.StatusOK, settings)
 }
