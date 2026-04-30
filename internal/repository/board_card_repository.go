@@ -417,3 +417,73 @@ func (r *BoardCardRepository) LastPositionInColumn(ctx context.Context, columnID
 	}
 	return pos.Float64, nil
 }
+
+func (r *BoardCardRepository) CreateManual(ctx context.Context, columnID, title, description string, tasks []string, position float64) (*models.BoardCard, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	var maxNum int
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(number), 0) FROM board_cards`).Scan(&maxNum); err != nil {
+		return nil, fmt.Errorf("get max number: %w", err)
+	}
+
+	tasksJSON, err := json.Marshal(tasks)
+	if err != nil {
+		return nil, fmt.Errorf("marshal tasks: %w", err)
+	}
+
+	now := time.Now().UTC()
+	card := &models.BoardCard{
+		ID:          uuid.New().String(),
+		MeetingID:   nil,
+		ColumnID:    columnID,
+		Number:      maxNum + 1,
+		Position:    position,
+		Title:       title,
+		Description: description,
+		Tasks:       tasks,
+		Source:      "manual",
+		UpdatedAt:   now,
+		CreatedAt:   now,
+	}
+
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO board_cards (id, meeting_id, column_id, number, position, title, description, tasks, source, updated_at, created_at)
+		 VALUES (?, NULL, ?, ?, ?, ?, ?, ?, 'manual', ?, ?)`,
+		card.ID, card.ColumnID, card.Number, card.Position,
+		card.Title, card.Description, string(tasksJSON),
+		card.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		card.CreatedAt.UTC().Format(time.RFC3339Nano),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create manual card: %w", err)
+	}
+	return card, tx.Commit()
+}
+
+func (r *BoardCardRepository) LinkToMeeting(ctx context.Context, cardID, meetingID string) error {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE board_cards SET meeting_id = ?, source = 'meeting', updated_at = ? WHERE id = ? AND meeting_id IS NULL`,
+		meetingID, now, cardID,
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ErrDuplicate
+		}
+		return fmt.Errorf("link card to meeting: %w", err)
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		var exists int
+		_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM board_cards WHERE id = ?`, cardID).Scan(&exists)
+		if exists == 0 {
+			return ErrNotFound
+		}
+		return ErrDuplicate
+	}
+	return nil
+}
