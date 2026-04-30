@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/wailsapp/wails/v2"
@@ -19,8 +20,11 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		OnStartup:        app.OnStartup,
-		OnShutdown:       app.OnShutdown,
+		OnStartup:  app.OnStartup,
+		OnShutdown: app.OnShutdown,
+		OnBeforeClose: func(ctx context.Context) bool {
+			return app.OnBeforeClose(ctx)
+		},
 		Bind:             []interface{}{app},
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
 	})

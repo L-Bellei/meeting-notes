@@ -33,6 +33,7 @@ type App struct {
 	server    *http.Server
 	audioProc *exec.Cmd
 	allowQuit bool
+	tray      *TrayManager
 }
 
 func NewApp() *App { return &App{} }
@@ -179,9 +180,25 @@ func (a *App) OnStartup(ctx context.Context) {
 	a.port = ln.Addr().(*net.TCPAddr).Port
 	a.server = &http.Server{Handler: r}
 	go a.server.Serve(ln)
+
+	a.tray = NewTrayManager(a, orch, meetingRepo, meetingSvc)
+	if err := a.tray.Start(ctx); err != nil {
+		log.Printf("tray: %v", err)
+	}
+}
+
+func (a *App) OnBeforeClose(ctx context.Context) bool {
+	if a.allowQuit {
+		return false
+	}
+	wailsruntime.Hide(ctx)
+	return true
 }
 
 func (a *App) OnShutdown(ctx context.Context) {
+	if a.tray != nil {
+		a.tray.Stop()
+	}
 	if a.server != nil {
 		a.server.Shutdown(context.Background())
 	}
