@@ -333,15 +333,16 @@ func (t *TrayManager) ApplySettings(settings map[string]string) {
 		log.Printf("tray: invalid hotkey %q: %v", key, err)
 		return
 	}
-	select {
-	case t.hotkeyUpdateCh <- key:
-	default:
-		// channel already has a pending update; replace it
+	for {
 		select {
-		case <-t.hotkeyUpdateCh:
+		case t.hotkeyUpdateCh <- key:
+			return
 		default:
+			select {
+			case <-t.hotkeyUpdateCh:
+			default:
+			}
 		}
-		t.hotkeyUpdateCh <- key
 	}
 }
 

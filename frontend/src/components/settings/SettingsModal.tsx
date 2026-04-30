@@ -4,6 +4,7 @@ import { X, Eye, EyeOff } from "lucide-react"
 import { useSettings, useUpdateSettings, type Settings } from "../../hooks/useSettings"
 import { Button } from "../ui/button"
 import { cn } from "../../lib/utils"
+import { formatHotkey } from "../../lib/formatHotkey"
 
 interface Props {
   open: boolean
@@ -43,6 +44,11 @@ function HotkeyCapture({ value, onChange }: { value: string; onChange: (v: strin
   useEffect(() => {
     if (!listening) return
     function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault()
+        setListening(false)
+        return
+      }
       e.preventDefault()
       const parts: string[] = []
       if (e.ctrlKey)  parts.push("ctrl")
@@ -59,10 +65,7 @@ function HotkeyCapture({ value, onChange }: { value: string; onChange: (v: strin
     return () => window.removeEventListener("keydown", onKey)
   }, [listening, onChange])
 
-  const display = value
-    .split("+")
-    .map(p => p.charAt(0).toUpperCase() + p.slice(1))
-    .join("+")
+  const display = formatHotkey(value)
 
   return (
     <div className="flex items-center gap-2 mt-1">
@@ -117,7 +120,7 @@ export function SettingsModal({ open, onClose }: Props) {
   }
 
   const handleHotkeyChange = useCallback(
-    (v: string) => set("recording_hotkey", v),
+    (v: string) => setForm(f => ({ ...f, recording_hotkey: v })),
     []
   )
 
