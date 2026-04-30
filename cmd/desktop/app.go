@@ -73,6 +73,7 @@ func (a *App) OnStartup(ctx context.Context) {
 
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
 	orch := services.NewOrchestrator(meetingRepo, themeRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo, boardCardSvc)
+	orch.SetSearchRepo(searchRepo)
 	orch.SetNotifyFn(func(meetingID, status string) {
 		if isWailsContext(ctx) {
 			type payload struct {

@@ -2,6 +2,7 @@ package services_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"sync"
@@ -415,5 +416,70 @@ func TestOrchestrator_NotifyFn_CalledOnStatusChange(t *testing.T) {
 		if calls[i].status != want {
 			t.Errorf("call[%d] status = %q, want %q", i, calls[i].status, want)
 		}
+	}
+}
+
+func newOrchTestWithDB(t *testing.T, audioClient audio.Client, aiClient ai.AIClient) (*services.Orchestrator, *repository.MeetingRepository, *sql.DB, string) {
+	t.Helper()
+	db, err := database.Open(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	mr := repository.NewMeetingRepository(db)
+	sr := repository.NewSummaryRepository(db)
+	kpr := repository.NewKeyPointRepository(db)
+	tr := repository.NewTaskRepository(db)
+	thr := repository.NewThemeRepository(db)
+
+	summarySvc := services.NewSummaryService(sr, aiClient)
+	keyPointSvc := services.NewKeyPointService(kpr, aiClient)
+	taskSvc := services.NewTaskService(tr, aiClient)
+
+	orch := services.NewOrchestrator(mr, thr, summarySvc, keyPointSvc, taskSvc, audioClient, &fakeSettings{}, nil)
+
+	now := time.Now().UTC()
+	m := &models.Meeting{ID: "m-orch", Title: "Orch Test", StartedAt: &now, Status: models.StatusPending}
+	if err := mr.Create(context.Background(), m); err != nil {
+		t.Fatalf("seed meeting: %v", err)
+	}
+	return orch, mr, db, m.ID
+}
+
+func TestOrchestrator_RunAIPipeline_SyncsSearch(t *testing.T) {
+	transcript := "sprint review completed successfully"
+	fakeAIClient := &fakeAI{
+		summaryText: "Sprint summary",
+		keyPoints:   []string{"Point 1"},
+		tasks:       []ai.TaskSuggestion{{Description: "Task 1", Priority: "low"}},
+	}
+	orch, mr, db, id := newOrchTestWithDB(t, &fakeAudioClient{}, fakeAIClient)
+	ctx := context.Background()
+
+	searchRepo := repository.NewSearchRepository(db)
+	orch.SetSearchRepo(searchRepo)
+
+	m, err := mr.GetByID(ctx, id)
+	if err != nil {
+		t.Fatalf("get meeting: %v", err)
+	}
+	m.Transcript = &transcript
+	if err := mr.Update(ctx, m); err != nil {
+		t.Fatalf("update meeting with transcript: %v", err)
+	}
+
+	if err := orch.RunAIPipeline(ctx, id); err != nil {
+		t.Fatalf("RunAIPipeline: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	results, err := searchRepo.Search(ctx, "sprint")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) == 0 {
+		t.Error("expected FTS result after pipeline, got none")
 	}
 }

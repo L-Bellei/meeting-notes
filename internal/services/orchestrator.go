@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +31,7 @@ type Orchestrator struct {
 	settings     orchestratorSettings
 	pipelineWG   sync.WaitGroup
 	notifyFn     func(meetingID, status string)
+	searchRepo   *repository.SearchRepository
 }
 
 func NewOrchestrator(
@@ -56,6 +58,10 @@ func NewOrchestrator(
 
 func (o *Orchestrator) SetNotifyFn(fn func(meetingID, status string)) {
 	o.notifyFn = fn
+}
+
+func (o *Orchestrator) SetSearchRepo(repo *repository.SearchRepository) {
+	o.searchRepo = repo
 }
 
 func (o *Orchestrator) notify(meetingID string, status models.MeetingStatus) {
@@ -250,6 +256,31 @@ func (o *Orchestrator) runAIGeneration(ctx context.Context, m *models.Meeting) e
 		if _, err := o.boardCardSvc.Create(ctx, m.ID, ""); err != nil {
 			log.Printf("auto-add to board %s: %v", m.ID, err)
 		}
+	}
+	if o.searchRepo != nil {
+		go func() {
+			bgCtx := context.Background()
+			transcript := ""
+			if m.Transcript != nil {
+				transcript = *m.Transcript
+			}
+			summary := ""
+			if sm, err2 := o.summarySvc.Get(bgCtx, m.ID); err2 == nil && sm != nil {
+				summary = sm.Content
+			}
+			kps, _ := o.keyPointSvc.List(bgCtx, m.ID)
+			var kpContents []string
+			for _, kp := range kps {
+				kpContents = append(kpContents, kp.Content)
+			}
+			tasks, _ := o.taskSvc.List(bgCtx, m.ID)
+			var taskContents []string
+			for _, tk := range tasks {
+				taskContents = append(taskContents, tk.Description)
+			}
+			_ = o.searchRepo.UpsertMeeting(bgCtx, m.ID, m.Title, transcript, summary,
+				strings.Join(kpContents, "\n"), strings.Join(taskContents, "\n"))
+		}()
 	}
 	return nil
 }
