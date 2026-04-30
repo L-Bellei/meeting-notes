@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { X, Eye, EyeOff } from "lucide-react"
 import { useSettings, useUpdateSettings, type Settings } from "../../hooks/useSettings"
@@ -36,6 +36,59 @@ const WHISPER_MODELS = [
   { value: "medium", label: "medium — alta precisão (padrão)" },
   { value: "large",  label: "large — máxima precisão, mais lento" },
 ]
+
+function HotkeyCapture({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [listening, setListening] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!listening) return
+    function onKey(e: KeyboardEvent) {
+      e.preventDefault()
+      const parts: string[] = []
+      if (e.ctrlKey)  parts.push("ctrl")
+      if (e.shiftKey) parts.push("shift")
+      if (e.altKey)   parts.push("alt")
+      const key = e.key.toLowerCase()
+      if (!["control", "shift", "alt", "meta"].includes(key) && key.length === 1) {
+        parts.push(key)
+        onChange(parts.join("+"))
+        setListening(false)
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [listening, onChange])
+
+  const display = value
+    .split("+")
+    .map(p => p.charAt(0).toUpperCase() + p.slice(1))
+    .join("+")
+
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <button
+        ref={btnRef}
+        onClick={() => setListening(l => !l)}
+        className={cn(
+          "flex-1 text-sm rounded-xl px-3 py-2 text-left border transition-colors font-mono",
+          listening
+            ? "bg-primary/10 border-primary text-primary animate-pulse"
+            : "bg-[#111111] border-border text-foreground hover:border-primary/50"
+        )}
+      >
+        {listening ? "Pressione o atalho..." : display}
+      </button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => { onChange("ctrl+shift+r"); setListening(false) }}
+      >
+        Restaurar
+      </Button>
+    </div>
+  )
+}
 
 export function SettingsModal({ open, onClose }: Props) {
   const { data: settings } = useSettings()
@@ -203,6 +256,21 @@ export function SettingsModal({ open, onClose }: Props) {
               ))}
             </select>
             <p className="text-[10px] text-muted-foreground/60 mt-1">Modelos maiores transcrevem melhor, mas demoram mais. Requer reinício do serviço de áudio para ter efeito.</p>
+          </div>
+        </div>
+
+        {/* Atalhos */}
+        <div className="px-5 py-4 border-b border-border space-y-3">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Atalhos</p>
+          <div>
+            <label className="text-xs text-muted-foreground">Atalho de gravação rápida</label>
+            <HotkeyCapture
+              value={form.recording_hotkey ?? "ctrl+shift+r"}
+              onChange={v => set("recording_hotkey", v)}
+            />
+            <p className="text-[10px] text-muted-foreground/60 mt-1">
+              Padrão: Ctrl+Shift+R — funciona com o app em segundo plano
+            </p>
           </div>
         </div>
 
