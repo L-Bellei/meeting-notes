@@ -4,9 +4,12 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"log"
+	"os"
 	"runtime"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -17,6 +20,9 @@ import (
 	"meeting-notes/internal/repository"
 	"meeting-notes/internal/services"
 )
+
+//go:embed assets/tray.ico
+var trayIconData []byte
 
 // ---------------------------------------------------------------------------
 // Win32 constants
@@ -120,6 +126,7 @@ var (
 	procRegisterHotKey      = user32.NewProc("RegisterHotKey")
 	procUnregisterHotKey    = user32.NewProc("UnregisterHotKey")
 	procLoadIconW           = user32.NewProc("LoadIconW")
+	procLoadImageW          = user32.NewProc("LoadImageW")
 	procCreatePopupMenu     = user32.NewProc("CreatePopupMenu")
 	procAppendMenuW         = user32.NewProc("AppendMenuW")
 	procTrackPopupMenuEx    = user32.NewProc("TrackPopupMenuEx")
@@ -129,6 +136,32 @@ var (
 	procGetModuleHandleW    = kernel32.NewProc("GetModuleHandleW")
 	procShellNotifyIconW    = shell32.NewProc("Shell_NotifyIconW")
 )
+
+const (
+	imageIcon      = 1
+	lrLoadFromFile = 0x0010
+)
+
+// loadEmbeddedIcon writes the embedded tray.ico to a temp file and loads it
+// via LoadImageW. Falls back to the default application icon on any error.
+func loadEmbeddedIcon() uintptr {
+	f, err := os.CreateTemp("", "tray-*.ico")
+	if err == nil {
+		_, err = f.Write(trayIconData)
+		f.Close()
+		if err == nil {
+			path, _ := syscall.UTF16PtrFromString(f.Name())
+			hIcon, _, _ := procLoadImageW.Call(0, uintptr(unsafe.Pointer(path)), imageIcon, 16, 16, lrLoadFromFile)
+			os.Remove(f.Name())
+			if hIcon != 0 {
+				return hIcon
+			}
+		}
+		os.Remove(f.Name())
+	}
+	hIcon, _, _ := procLoadIconW.Call(0, idiApplication)
+	return hIcon
+}
 
 // ---------------------------------------------------------------------------
 // Package-level WndProc callback — syscall.NewCallback must be called once
@@ -151,7 +184,7 @@ type TrayManager struct {
 	app         *App
 	hwnd        uintptr
 	hIcon       uintptr
-	running     bool
+	running     atomic.Bool
 	isRecording bool
 }
 
@@ -170,7 +203,7 @@ func (t *TrayManager) Start(ctx context.Context) error {
 	globalTray = t
 
 	hInstance, _, _ := procGetModuleHandleW.Call(0)
-	t.hIcon, _, _ = procLoadIconW.Call(0, idiApplication)
+	t.hIcon = loadEmbeddedIcon()
 
 	className, _ := syscall.UTF16PtrFromString("MeetingNotesTrayClass")
 	wc := wndClassEx{
@@ -202,23 +235,22 @@ func (t *TrayManager) Start(ctx context.Context) error {
 		log.Printf("tray: Shell_NotifyIcon: %v", err)
 	}
 
-	t.running = true
+	t.running.Store(true)
 	go t.messageLoop()
 	return nil
 }
 
 // Stop unregisters the hotkey, removes the tray icon, and destroys the window.
 func (t *TrayManager) Stop() {
-	if !t.running {
+	if !t.running.Swap(false) {
 		return
 	}
-	t.running = false
 	procUnregisterHotKey.Call(t.hwnd, hotkeyID)
 	t.removeTrayIcon()
 	procDestroyWindow.Call(t.hwnd)
 }
 
-func (t *TrayManager) IsRunning() bool { return t.running }
+func (t *TrayManager) IsRunning() bool { return t.running.Load() }
 
 // UpdateState updates the tray tooltip to reflect the current recording state.
 func (t *TrayManager) UpdateState(isRecording bool) {
