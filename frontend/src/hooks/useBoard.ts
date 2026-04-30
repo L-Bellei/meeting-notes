@@ -5,11 +5,12 @@ export interface TaskProgress { total: number; completed: number }
 
 export interface BoardCardSummary {
   id: string
-  meeting_id: string
+  meeting_id: string | null
   column_id: string
   number: number
   position: number
   description: string
+  source: string
   updated_at: string
   created_at: string
   meeting_title: string
@@ -22,11 +23,14 @@ export interface BoardCardSummary {
 
 export interface BoardCardDetail {
   id: string
-  meeting_id: string
+  meeting_id: string | null
   column_id: string
   number: number
   position: number
+  title: string
   description: string
+  source: string
+  manual_tasks: string[]
   updated_at: string
   created_at: string
   status: string
@@ -88,6 +92,36 @@ export function useCreateCard() {
   })
 }
 
+export function useCreateManualCard() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ column_id, title, description }: { column_id: string; title: string; description?: string }) =>
+      api<{ id: string; number: number }>("/api/board/cards/manual", {
+        method: "POST",
+        body: JSON.stringify({ column_id, title, description: description ?? "" }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["board-cards"] })
+      qc.invalidateQueries({ queryKey: ["board-columns"] })
+    },
+  })
+}
+
+export function useLinkCardToMeeting() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ cardId, meetingId }: { cardId: string; meetingId: string }) =>
+      api<void>(`/api/board/cards/${cardId}/link`, {
+        method: "PATCH",
+        body: JSON.stringify({ meeting_id: meetingId }),
+      }),
+    onSuccess: (_data, { cardId }) => {
+      qc.invalidateQueries({ queryKey: ["board-cards"] })
+      qc.invalidateQueries({ queryKey: ["board-card", cardId] })
+    },
+  })
+}
+
 export function useDeleteCard() {
   const qc = useQueryClient()
   return useMutation({
@@ -102,10 +136,10 @@ export function useDeleteCard() {
 export function useUpdateCard() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, description }: { id: string; description: string }) =>
+    mutationFn: ({ id, description, tasks }: { id: string; description: string; tasks?: string[] }) =>
       api<{ id: string }>(`/api/board/cards/${id}`, {
         method: "PUT",
-        body: JSON.stringify({ description }),
+        body: JSON.stringify({ description, tasks: tasks ?? [] }),
       }),
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: ["board-cards"] })
