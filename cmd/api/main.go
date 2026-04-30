@@ -39,6 +39,7 @@ func main() {
 	settingsRepo := repository.NewSettingsRepository(db)
 	boardColumnRepo := repository.NewBoardColumnRepository(db)
 	boardCardRepo := repository.NewBoardCardRepository(db)
+	searchRepo := repository.NewSearchRepository(db)
 
 	aiClient := ai.NewDynamicAIClient(settingsRepo)
 
@@ -51,6 +52,7 @@ func main() {
 	keyPointSvc := services.NewKeyPointService(keyPointRepo, aiClient)
 	taskSvc := services.NewTaskService(taskRepo, aiClient)
 	settingsSvc := services.NewSettingsService(settingsRepo)
+	searchSvc := services.NewSearchService(searchRepo, meetingRepo)
 
 	// Audio + Orchestrator
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
@@ -64,6 +66,7 @@ func main() {
 	keyPointHandler := handlers.NewKeyPointHandler(keyPointSvc, meetingSvc, themeRepo)
 	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc, themeRepo)
 	settingsH := handlers.NewSettingsHandler(settingsSvc)
+	searchHandler := handlers.NewSearchHandler(searchSvc)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -141,6 +144,8 @@ func main() {
 		r.Patch("/cards/{id}/move", boardHandler.MoveCard)
 		r.Patch("/cards/{id}/link", boardHandler.LinkCardToMeeting)
 	})
+
+	r.Get("/api/search", searchHandler.Search)
 
 	log.Printf("server listening on :%s", cfg.HTTPPort)
 	if err := http.ListenAndServe(":"+cfg.HTTPPort, r); err != nil {
