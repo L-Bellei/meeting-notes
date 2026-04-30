@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Settings2 } from "lucide-react"
+import { Plus, Settings2 } from "lucide-react"
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   type DragEndEvent, type DragStartEvent,
@@ -12,6 +12,7 @@ import { KanbanCard } from "./KanbanCard"
 import { ColumnSettingsPanel } from "./ColumnSettingsPanel"
 import { CardDetailModal } from "./CardDetailModal"
 import { BoardFilters } from "./BoardFilters"
+import { CreateManualCardModal } from "./CreateManualCardModal"
 import { useQueryClient } from "@tanstack/react-query"
 
 export function BoardView() {
@@ -21,6 +22,7 @@ export function BoardView() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null)
   const [activeCard, setActiveCard] = useState<BoardCardSummary | null>(null)
+  const [createModalColumnId, setCreateModalColumnId] = useState<string | null>(null)
   const moveCard = useMoveCard()
   const qc = useQueryClient()
 
@@ -75,6 +77,10 @@ export function BoardView() {
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border flex-shrink-0">
           <span className="font-semibold text-sm flex-1">Board</span>
           <BoardFilters filters={filters} onChange={setFilters} />
+          <Button variant="ghost" size="sm" onClick={() => setCreateModalColumnId("")} className="gap-1.5">
+            <Plus size={14} />
+            Novo card
+          </Button>
           <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)}>
             <Settings2 size={16} />
           </Button>
@@ -86,6 +92,7 @@ export function BoardView() {
               column={col}
               cards={cardsByColumn[col.id] ?? []}
               onCardClick={setSelectedCardId}
+              onAddCard={colId => setCreateModalColumnId(colId)}
             />
           ))}
           {columns.length === 0 && (
@@ -100,6 +107,13 @@ export function BoardView() {
       </div>
       {settingsOpen && <ColumnSettingsPanel onClose={() => setSettingsOpen(false)} />}
       <CardDetailModal cardId={selectedCardId} onClose={() => setSelectedCardId(null)} />
+      {createModalColumnId !== null && columns.length > 0 && (
+        <CreateManualCardModal
+          columns={columns}
+          defaultColumnId={createModalColumnId || undefined}
+          onClose={() => setCreateModalColumnId(null)}
+        />
+      )}
     </DndContext>
   )
 }
