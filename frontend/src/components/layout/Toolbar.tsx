@@ -48,9 +48,9 @@ export function Toolbar({ onToggleSidebar, onRecord, onSettings, onSearch, recor
         <Mic size={14} className="mr-1.5" />
         Gravar
         {recordingHotkey && (
-          <span className="ml-1.5 text-[10px] bg-white/20 rounded px-1 py-0.5 font-mono leading-none">
+          <kbd className="ml-1.5 text-[10px] bg-white/20 rounded px-1 py-0.5 font-mono leading-none">
             {recordingHotkey}
-          </span>
+          </kbd>
         )}
       </Button>
       <Button variant="ghost" size="icon" onClick={onSettings}>
