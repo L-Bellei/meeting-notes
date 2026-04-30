@@ -32,6 +32,7 @@ type App struct {
 	port      int
 	server    *http.Server
 	audioProc *exec.Cmd
+	allowQuit bool
 }
 
 func NewApp() *App { return &App{} }
