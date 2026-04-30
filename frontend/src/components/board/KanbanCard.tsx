@@ -1,5 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { Pencil } from "lucide-react"
 import type { BoardCardSummary } from "../../hooks/useBoard"
 
 interface Props {
@@ -35,8 +36,13 @@ export function KanbanCard({ card, onClick }: Props) {
       onClick={onClick}
     >
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-muted-foreground">#{card.number}</span>
-        {card.theme_color && (
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">#{card.number}</span>
+          {card.source === "manual" && (
+            <Pencil size={10} className="text-muted-foreground/60" />
+          )}
+        </div>
+        {card.source !== "manual" && card.theme_color && (
           <span
             className="text-xs px-1.5 py-0.5 rounded-full"
             style={{ background: card.theme_color + "22", color: card.theme_color }}
