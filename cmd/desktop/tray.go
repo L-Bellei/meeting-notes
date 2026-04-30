@@ -209,18 +209,19 @@ var globalTray *TrayManager
 // ---------------------------------------------------------------------------
 
 type TrayManager struct {
-	ctx          context.Context
-	orch         *services.Orchestrator
-	meetingRepo  *repository.MeetingRepository
-	meetingSvc   *services.MeetingService
-	settingsRepo *repository.SettingsRepository
-	app          *App
-	hwnd         uintptr
-	hIcon        uintptr
-	running      atomic.Bool
-	isRecording  bool
-	hotkeyMods   uint32
-	hotkeyVK     uint32
+	ctx            context.Context
+	orch           *services.Orchestrator
+	meetingRepo    *repository.MeetingRepository
+	meetingSvc     *services.MeetingService
+	settingsRepo   *repository.SettingsRepository
+	app            *App
+	hwnd           uintptr
+	hIcon          uintptr
+	running        atomic.Bool
+	isRecording    bool
+	hotkeyMods     uint32
+	hotkeyVK       uint32
+	hotkeyUpdateCh chan string
 }
 
 func NewTrayManager(
@@ -231,11 +232,12 @@ func NewTrayManager(
 	settingsRepo *repository.SettingsRepository,
 ) *TrayManager {
 	return &TrayManager{
-		app:          app,
-		orch:         orch,
-		meetingRepo:  meetingRepo,
-		meetingSvc:   meetingSvc,
-		settingsRepo: settingsRepo,
+		app:            app,
+		orch:           orch,
+		meetingRepo:    meetingRepo,
+		meetingSvc:     meetingSvc,
+		settingsRepo:   settingsRepo,
+		hotkeyUpdateCh: make(chan string, 1),
 	}
 }
 
@@ -280,7 +282,10 @@ func (t *TrayManager) Start(ctx context.Context) error {
 	mods, vk, err2 := parseHotkey(hotkeyStr)
 	if err2 != nil {
 		log.Printf("tray: invalid hotkey %q, using default: %v", hotkeyStr, err2)
-		mods, vk, _ = parseHotkey(defaultHotkey)
+		mods, vk, err2 = parseHotkey(defaultHotkey)
+		if err2 != nil {
+			panic(fmt.Sprintf("tray: built-in defaultHotkey is invalid: %v", err2))
+		}
 	}
 	t.hotkeyMods = mods
 	t.hotkeyVK = vk
@@ -316,24 +321,27 @@ func (t *TrayManager) UpdateState(isRecording bool) {
 }
 
 // ApplySettings re-registers the hotkey when recording_hotkey setting changes.
+// It must not call Win32 APIs directly because RegisterHotKey/UnregisterHotKey
+// are thread-affine and must run on the message-loop OS thread. Instead, the
+// new key is queued to hotkeyUpdateCh and applied by the message loop.
 func (t *TrayManager) ApplySettings(settings map[string]string) {
 	key := settings["recording_hotkey"]
 	if key == "" {
 		key = defaultHotkey
 	}
-	mods, vk, err := parseHotkey(key)
-	if err != nil {
+	if _, _, err := parseHotkey(key); err != nil {
 		log.Printf("tray: invalid hotkey %q: %v", key, err)
 		return
 	}
-	if mods == t.hotkeyMods && vk == t.hotkeyVK {
-		return
-	}
-	procUnregisterHotKey.Call(t.hwnd, hotkeyID)
-	t.hotkeyMods = mods
-	t.hotkeyVK = vk
-	if ret, _, regErr := procRegisterHotKey.Call(t.hwnd, hotkeyID, uintptr(mods), uintptr(vk)); ret == 0 {
-		log.Printf("tray: RegisterHotKey %q: %v", key, regErr)
+	select {
+	case t.hotkeyUpdateCh <- key:
+	default:
+		// channel already has a pending update; replace it
+		select {
+		case <-t.hotkeyUpdateCh:
+		default:
+		}
+		t.hotkeyUpdateCh <- key
 	}
 }
 
@@ -353,6 +361,21 @@ func (t *TrayManager) messageLoop() {
 		}
 		procTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
 		procDispatchMessageW.Call(uintptr(unsafe.Pointer(&msg)))
+
+		// Apply any pending hotkey update on the message-loop thread
+		select {
+		case newKey := <-t.hotkeyUpdateCh:
+			mods2, vk2, err2 := parseHotkey(newKey)
+			if err2 == nil && (mods2 != t.hotkeyMods || vk2 != t.hotkeyVK) {
+				procUnregisterHotKey.Call(t.hwnd, hotkeyID)
+				t.hotkeyMods = mods2
+				t.hotkeyVK = vk2
+				if ret2, _, regErr := procRegisterHotKey.Call(t.hwnd, hotkeyID, uintptr(mods2), uintptr(vk2)); ret2 == 0 {
+					log.Printf("tray: RegisterHotKey %q: %v", newKey, regErr)
+				}
+			}
+		default:
+		}
 	}
 }
 
