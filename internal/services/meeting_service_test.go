@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"meeting-notes/internal/database"
 	"meeting-notes/internal/models"
@@ -22,7 +23,13 @@ func newTestMeetingService(t *testing.T) *services.MeetingService {
 	if _, err := db.Exec(`INSERT INTO themes (id, name, color) VALUES (?, ?, '#ffffff')`, "theme-abc", "theme-abc"); err != nil {
 		t.Fatalf("seed theme: %v", err)
 	}
-	return services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db))
+	meetingRepo := repository.NewMeetingRepository(db)
+	themeRepo := repository.NewThemeRepository(db)
+	searchRepo := repository.NewSearchRepository(db)
+	keyPointRepo := repository.NewKeyPointRepository(db)
+	taskRepo := repository.NewTaskRepository(db)
+	summaryRepo := repository.NewSummaryRepository(db)
+	return services.NewMeetingService(meetingRepo, themeRepo, searchRepo, keyPointRepo, taskRepo, summaryRepo)
 }
 
 func TestMeetingService_Create(t *testing.T) {
@@ -258,5 +265,75 @@ func TestMeetingService_Update_PreservesThemeID(t *testing.T) {
 	}
 	if updated.ThemeID == nil || *updated.ThemeID != "theme-abc" {
 		t.Errorf("ThemeID should be preserved as theme-abc, got %v", updated.ThemeID)
+	}
+}
+
+func newMeetingServiceWithSearch(t *testing.T) (*services.MeetingService, *repository.SearchRepository) {
+	t.Helper()
+	db, err := database.Open(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	meetingRepo := repository.NewMeetingRepository(db)
+	themeRepo := repository.NewThemeRepository(db)
+	searchRepo := repository.NewSearchRepository(db)
+	keyPointRepo := repository.NewKeyPointRepository(db)
+	taskRepo := repository.NewTaskRepository(db)
+	summaryRepo := repository.NewSummaryRepository(db)
+	svc := services.NewMeetingService(meetingRepo, themeRepo, searchRepo, keyPointRepo, taskRepo, summaryRepo)
+	return svc, searchRepo
+}
+
+func TestMeetingService_Update_SyncsSearch(t *testing.T) {
+	svc, searchRepo := newMeetingServiceWithSearch(t)
+	ctx := context.Background()
+
+	m, err := svc.Create(ctx, "Original Title", "", "", nil)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if _, err := svc.Update(ctx, m.ID, "Updated Title", nil, "", nil, nil, nil, nil); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	// FTS sync is async (goroutine) — wait briefly
+	time.Sleep(50 * time.Millisecond)
+
+	results, err := searchRepo.Search(ctx, "Updated")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 FTS result after update, got %d", len(results))
+	}
+}
+
+func TestMeetingService_Delete_SyncsSearch(t *testing.T) {
+	svc, searchRepo := newMeetingServiceWithSearch(t)
+	ctx := context.Background()
+
+	m, err := svc.Create(ctx, "To Delete", "", "", nil)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := searchRepo.UpsertMeeting(ctx, m.ID, m.Title, "", "", "", ""); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	if err := svc.Delete(ctx, m.ID); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	// FTS sync is async (goroutine) — wait briefly
+	time.Sleep(50 * time.Millisecond)
+
+	results, err := searchRepo.Search(ctx, "Delete")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 FTS results after delete, got %d", len(results))
 	}
 }

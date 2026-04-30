@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,12 +29,23 @@ var validMeetingStatuses = map[string]bool{
 }
 
 type MeetingService struct {
-	repo      *repository.MeetingRepository
-	themeRepo *repository.ThemeRepository
+	repo         *repository.MeetingRepository
+	themeRepo    *repository.ThemeRepository
+	searchRepo   *repository.SearchRepository
+	keyPointRepo *repository.KeyPointRepository
+	taskRepo     *repository.TaskRepository
+	summaryRepo  *repository.SummaryRepository
 }
 
-func NewMeetingService(repo *repository.MeetingRepository, themeRepo *repository.ThemeRepository) *MeetingService {
-	return &MeetingService{repo: repo, themeRepo: themeRepo}
+func NewMeetingService(
+	repo *repository.MeetingRepository,
+	themeRepo *repository.ThemeRepository,
+	searchRepo *repository.SearchRepository,
+	keyPointRepo *repository.KeyPointRepository,
+	taskRepo *repository.TaskRepository,
+	summaryRepo *repository.SummaryRepository,
+) *MeetingService {
+	return &MeetingService{repo, themeRepo, searchRepo, keyPointRepo, taskRepo, summaryRepo}
 }
 
 func (s *MeetingService) List(ctx context.Context, f MeetingFilters) ([]models.Meeting, error) {
@@ -127,9 +139,38 @@ func (s *MeetingService) Update(ctx context.Context, id, title string, themeID *
 	if err := s.repo.Update(ctx, m); err != nil {
 		return nil, err
 	}
+	go func() {
+		bgCtx := context.Background()
+		transcript := ""
+		if m.Transcript != nil {
+			transcript = *m.Transcript
+		}
+		summary := ""
+		if sm, err2 := s.summaryRepo.GetByMeetingID(bgCtx, m.ID); err2 == nil && sm != nil {
+			summary = sm.Content
+		}
+		kps, _ := s.keyPointRepo.ListByMeetingID(bgCtx, m.ID)
+		var kpContents []string
+		for _, kp := range kps {
+			kpContents = append(kpContents, kp.Content)
+		}
+		tasks, _ := s.taskRepo.ListByMeetingID(bgCtx, m.ID)
+		var taskContents []string
+		for _, tk := range tasks {
+			taskContents = append(taskContents, tk.Description)
+		}
+		_ = s.searchRepo.UpsertMeeting(bgCtx, m.ID, m.Title, transcript, summary,
+			strings.Join(kpContents, "\n"), strings.Join(taskContents, "\n"))
+	}()
 	return m, nil
 }
 
 func (s *MeetingService) Delete(ctx context.Context, id string) error {
-	return s.repo.Delete(ctx, id)
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return err
+	}
+	go func() {
+		_ = s.searchRepo.DeleteMeeting(context.Background(), id)
+	}()
+	return nil
 }

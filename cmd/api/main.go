@@ -47,7 +47,7 @@ func main() {
 	boardColumnSvc := services.NewBoardColumnService(boardColumnRepo)
 	boardCardSvc := services.NewBoardCardService(boardCardRepo, boardColumnRepo, meetingRepo, summaryRepo, keyPointRepo, taskRepo)
 	themeSvc := services.NewThemeService(themeRepo)
-	meetingSvc := services.NewMeetingService(meetingRepo, themeRepo)
+	meetingSvc := services.NewMeetingService(meetingRepo, themeRepo, searchRepo, keyPointRepo, taskRepo, summaryRepo)
 	summarySvc := services.NewSummaryService(summaryRepo, aiClient)
 	keyPointSvc := services.NewKeyPointService(keyPointRepo, aiClient)
 	taskSvc := services.NewTaskService(taskRepo, aiClient)
