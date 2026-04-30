@@ -14,8 +14,9 @@ import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Spinner } from "../ui/spinner"
 import { cn } from "../../lib/utils"
+import { highlightText } from "../../lib/highlight"
 
-interface Props { meetingId: string | null; onDeleted?: () => void }
+interface Props { meetingId: string | null; onDeleted?: () => void; highlightQuery?: string }
 
 type Tab = "transcript" | "summary" | "keypoints" | "tasks" | "notes"
 
@@ -23,7 +24,7 @@ function statusVariant(s: string) {
   return s as any
 }
 
-export function MeetingDetail({ meetingId, onDeleted }: Props) {
+export function MeetingDetail({ meetingId, onDeleted, highlightQuery }: Props) {
   const { data: meeting } = useMeeting(meetingId)
   const { data: settings } = useSettings()
   const [tab, setTab] = useState<Tab>("transcript")
@@ -76,7 +77,7 @@ export function MeetingDetail({ meetingId, onDeleted }: Props) {
 
   return (
     <div className="flex-1 h-full flex flex-col overflow-hidden animate-fade-in">
-      <MeetingHeader meeting={meeting} onDeleted={onDeleted} />
+      <MeetingHeader meeting={meeting} onDeleted={onDeleted} highlightQuery={highlightQuery ?? ""} />
       {meetingId && !existingCard && meeting?.status === "completed" && (
         <div className="px-4 pb-2">
           <Button
@@ -116,16 +117,16 @@ export function MeetingDetail({ meetingId, onDeleted }: Props) {
       </div>
       <div className="flex-1 overflow-y-auto p-4">
         {tab === "transcript" && <TranscriptTab meeting={meeting} />}
-        {tab === "summary" && <SummaryTab meeting={meeting} />}
-        {tab === "keypoints" && <KeyPointsTab meeting={meeting} />}
-        {tab === "tasks" && <TasksTab meeting={meeting} />}
+        {tab === "summary" && <SummaryTab meeting={meeting} highlightQuery={highlightQuery ?? ""} />}
+        {tab === "keypoints" && <KeyPointsTab meeting={meeting} highlightQuery={highlightQuery ?? ""} />}
+        {tab === "tasks" && <TasksTab meeting={meeting} highlightQuery={highlightQuery ?? ""} />}
         {tab === "notes" && <NotesTab meeting={meeting} />}
       </div>
     </div>
   )
 }
 
-function MeetingHeader({ meeting, onDeleted }: { meeting: any; onDeleted?: () => void }) {
+function MeetingHeader({ meeting, onDeleted, highlightQuery }: { meeting: any; onDeleted?: () => void; highlightQuery: string }) {
   const start = useStartRecording(meeting.id)
   const stop = useStopRecording(meeting.id)
   const reprocess = useReprocess(meeting.id)
@@ -151,7 +152,7 @@ function MeetingHeader({ meeting, onDeleted }: { meeting: any; onDeleted?: () =>
   return (
     <div className="px-4 py-3 border-b border-border flex-shrink-0">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-base font-semibold truncate">{meeting.title}</h2>
+        <h2 className="text-base font-semibold truncate" dangerouslySetInnerHTML={{ __html: highlightText(meeting.title, highlightQuery) }} />
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <Badge variant={statusVariant(meeting.status)}>{meeting.status}</Badge>
           <button
@@ -216,7 +217,7 @@ function TranscriptTab({ meeting }: { meeting: any }) {
   )
 }
 
-function SummaryTab({ meeting }: { meeting: any }) {
+function SummaryTab({ meeting, highlightQuery }: { meeting: any; highlightQuery: string }) {
   const generate = useGenerateSummary(meeting.id)
   return (
     <div>
@@ -227,7 +228,7 @@ function SummaryTab({ meeting }: { meeting: any }) {
         </Button>
       </div>
       {meeting.summary ? (
-        <p className="text-sm leading-relaxed whitespace-pre-wrap">{meeting.summary.content}</p>
+        <p className="text-sm leading-relaxed whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: highlightText(meeting.summary.content, highlightQuery) }} />
       ) : (
         <p className="text-sm text-muted-foreground">Nenhum resumo ainda.</p>
       )}
@@ -235,7 +236,7 @@ function SummaryTab({ meeting }: { meeting: any }) {
   )
 }
 
-function KeyPointsTab({ meeting }: { meeting: any }) {
+function KeyPointsTab({ meeting, highlightQuery }: { meeting: any; highlightQuery: string }) {
   const generate = useGenerateKeyPoints(meeting.id)
   return (
     <div>
@@ -252,7 +253,7 @@ function KeyPointsTab({ meeting }: { meeting: any }) {
           {meeting.key_points.map((kp: any, i: number) => (
             <li key={kp.id} className="flex gap-2 text-sm">
               <span className="text-muted-foreground w-5 flex-shrink-0">{i + 1}.</span>
-              <span>{kp.content}</span>
+              <span dangerouslySetInnerHTML={{ __html: highlightText(kp.content, highlightQuery) }} />
             </li>
           ))}
         </ol>
@@ -261,7 +262,7 @@ function KeyPointsTab({ meeting }: { meeting: any }) {
   )
 }
 
-function TasksTab({ meeting }: { meeting: any }) {
+function TasksTab({ meeting, highlightQuery }: { meeting: any; highlightQuery: string }) {
   const generate = useGenerateTasks(meeting.id)
   return (
     <div>
@@ -276,7 +277,7 @@ function TasksTab({ meeting }: { meeting: any }) {
       ) : (
         <ul className="space-y-2">
           {meeting.tasks.map((task: any) => (
-            <TaskItem key={task.id} task={task} meetingId={meeting.id} />
+            <TaskItem key={task.id} task={task} meetingId={meeting.id} highlightQuery={highlightQuery} />
           ))}
         </ul>
       )}
@@ -284,7 +285,7 @@ function TasksTab({ meeting }: { meeting: any }) {
   )
 }
 
-function TaskItem({ task, meetingId }: { task: any; meetingId: string }) {
+function TaskItem({ task, meetingId, highlightQuery }: { task: any; meetingId: string; highlightQuery: string }) {
   const update = useUpdateTask(meetingId, task.id)
   return (
     <li className="flex items-start gap-2 text-sm">
@@ -295,7 +296,7 @@ function TaskItem({ task, meetingId }: { task: any; meetingId: string }) {
         className="mt-0.5"
       />
       <div className={cn("flex-1", task.completed && "line-through text-muted-foreground")}>
-        <span>{task.description}</span>
+        <span dangerouslySetInnerHTML={{ __html: highlightText(task.description, highlightQuery) }} />
         {task.assignee && <span className="ml-2 text-xs text-muted-foreground">@{task.assignee}</span>}
       </div>
     </li>

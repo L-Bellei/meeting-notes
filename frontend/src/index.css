@@ -36,4 +36,11 @@
   select option {
     @apply bg-background text-foreground;
   }
+
+  mark {
+    background-color: hsl(var(--primary) / 0.2);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 2px;
+  }
 }
