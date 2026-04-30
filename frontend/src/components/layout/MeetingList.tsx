@@ -13,6 +13,7 @@ interface MeetingListProps {
   selectedMeetingId: string | null
   onSelectMeeting: (id: string) => void
   onMeetingDeleted?: (id: string) => void
+  onOpenSearch: () => void
 }
 
 const STATUS_OPTIONS = [
@@ -42,7 +43,7 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })
 }
 
-export function MeetingList({ themeId, selectedMeetingId, onSelectMeeting, onMeetingDeleted }: MeetingListProps) {
+export function MeetingList({ themeId, selectedMeetingId, onSelectMeeting, onMeetingDeleted, onOpenSearch }: MeetingListProps) {
   const [q, setQ] = useState("")
   const [status, setStatus] = useState("")
   const [startedAfter, setStartedAfter] = useState("")
@@ -104,6 +105,13 @@ export function MeetingList({ themeId, selectedMeetingId, onSelectMeeting, onMee
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reuniões</span>
         <div className="flex items-center gap-1">
           <span className="text-xs text-muted-foreground">{meetings.length}</span>
+          <button
+            onClick={onOpenSearch}
+            title="Busca global (Ctrl+K)"
+            className="p-1 rounded-md hover:bg-accent transition-colors text-muted-foreground"
+          >
+            <Search size={14} />
+          </button>
           <button
             onClick={() => setShowFilters(v => !v)}
             title="Filtros"
