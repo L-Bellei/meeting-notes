@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { GetPort } from "./wailsjs/go/main/App"
+import { EventsOn } from "./wailsjs/runtime/runtime"
 import { initApi } from "./hooks/useApi"
 import { usePipeline } from "./hooks/usePipeline"
 import { Sidebar } from "./components/layout/Sidebar"
@@ -44,6 +45,15 @@ function AppInner() {
     }
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
+  }, [])
+
+  useEffect(() => {
+    const unlisten = EventsOn("hotkey:recording-started", ({ meetingId }: { meetingId: string }) => {
+      setSelectedMeetingId(meetingId)
+      setHighlightQuery(undefined)
+      setActiveView("meetings")
+    })
+    return () => { if (typeof unlisten === "function") unlisten() }
   }, [])
 
   usePipeline()
