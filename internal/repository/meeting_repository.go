@@ -157,6 +157,21 @@ func (r *MeetingRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+func (r *MeetingRepository) GetRecording(ctx context.Context) (*models.Meeting, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, created_at
+		 FROM meetings WHERE status = 'recording' LIMIT 1`,
+	)
+	m, err := scanMeeting(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get recording meeting: %w", err)
+	}
+	return m, nil
+}
+
 type meetingScanner interface {
 	Scan(dest ...any) error
 }

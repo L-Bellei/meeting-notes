@@ -212,3 +212,53 @@ func TestMeetingRepository_Delete_NotFound(t *testing.T) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
+
+func TestMeetingRepository_GetRecording(t *testing.T) {
+	repo := openMeetingTestDB(t)
+	ctx := context.Background()
+
+	// no meeting recording → returns nil, nil
+	got, err := repo.GetRecording(ctx)
+	if err != nil {
+		t.Fatalf("GetRecording: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil, got %v", got.ID)
+	}
+
+	// create a pending meeting — should NOT be returned
+	now := time.Now().UTC().Truncate(time.Second)
+	pending := &models.Meeting{
+		ID: "rec-pending", Title: "Pending", Status: models.StatusPending,
+		StartedAt: &now, CreatedAt: now,
+	}
+	if err := repo.Create(ctx, pending); err != nil {
+		t.Fatalf("Create pending: %v", err)
+	}
+	got, err = repo.GetRecording(ctx)
+	if err != nil {
+		t.Fatalf("GetRecording after pending: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil after pending, got %v", got.ID)
+	}
+
+	// create a recording meeting — should be returned
+	rec := &models.Meeting{
+		ID: "rec-001", Title: "Em gravação", Status: models.StatusRecording,
+		StartedAt: &now, CreatedAt: now,
+	}
+	if err := repo.Create(ctx, rec); err != nil {
+		t.Fatalf("Create recording: %v", err)
+	}
+	got, err = repo.GetRecording(ctx)
+	if err != nil {
+		t.Fatalf("GetRecording: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected recording meeting, got nil")
+	}
+	if got.ID != rec.ID {
+		t.Fatalf("expected ID %q, got %q", rec.ID, got.ID)
+	}
+}
