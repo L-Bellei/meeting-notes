@@ -263,8 +263,11 @@ func trayWndProcImpl(hwnd, msg, wparam, lparam uintptr) uintptr {
 		switch uint32(lparam) {
 		case wmLbuttonup:
 			if t.ctx != nil && isWailsContext(t.ctx) {
-				wailsruntime.Show(t.ctx)
-				wailsruntime.WindowUnminimise(t.ctx)
+				ctx := t.ctx
+				go func() {
+					wailsruntime.Show(ctx)
+					wailsruntime.WindowUnminimise(ctx)
+				}()
 			}
 		case wmRbuttonup:
 			t.showContextMenu()
@@ -283,7 +286,7 @@ func trayWndProcImpl(hwnd, msg, wparam, lparam uintptr) uintptr {
 // ---------------------------------------------------------------------------
 
 func (t *TrayManager) toggleRecording() {
-	ctx := context.Background()
+	ctx := t.ctx
 
 	recording, err := t.meetingRepo.GetRecording(ctx)
 	if err != nil {
@@ -402,8 +405,11 @@ func (t *TrayManager) showContextMenu() {
 	switch cmdID {
 	case menuShow:
 		if t.ctx != nil && isWailsContext(t.ctx) {
-			wailsruntime.Show(t.ctx)
-			wailsruntime.WindowUnminimise(t.ctx)
+			ctx := t.ctx
+			go func() {
+				wailsruntime.Show(ctx)
+				wailsruntime.WindowUnminimise(ctx)
+			}()
 		}
 	case menuRecord:
 		go t.toggleRecording()
