@@ -100,6 +100,11 @@ Section
 
     !insertmacro wails.files
 
+    # Bundle the Python audio service (PyInstaller onedir build)
+    SetOutPath $INSTDIR\audio-service
+    File /r "..\..\bin\audio-service\*.*"
+    SetOutPath $INSTDIR
+
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 
