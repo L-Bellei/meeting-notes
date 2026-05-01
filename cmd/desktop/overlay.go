@@ -266,7 +266,171 @@ func overlayWndProcImpl(hwnd, msg, wparam, lparam uintptr) uintptr {
 }
 
 // Stubs — implemented in later tasks
-func (o *OverlayWindow) onPaint()                                  {}
+func (o *OverlayWindow) onPaint() {
+	var ps paintStruct
+	hdc, _, _ := procBeginPaint.Call(o.hwnd, uintptr(unsafe.Pointer(&ps)))
+	if hdc == 0 {
+		return
+	}
+	defer procEndPaint.Call(o.hwnd, uintptr(unsafe.Pointer(&ps)))
+
+	var rc winRect
+	procGetClientRect.Call(o.hwnd, uintptr(unsafe.Pointer(&rc)))
+
+	// Dark background fill
+	bgBrush, _, _ := procCreateSolidBrush.Call(colorBg)
+	procFillRect.Call(hdc, uintptr(unsafe.Pointer(&rc)), bgBrush)
+	procDeleteObject.Call(bgBrush)
+
+	// Pill border (rounded rect, no fill)
+	procSaveDC.Call(hdc)
+	borderPen, _, _ := procCreatePen.Call(psSolid, 1, colorBorder)
+	nullBrush, _, _ := procGetStockObject.Call(nullBrushObj)
+	procSelectObject.Call(hdc, borderPen)
+	procSelectObject.Call(hdc, nullBrush)
+	procRoundRect.Call(hdc,
+		uintptr(rc.Left), uintptr(rc.Top), uintptr(rc.Right), uintptr(rc.Bottom),
+		overlayCorner, overlayCorner)
+	procRestoreDC.Call(hdc, ^uintptr(0))
+	procDeleteObject.Call(borderPen)
+
+	procSetBkMode.Call(hdc, transparentBk)
+
+	o.mu.Lock()
+	confirming := o.confirming
+	dotOn := o.dotOn
+	o.mu.Unlock()
+	elapsed := atomic.LoadInt64(&o.elapsed)
+
+	if confirming {
+		o.paintConfirmation(hdc, rc)
+	} else {
+		o.paintRecording(hdc, rc, elapsed, dotOn)
+	}
+}
+
+func (o *OverlayWindow) paintRecording(hdc uintptr, rc winRect, elapsed int64, dotOn bool) {
+	const dotSize = int32(8)
+	const dotX    = int32(12)
+	dotY := (rc.Bottom - dotSize) / 2
+
+	// Pulsing red dot
+	if dotOn {
+		procSaveDC.Call(hdc)
+		redBrush, _, _ := procCreateSolidBrush.Call(colorRed)
+		nullPen, _, _ := procGetStockObject.Call(nullPenObj)
+		procSelectObject.Call(hdc, redBrush)
+		procSelectObject.Call(hdc, nullPen)
+		procEllipse.Call(hdc,
+			uintptr(dotX), uintptr(dotY),
+			uintptr(dotX+dotSize), uintptr(dotY+dotSize))
+		procRestoreDC.Call(hdc, ^uintptr(0))
+		procDeleteObject.Call(redBrush)
+	}
+
+	// "Gravando" label
+	procSetTextColor.Call(hdc, colorWhite)
+	guiFont, _, _ := procGetStockObject.Call(defaultGuiFont)
+	procSelectObject.Call(hdc, guiFont)
+	label, _ := syscall.UTF16PtrFromString("Gravando")
+	labelRC := winRect{Left: dotX + dotSize + 6, Top: rc.Top, Right: 130, Bottom: rc.Bottom}
+	const dtSingleline = uintptr(0x0020)
+	const dtVcenter    = uintptr(0x0004)
+	procDrawTextW.Call(hdc, uintptr(unsafe.Pointer(label)), ^uintptr(0),
+		uintptr(unsafe.Pointer(&labelRC)), dtSingleline|dtVcenter)
+
+	// Timer MM:SS — right-aligned before stop button
+	timerStr, _ := syscall.UTF16PtrFromString(fmt.Sprintf("%02d:%02d", elapsed/60, elapsed%60))
+	timerRC := winRect{
+		Left:   130,
+		Top:    rc.Top,
+		Right:  rc.Right - stopBtnD - stopBtnMR - 4,
+		Bottom: rc.Bottom,
+	}
+	const dtRight = uintptr(0x0002)
+	procDrawTextW.Call(hdc, uintptr(unsafe.Pointer(timerStr)), ^uintptr(0),
+		uintptr(unsafe.Pointer(&timerRC)), dtSingleline|dtVcenter|dtRight)
+
+	// Stop button: red filled circle
+	btnLeft := rc.Right - stopBtnD - stopBtnMR
+	btnTop  := (rc.Bottom - stopBtnD) / 2
+	procSaveDC.Call(hdc)
+	redBrush2, _, _ := procCreateSolidBrush.Call(colorRed)
+	nullPen2, _, _ := procGetStockObject.Call(nullPenObj)
+	procSelectObject.Call(hdc, redBrush2)
+	procSelectObject.Call(hdc, nullPen2)
+	procEllipse.Call(hdc,
+		uintptr(btnLeft), uintptr(btnTop),
+		uintptr(btnLeft+stopBtnD), uintptr(btnTop+stopBtnD))
+	procRestoreDC.Call(hdc, ^uintptr(0))
+	procDeleteObject.Call(redBrush2)
+
+	// Stop icon: white square inside the button circle
+	const squareSz = int32(10)
+	sqLeft := btnLeft + (stopBtnD-squareSz)/2
+	sqTop  := btnTop  + (stopBtnD-squareSz)/2
+	squareRC := winRect{Left: sqLeft, Top: sqTop, Right: sqLeft + squareSz, Bottom: sqTop + squareSz}
+	whiteBrush, _, _ := procCreateSolidBrush.Call(colorWhite)
+	procFillRect.Call(hdc, uintptr(unsafe.Pointer(&squareRC)), whiteBrush)
+	procDeleteObject.Call(whiteBrush)
+}
+
+func (o *OverlayWindow) paintConfirmation(hdc uintptr, rc winRect) {
+	procSetTextColor.Call(hdc, colorWhite)
+	guiFont, _, _ := procGetStockObject.Call(defaultGuiFont)
+	procSelectObject.Call(hdc, guiFont)
+
+	// "Parar gravação?" label
+	question, _ := syscall.UTF16PtrFromString("Parar gravação?")
+	questionRC := winRect{Left: 12, Top: rc.Top, Right: 158, Bottom: rc.Bottom}
+	const dtSingleline = uintptr(0x0020)
+	const dtVcenter    = uintptr(0x0004)
+	const dtCenter     = uintptr(0x0001)
+	procDrawTextW.Call(hdc, uintptr(unsafe.Pointer(question)), ^uintptr(0),
+		uintptr(unsafe.Pointer(&questionRC)), dtSingleline|dtVcenter)
+
+	btnH   := int32(24)
+	btnW   := int32(40)
+	btnTop := (rc.Bottom - btnH) / 2
+
+	// "Sim" button — red rounded rect fill
+	simLeft := int32(162)
+	procSaveDC.Call(hdc)
+	redBrush, _, _ := procCreateSolidBrush.Call(colorRed)
+	nullPen, _, _ := procGetStockObject.Call(nullPenObj)
+	procSelectObject.Call(hdc, redBrush)
+	procSelectObject.Call(hdc, nullPen)
+	procRoundRect.Call(hdc,
+		uintptr(simLeft), uintptr(btnTop),
+		uintptr(simLeft+btnW), uintptr(btnTop+btnH),
+		6, 6)
+	procRestoreDC.Call(hdc, ^uintptr(0))
+	procDeleteObject.Call(redBrush)
+
+	simText, _ := syscall.UTF16PtrFromString("Sim")
+	simRC := winRect{Left: simLeft, Top: btnTop, Right: simLeft + btnW, Bottom: btnTop + btnH}
+	procDrawTextW.Call(hdc, uintptr(unsafe.Pointer(simText)), ^uintptr(0),
+		uintptr(unsafe.Pointer(&simRC)), dtSingleline|dtVcenter|dtCenter)
+
+	// "Não" button — border only (no fill)
+	naoLeft := simLeft + btnW + 6
+	procSaveDC.Call(hdc)
+	borderPen, _, _ := procCreatePen.Call(psSolid, 1, colorBorder)
+	nullBrush, _, _ := procGetStockObject.Call(nullBrushObj)
+	procSelectObject.Call(hdc, borderPen)
+	procSelectObject.Call(hdc, nullBrush)
+	procRoundRect.Call(hdc,
+		uintptr(naoLeft), uintptr(btnTop),
+		uintptr(naoLeft+btnW), uintptr(btnTop+btnH),
+		6, 6)
+	procRestoreDC.Call(hdc, ^uintptr(0))
+	procDeleteObject.Call(borderPen)
+
+	naoText, _ := syscall.UTF16PtrFromString("Não")
+	naoRC := winRect{Left: naoLeft, Top: btnTop, Right: naoLeft + btnW, Bottom: btnTop + btnH}
+	procDrawTextW.Call(hdc, uintptr(unsafe.Pointer(naoText)), ^uintptr(0),
+		uintptr(unsafe.Pointer(&naoRC)), dtSingleline|dtVcenter|dtCenter)
+}
 func (o *OverlayWindow) onNcHitTest(hwnd, lparam uintptr) uintptr { return htCaption }
 func (o *OverlayWindow) onLButtonDown(x, y int32)                 {}
 func (o *OverlayWindow) timerLoop(stopCh <-chan struct{})          {}
@@ -277,7 +441,6 @@ func (o *OverlayWindow) confirmStop()                              {}
 // ---------------------------------------------------------------------------
 
 var (
-	_ = fmt.Sprintf
 	_ = http.DefaultClient
 	_ = time.Second
 	_ = wailsruntime.Show
