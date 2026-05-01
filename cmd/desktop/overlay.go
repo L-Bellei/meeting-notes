@@ -431,8 +431,90 @@ func (o *OverlayWindow) paintConfirmation(hdc uintptr, rc winRect) {
 		uintptr(unsafe.Pointer(&naoRC)), dtSingleline|dtVcenter|dtCenter)
 }
 
-func (o *OverlayWindow) onNcHitTest(hwnd, lparam uintptr) uintptr { return htCaption }
-func (o *OverlayWindow) onLButtonDown(x, y int32)                 {}
+func (o *OverlayWindow) onNcHitTest(hwnd, lparam uintptr) uintptr {
+	o.mu.Lock()
+	confirming := o.confirming
+	o.mu.Unlock()
+
+	// In confirmation state all clicks go to WM_LBUTTONDOWN
+	if confirming {
+		return htClient
+	}
+
+	// Convert screen coords (lParam) to client coords
+	screenX := int32(int16(lparam & 0xFFFF))
+	screenY := int32(int16((lparam >> 16) & 0xFFFF))
+	pt := winPoint{x: screenX, y: screenY}
+	procScreenToClient.Call(hwnd, uintptr(unsafe.Pointer(&pt)))
+
+	var rc winRect
+	procGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&rc)))
+
+	// Stop button area (right edge) → HTCLIENT so WM_LBUTTONDOWN fires
+	btnLeft := rc.Right - stopBtnD - stopBtnMR
+	if pt.x >= btnLeft {
+		return htClient
+	}
+
+	// Pill body → HTCAPTION enables native Win32 drag
+	return htCaption
+}
+
+func (o *OverlayWindow) onLButtonDown(clientX, clientY int32) {
+	o.mu.Lock()
+	confirming := o.confirming
+	o.mu.Unlock()
+
+	if !confirming {
+		// Stop button clicked → enter confirmation state, widen pill
+		o.mu.Lock()
+		o.confirming = true
+		o.mu.Unlock()
+
+		screenW, _, _ := procGetSystemMetrics.Call(smCxscreen)
+		x := int32(screenW) - overlayWidthConfirm - 20
+		rgn, _, _ := procCreateRoundRectRgn.Call(0, 0, overlayWidthConfirm, overlayHeight, overlayCorner, overlayCorner)
+		if rgn != 0 {
+			procSetWindowRgn.Call(o.hwnd, rgn, 0)
+		}
+		const swpNoActivate = 0x0010
+		procSetWindowPos.Call(o.hwnd, 0, uintptr(x), 20, overlayWidthConfirm, overlayHeight, swpNoActivate)
+		procInvalidateRect.Call(o.hwnd, 0, 1)
+		return
+	}
+
+	// In confirmation state: hit-test Sim and Não buttons
+	// Layout matches paintConfirmation: simLeft=162, btnW=40, naoLeft=simLeft+btnW+6=208
+	var rc winRect
+	procGetClientRect.Call(o.hwnd, uintptr(unsafe.Pointer(&rc)))
+	btnH   := int32(24)
+	btnTop := (rc.Bottom - btnH) / 2
+	const simLeft = int32(162)
+	const btnW    = int32(40)
+	const naoLeft = simLeft + btnW + 6
+
+	inSim := clientX >= simLeft && clientX <= simLeft+btnW && clientY >= btnTop && clientY <= btnTop+btnH
+	inNao := clientX >= naoLeft && clientX <= naoLeft+btnW && clientY >= btnTop && clientY <= btnTop+btnH
+
+	switch {
+	case inSim:
+		go o.confirmStop()
+	case inNao:
+		// Cancel → return to normal recording state, shrink pill
+		o.mu.Lock()
+		o.confirming = false
+		o.mu.Unlock()
+		screenW, _, _ := procGetSystemMetrics.Call(smCxscreen)
+		x := int32(screenW) - overlayWidth - 20
+		rgn, _, _ := procCreateRoundRectRgn.Call(0, 0, overlayWidth, overlayHeight, overlayCorner, overlayCorner)
+		if rgn != 0 {
+			procSetWindowRgn.Call(o.hwnd, rgn, 0)
+		}
+		const swpNoActivate = 0x0010
+		procSetWindowPos.Call(o.hwnd, 0, uintptr(x), 20, overlayWidth, overlayHeight, swpNoActivate)
+		procInvalidateRect.Call(o.hwnd, 0, 1)
+	}
+}
 func (o *OverlayWindow) timerLoop(stopCh <-chan struct{}) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
