@@ -51,6 +51,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	}
 	a.db = db
 
+	logRepo := repository.NewLogRepository(db)
 	themeRepo := repository.NewThemeRepository(db)
 	meetingRepo := repository.NewMeetingRepository(db)
 	summaryRepo := repository.NewSummaryRepository(db)
@@ -76,6 +77,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
 	orch := services.NewOrchestrator(meetingRepo, themeRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo, boardCardSvc)
 	orch.SetSearchRepo(searchRepo)
+	orch.SetLogRepo(logRepo)
 	orch.SetNotifyFn(func(meetingID, status string) {
 		if isWailsContext(ctx) {
 			type payload struct {
@@ -99,6 +101,7 @@ func (a *App) OnStartup(ctx context.Context) {
 		}
 	})
 	searchHandler := handlers.NewSearchHandler(searchSvc)
+	logHandler := handlers.NewLogHandler(logRepo)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
@@ -176,6 +179,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	})
 
 	r.Get("/api/search", searchHandler.Search)
+	r.Get("/api/logs", logHandler.List)
 
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {

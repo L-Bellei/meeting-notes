@@ -32,6 +32,7 @@ type Orchestrator struct {
 	pipelineWG   sync.WaitGroup
 	notifyFn     func(meetingID, status string)
 	searchRepo   *repository.SearchRepository
+	logRepo      *repository.LogRepository
 }
 
 func NewOrchestrator(
@@ -62,6 +63,19 @@ func (o *Orchestrator) SetNotifyFn(fn func(meetingID, status string)) {
 
 func (o *Orchestrator) SetSearchRepo(repo *repository.SearchRepository) {
 	o.searchRepo = repo
+}
+
+func (o *Orchestrator) SetLogRepo(repo *repository.LogRepository) {
+	o.logRepo = repo
+}
+
+func (o *Orchestrator) persistLog(level, component, message string) {
+	if o.logRepo == nil {
+		return
+	}
+	go func() {
+		_ = o.logRepo.Insert(context.Background(), level, component, message, nil)
+	}()
 }
 
 func (o *Orchestrator) notify(meetingID string, status models.MeetingStatus) {
@@ -140,6 +154,7 @@ func (o *Orchestrator) spawnPipeline(meetingID string, fn func(context.Context, 
 		defer cancel()
 		if err := fn(bgCtx, meetingID); err != nil {
 			log.Printf("pipeline %s: %v", meetingID, err)
+			o.persistLog("error", "orchestrator", fmt.Sprintf("pipeline %s failed: %v", meetingID, err))
 		}
 	}()
 }
@@ -255,6 +270,7 @@ func (o *Orchestrator) runAIGeneration(ctx context.Context, m *models.Meeting) e
 	if theme != nil && o.boardCardSvc != nil && theme.AutoAddToBoard {
 		if _, err := o.boardCardSvc.Create(ctx, m.ID, ""); err != nil {
 			log.Printf("auto-add to board %s: %v", m.ID, err)
+			o.persistLog("warn", "orchestrator", fmt.Sprintf("auto-add board %s: %v", m.ID, err))
 		}
 	}
 	if o.searchRepo != nil {
@@ -289,6 +305,7 @@ func (o *Orchestrator) markFailed(ctx context.Context, m *models.Meeting) {
 	m.Status = models.StatusFailed
 	if err := o.repo.Update(ctx, m); err != nil {
 		log.Printf("warning: mark failed %s: %v", m.ID, err)
+		o.persistLog("warn", "orchestrator", fmt.Sprintf("mark failed %s: %v", m.ID, err))
 		return
 	}
 	o.notify(m.ID, m.Status)
