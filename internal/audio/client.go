@@ -64,7 +64,7 @@ func NewHTTPClient(baseURL string) *httpClient {
 	return &httpClient{
 		baseURL:          strings.TrimRight(baseURL, "/"),
 		defaultClient:    &http.Client{Timeout: 30 * time.Second},
-		transcribeClient: &http.Client{Timeout: 10 * time.Minute},
+		transcribeClient: &http.Client{Timeout: 60 * time.Minute},
 	}
 }
 

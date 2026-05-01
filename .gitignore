@@ -10,8 +10,12 @@ api.exe
 __pycache__/
 *.pyc
 
-# Wails build artifacts
-/cmd/desktop/build/
+# Wails build artifacts (binaries, generated files)
+/cmd/desktop/build/bin/
+/cmd/desktop/build/appicon.png
+/cmd/desktop/build/windows/tray.ico
+/cmd/desktop/build/windows/icon.ico
+/cmd/desktop/build/windows/wails_tools.nsh
 /cmd/desktop/frontend/dist/
 /dist/
 desktop.exe

@@ -17,7 +17,8 @@ var validSettings = map[string]func(string) error{
 	"auto_generate":     validateEnum("true", "false"),
 	"whisper_language":  validateEnum("pt", "en", "es", "auto"),
 	"whisper_model":     validateEnum("tiny", "base", "small", "medium", "large"),
-	"recording_hotkey": func(string) error { return nil },
+	"recording_hotkey":       func(string) error { return nil },
+	"meeting_name_template":  func(string) error { return nil },
 }
 
 func validateEnum(allowed ...string) func(string) error {

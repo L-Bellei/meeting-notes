@@ -9,6 +9,7 @@ import { MeetingList } from "./components/layout/MeetingList"
 import { MeetingDetail } from "./components/layout/MeetingDetail"
 import { Toolbar } from "./components/layout/Toolbar"
 import { RecordingModal } from "./components/recording/RecordingModal"
+import { StopConfirmModal } from "./components/recording/StopConfirmModal"
 import { SettingsModal } from "./components/settings/SettingsModal"
 import { Spinner } from "./components/ui/spinner"
 import { BoardView } from "./components/board/BoardView"
@@ -25,6 +26,8 @@ function AppInner() {
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null)
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null)
   const [recordingModalOpen, setRecordingModalOpen] = useState(false)
+  const [stopConfirmMeetingId, setStopConfirmMeetingId] = useState<string | null>(null)
+  const [hotkeySuggestedTitle, setHotkeySuggestedTitle] = useState<string>("")
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [activeView, setActiveView] = useState<"meetings" | "board">("meetings")
@@ -57,6 +60,21 @@ function AppInner() {
       setSelectedMeetingId(meetingId)
       setHighlightQuery(undefined)
       setActiveView("meetings")
+    })
+    return () => { if (typeof unlisten === "function") unlisten() }
+  }, [])
+
+  useEffect(() => {
+    const unlisten = EventsOn("hotkey:open-recording-modal", ({ suggestedTitle }: { suggestedTitle: string }) => {
+      setHotkeySuggestedTitle(suggestedTitle)
+      setRecordingModalOpen(true)
+    })
+    return () => { if (typeof unlisten === "function") unlisten() }
+  }, [])
+
+  useEffect(() => {
+    const unlisten = EventsOn("hotkey:confirm-stop", ({ meetingId }: { meetingId: string }) => {
+      setStopConfirmMeetingId(meetingId)
     })
     return () => { if (typeof unlisten === "function") unlisten() }
   }, [])
@@ -123,8 +141,14 @@ function AppInner() {
       )}
       <RecordingModal
         open={recordingModalOpen}
-        onClose={() => setRecordingModalOpen(false)}
+        onClose={() => { setRecordingModalOpen(false); setHotkeySuggestedTitle("") }}
         onMeetingCreated={(id: string) => setSelectedMeetingId(id)}
+        initialTitle={hotkeySuggestedTitle}
+      />
+      <StopConfirmModal
+        open={stopConfirmMeetingId !== null}
+        meetingId={stopConfirmMeetingId}
+        onClose={() => setStopConfirmMeetingId(null)}
       />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>

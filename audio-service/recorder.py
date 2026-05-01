@@ -162,31 +162,63 @@ class Recorder:
             subtype="PCM_16",
         )
 
-        self._mic_stream = self._pa.open(
-            format=pyaudio.paInt16,
-            channels=self._mic_channels,
-            rate=self._mic_native_rate,
-            input=True,
-            input_device_index=self._mic_info["index"],
-            frames_per_buffer=CHUNK_FRAMES,
-            stream_callback=self._make_callback(self._mic_queue),
-        )
+        try:
+            self._mic_stream = self._pa.open(
+                format=pyaudio.paInt16,
+                channels=self._mic_channels,
+                rate=self._mic_native_rate,
+                input=True,
+                input_device_index=self._mic_info["index"],
+                frames_per_buffer=CHUNK_FRAMES,
+                stream_callback=self._make_callback(self._mic_queue),
+            )
 
-        self._loopback_stream = self._pa.open(
-            format=pyaudio.paInt16,
-            channels=self._loopback_channels,
-            rate=self._loopback_native_rate,
-            input=True,
-            input_device_index=self._loopback_info["index"],
-            frames_per_buffer=CHUNK_FRAMES,
-            stream_callback=self._make_callback(self._loopback_queue),
-        )
+            self._loopback_stream = self._pa.open(
+                format=pyaudio.paInt16,
+                channels=self._loopback_channels,
+                rate=self._loopback_native_rate,
+                input=True,
+                input_device_index=self._loopback_info["index"],
+                frames_per_buffer=CHUNK_FRAMES,
+                stream_callback=self._make_callback(self._loopback_queue),
+            )
+        except OSError:
+            # PyAudio instance may be in a stale state — reinitialize and retry once.
+            log.warning("Stream open failed; reinitializing PyAudio and retrying")
+            self._reset_pyaudio()
+            self._mic_stream = self._pa.open(
+                format=pyaudio.paInt16,
+                channels=self._mic_channels,
+                rate=self._mic_native_rate,
+                input=True,
+                input_device_index=self._mic_info["index"],
+                frames_per_buffer=CHUNK_FRAMES,
+                stream_callback=self._make_callback(self._mic_queue),
+            )
+            self._loopback_stream = self._pa.open(
+                format=pyaudio.paInt16,
+                channels=self._loopback_channels,
+                rate=self._loopback_native_rate,
+                input=True,
+                input_device_index=self._loopback_info["index"],
+                frames_per_buffer=CHUNK_FRAMES,
+                stream_callback=self._make_callback(self._loopback_queue),
+            )
 
         self._mic_stream.start_stream()
         self._loopback_stream.start_stream()
 
         self._mixer_thread = threading.Thread(target=self._run_mixer, daemon=True)
         self._mixer_thread.start()
+
+    def _reset_pyaudio(self):
+        """Terminate the current PyAudio instance and create a fresh one with re-enumerated devices."""
+        try:
+            self._pa.terminate()
+        except Exception:
+            pass
+        self._pa = pyaudio.PyAudio()
+        self._enumerate_devices()
 
     def _make_callback(self, q):
         def callback(in_data, frame_count, time_info, status):

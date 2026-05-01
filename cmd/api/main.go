@@ -31,6 +31,7 @@ func main() {
 	defer db.Close()
 
 	// Repositories
+	logRepo := repository.NewLogRepository(db)
 	themeRepo := repository.NewThemeRepository(db)
 	meetingRepo := repository.NewMeetingRepository(db)
 	summaryRepo := repository.NewSummaryRepository(db)
@@ -58,6 +59,7 @@ func main() {
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
 	orchestrator := services.NewOrchestrator(meetingRepo, themeRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo, boardCardSvc)
 	orchestrator.SetSearchRepo(searchRepo)
+	orchestrator.SetLogRepo(logRepo)
 
 	// Handlers
 	boardHandler := handlers.NewBoardHandler(boardColumnSvc, boardCardSvc)
@@ -68,6 +70,7 @@ func main() {
 	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc, themeRepo)
 	settingsH := handlers.NewSettingsHandler(settingsSvc)
 	searchHandler := handlers.NewSearchHandler(searchSvc)
+	logHandler := handlers.NewLogHandler(logRepo)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -147,6 +150,7 @@ func main() {
 	})
 
 	r.Get("/api/search", searchHandler.Search)
+	r.Get("/api/logs", logHandler.List)
 
 	log.Printf("server listening on :%s", cfg.HTTPPort)
 	if err := http.ListenAndServe(":"+cfg.HTTPPort, r); err != nil {

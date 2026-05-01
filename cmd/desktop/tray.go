@@ -17,7 +17,6 @@ import (
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"meeting-notes/internal/models"
 	"meeting-notes/internal/repository"
 	"meeting-notes/internal/services"
 )
@@ -143,26 +142,36 @@ var (
 const (
 	imageIcon      = 1
 	lrLoadFromFile = 0x0010
+	lrDefaultSize  = 0x0040
 )
 
 // loadEmbeddedIcon writes the embedded tray.ico to a temp file and loads it
 // via LoadImageW. Falls back to the default application icon on any error.
 func loadEmbeddedIcon() uintptr {
 	f, err := os.CreateTemp("", "tray-*.ico")
-	if err == nil {
-		_, err = f.Write(trayIconData)
-		f.Close()
-		if err == nil {
-			path, _ := syscall.UTF16PtrFromString(f.Name())
-			hIcon, _, _ := procLoadImageW.Call(0, uintptr(unsafe.Pointer(path)), imageIcon, 16, 16, lrLoadFromFile)
-			os.Remove(f.Name())
-			if hIcon != 0 {
-				return hIcon
-			}
-		}
-		os.Remove(f.Name())
+	if err != nil {
+		hIcon, _, _ := procLoadIconW.Call(0, idiApplication)
+		return hIcon
 	}
-	hIcon, _, _ := procLoadIconW.Call(0, idiApplication)
+	_, err = f.Write(trayIconData)
+	name := f.Name()
+	f.Close()
+	defer os.Remove(name)
+	if err != nil {
+		hIcon, _, _ := procLoadIconW.Call(0, idiApplication)
+		return hIcon
+	}
+	path, _ := syscall.UTF16PtrFromString(name)
+	// Try exact 16x16 first (tray size), then let Windows choose
+	hIcon, _, _ := procLoadImageW.Call(0, uintptr(unsafe.Pointer(path)), imageIcon, 16, 16, lrLoadFromFile)
+	if hIcon != 0 {
+		return hIcon
+	}
+	hIcon, _, _ = procLoadImageW.Call(0, uintptr(unsafe.Pointer(path)), imageIcon, 0, 0, lrLoadFromFile|lrDefaultSize)
+	if hIcon != 0 {
+		return hIcon
+	}
+	hIcon, _, _ = procLoadIconW.Call(0, idiApplication)
 	return hIcon
 }
 
@@ -422,6 +431,9 @@ func trayWndProcImpl(hwnd, msg, wparam, lparam uintptr) uintptr {
 
 func (t *TrayManager) toggleRecording() {
 	ctx := t.ctx
+	if ctx == nil || !isWailsContext(ctx) {
+		return
+	}
 
 	recording, err := t.meetingRepo.GetRecording(ctx)
 	if err != nil {
@@ -429,29 +441,35 @@ func (t *TrayManager) toggleRecording() {
 		return
 	}
 
+	// Always bring the window to front first
+	wailsruntime.Show(ctx)
+	wailsruntime.WindowUnminimise(ctx)
+
 	if recording != nil {
-		if err := t.orch.StopRecording(ctx, recording.ID); err != nil {
-			log.Printf("tray: StopRecording: %v", err)
-			return
-		}
-		t.UpdateState(false)
+		// Ask frontend to confirm stop
+		wailsruntime.EventsEmit(ctx, "hotkey:confirm-stop", map[string]string{
+			"meetingId": recording.ID,
+		})
 		return
 	}
 
-	title := "Reunião - " + time.Now().Format("02/01/2006 15:04")
-	m, err := t.meetingSvc.Create(ctx, title, "", string(models.StatusPending), nil)
-	if err != nil {
-		log.Printf("tray: Create meeting: %v", err)
-		return
+	// Build suggested title from template
+	nameTemplate := "Reunião {date}"
+	if all, err2 := t.settingsRepo.GetAll(ctx); err2 == nil {
+		if v := all["meeting_name_template"]; v != "" {
+			nameTemplate = v
+		}
 	}
-	if err := t.orch.StartRecording(ctx, m.ID); err != nil {
-		log.Printf("tray: StartRecording: %v", err)
-		return
-	}
-	t.UpdateState(true)
-	if t.ctx != nil && isWailsContext(t.ctx) {
-		wailsruntime.EventsEmit(t.ctx, "hotkey:recording-started", map[string]string{"meetingId": m.ID})
-	}
+	now := time.Now()
+	suggestedTitle := strings.NewReplacer(
+		"{date}", now.Format("02/01/2006"),
+		"{time}", now.Format("15:04"),
+	).Replace(nameTemplate)
+
+	// Ask frontend to open the recording modal with suggested title
+	wailsruntime.EventsEmit(ctx, "hotkey:open-recording-modal", map[string]string{
+		"suggestedTitle": suggestedTitle,
+	})
 }
 
 // ---------------------------------------------------------------------------

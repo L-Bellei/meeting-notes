@@ -23,7 +23,7 @@ func main() {
 		OnShutdown:    app.OnShutdown,
 		OnBeforeClose: app.OnBeforeClose,
 		Bind:             []interface{}{app},
-		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
+		BackgroundColour: &options.RGBA{R: 26, G: 26, B: 26, A: 255},
 	})
 	if err != nil {
 		log.Fatal(err)
