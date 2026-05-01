@@ -290,18 +290,33 @@ func (a *App) waitAudioReady(ctx context.Context, audioURL string) {
 	log.Printf("audio service did not become ready within 90 s")
 }
 
-// findAudioServiceDir searches common locations relative to the working directory.
+// findAudioServiceDir searches for the audio-service directory relative to both
+// the executable path and the working directory, covering dev and production layouts.
 func findAudioServiceDir() string {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return ""
+	var roots []string
+
+	// Prefer exe-relative lookup so the built binary works regardless of CWD.
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		roots = append(roots,
+			exeDir,                                    // <exe-dir>/audio-service
+			filepath.Join(exeDir, ".."),               // one level up
+			filepath.Join(exeDir, "..", ".."),         // two levels up  (build/bin → cmd/desktop)
+			filepath.Join(exeDir, "..", "..", ".."),   // three levels up (cmd/desktop → cmd)
+			filepath.Join(exeDir, "..", "..", "..", ".."), // four levels up (build/bin → project root)
+		)
 	}
-	candidates := []string{
-		filepath.Join(cwd, "..", "..", "audio-service"), // wails dev from cmd/desktop/
-		filepath.Join(cwd, "audio-service"),             // run from project root
-		filepath.Join(cwd, "..", "audio-service"),       // one level up
+
+	if cwd, err := os.Getwd(); err == nil {
+		roots = append(roots,
+			cwd,
+			filepath.Join(cwd, ".."),
+			filepath.Join(cwd, "..", ".."),
+		)
 	}
-	for _, p := range candidates {
+
+	for _, root := range roots {
+		p := filepath.Join(root, "audio-service")
 		abs, err := filepath.Abs(p)
 		if err != nil {
 			continue
