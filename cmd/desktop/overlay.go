@@ -57,6 +57,8 @@ const (
 	// Stop button: 28px diameter, 8px margin from right edge
 	stopBtnD  = 28
 	stopBtnMR = 8
+
+	swpNoActivate = 0x0010 // SetWindowPos flag: don't steal focus
 )
 
 // GDI COLORREF format: 0x00BBGGRR
@@ -219,7 +221,6 @@ func (o *OverlayWindow) Show(ctx context.Context, port int, meetingID string) {
 	// Position: 20px from top-right of primary monitor
 	screenW, _, _ := procGetSystemMetrics.Call(smCxscreen)
 	x := int32(screenW) - overlayWidth - 20
-	const swpNoActivate = 0x0010
 	procSetWindowPos.Call(o.hwnd, 0, uintptr(x), 20, overlayWidth, overlayHeight, swpNoActivate)
 	procShowWindow.Call(o.hwnd, swShow)
 
@@ -477,7 +478,6 @@ func (o *OverlayWindow) onLButtonDown(clientX, clientY int32) {
 		if rgn != 0 {
 			procSetWindowRgn.Call(o.hwnd, rgn, 0)
 		}
-		const swpNoActivate = 0x0010
 		procSetWindowPos.Call(o.hwnd, 0, uintptr(x), 20, overlayWidthConfirm, overlayHeight, swpNoActivate)
 		procInvalidateRect.Call(o.hwnd, 0, 1)
 		return
@@ -510,11 +510,11 @@ func (o *OverlayWindow) onLButtonDown(clientX, clientY int32) {
 		if rgn != 0 {
 			procSetWindowRgn.Call(o.hwnd, rgn, 0)
 		}
-		const swpNoActivate = 0x0010
 		procSetWindowPos.Call(o.hwnd, 0, uintptr(x), 20, overlayWidth, overlayHeight, swpNoActivate)
 		procInvalidateRect.Call(o.hwnd, 0, 1)
 	}
 }
+
 func (o *OverlayWindow) timerLoop(stopCh <-chan struct{}) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
