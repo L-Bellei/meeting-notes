@@ -14,7 +14,7 @@ import (
 	"meeting-notes/internal/repository"
 )
 
-const pipelineTimeout = 15 * time.Minute
+const pipelineTimeout = 90 * time.Minute
 
 type orchestratorSettings interface {
 	GetAll(ctx context.Context) (map[string]string, error)
