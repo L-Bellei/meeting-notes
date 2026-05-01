@@ -537,13 +537,41 @@ func (o *OverlayWindow) timerLoop(stopCh <-chan struct{}) {
 		}
 	}
 }
-func (o *OverlayWindow) confirmStop()                              {}
+func (o *OverlayWindow) confirmStop() {
+	o.mu.Lock()
+	meetingID := o.meetingID
+	port := o.port
+	ctx := o.ctx
+	o.mu.Unlock()
 
-// ---------------------------------------------------------------------------
-// Silence unused-import errors for imports needed by later tasks
-// ---------------------------------------------------------------------------
+	url := fmt.Sprintf("http://localhost:%d/api/meetings/%s/stop", port, meetingID)
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(url, "application/json", nil)
+	if err != nil || (resp != nil && resp.StatusCode >= 300) {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		log.Printf("overlay: stop failed: %v", err)
+		// Return to recording state on error
+		o.mu.Lock()
+		o.confirming = false
+		o.mu.Unlock()
+		screenW, _, _ := procGetSystemMetrics.Call(smCxscreen)
+		x := int32(screenW) - overlayWidth - 20
+		rgn, _, _ := procCreateRoundRectRgn.Call(0, 0, overlayWidth, overlayHeight, overlayCorner, overlayCorner)
+		if rgn != 0 {
+			procSetWindowRgn.Call(o.hwnd, rgn, 0)
+		}
+		procSetWindowPos.Call(o.hwnd, 0, uintptr(x), 20, overlayWidth, overlayHeight, swpNoActivate)
+		procInvalidateRect.Call(o.hwnd, 0, 1)
+		return
+	}
+	resp.Body.Close()
 
-var (
-	_ = http.DefaultClient
-	_ = wailsruntime.Show
-)
+	// Success: bring main window to front.
+	// The overlay hides when the orchestrator emits "transcribing" status (via app.go notify).
+	if ctx != nil && isWailsContext(ctx) {
+		wailsruntime.Show(ctx)
+		wailsruntime.WindowUnminimise(ctx)
+	}
+}
