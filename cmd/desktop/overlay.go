@@ -144,54 +144,57 @@ func NewOverlayWindow() *OverlayWindow {
 	o := &OverlayWindow{}
 	globalOverlay = o
 
-	hInstance, _, _ := procGetModuleHandleW.Call(0)
-	className, _ := syscall.UTF16PtrFromString("MeetingNotesOverlayClass")
-	windowName, _ := syscall.UTF16PtrFromString("MeetingNotesOverlay")
+	ready := make(chan struct{})
+	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
 
-	wc := wndClassEx{
-		cbSize:        uint32(unsafe.Sizeof(wndClassEx{})),
-		lpfnWndProc:   overlayWndProcCb,
-		hInstance:     hInstance,
-		lpszClassName: className,
-	}
-	if ret, _, err := procRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc))); ret == 0 {
-		log.Printf("overlay: RegisterClassEx: %v", err)
-		return o
-	}
+		hInstance, _, _ := procGetModuleHandleW.Call(0)
+		className, _ := syscall.UTF16PtrFromString("MeetingNotesOverlayClass")
+		windowName, _ := syscall.UTF16PtrFromString("MeetingNotesOverlay")
 
-	hwnd, _, err := procCreateWindowExW.Call(
-		wsExTopmost|wsExLayered|wsExToolwindow,
-		uintptr(unsafe.Pointer(className)),
-		uintptr(unsafe.Pointer(windowName)),
-		wsPopup,
-		0, 0, overlayWidth, overlayHeight,
-		0, 0, hInstance, 0,
-	)
-	if hwnd == 0 {
-		log.Printf("overlay: CreateWindowEx: %v", err)
-		return o
-	}
-	o.hwnd = hwnd
-
-	// 220/255 alpha — whole-window uniform transparency
-	procSetLayeredWindowAttributes.Call(hwnd, 0, 220, lwaAlpha)
-
-	go o.runMessageLoop()
-	return o
-}
-
-func (o *OverlayWindow) runMessageLoop() {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	var msg winMsg
-	for {
-		ret, _, _ := procGetMessageW.Call(uintptr(unsafe.Pointer(&msg)), o.hwnd, 0, 0)
-		if ret == 0 || ret == ^uintptr(0) {
-			break
+		wc := wndClassEx{
+			cbSize:        uint32(unsafe.Sizeof(wndClassEx{})),
+			lpfnWndProc:   overlayWndProcCb,
+			hInstance:     hInstance,
+			lpszClassName: className,
 		}
-		procTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
-		procDispatchMessageW.Call(uintptr(unsafe.Pointer(&msg)))
-	}
+		if ret, _, err := procRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc))); ret == 0 {
+			log.Printf("overlay: RegisterClassEx: %v", err)
+			close(ready)
+			return
+		}
+
+		hwnd, _, err := procCreateWindowExW.Call(
+			wsExTopmost|wsExLayered|wsExToolwindow,
+			uintptr(unsafe.Pointer(className)),
+			uintptr(unsafe.Pointer(windowName)),
+			wsPopup,
+			0, 0, overlayWidth, overlayHeight,
+			0, 0, hInstance, 0,
+		)
+		if hwnd == 0 {
+			log.Printf("overlay: CreateWindowEx: %v", err)
+			close(ready)
+			return
+		}
+		o.hwnd = hwnd
+		procSetLayeredWindowAttributes.Call(hwnd, 0, 220, lwaAlpha)
+		close(ready)
+
+		var msg winMsg
+		for {
+			ret, _, _ := procGetMessageW.Call(uintptr(unsafe.Pointer(&msg)), o.hwnd, 0, 0)
+			if ret == 0 || ret == ^uintptr(0) {
+				break
+			}
+			procTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
+			procDispatchMessageW.Call(uintptr(unsafe.Pointer(&msg)))
+		}
+	}()
+
+	<-ready
+	return o
 }
 
 func (o *OverlayWindow) Show(ctx context.Context, port int, meetingID string) {
