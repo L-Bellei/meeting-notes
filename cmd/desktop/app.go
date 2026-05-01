@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -240,8 +241,7 @@ func (a *App) startAudioService(ctx context.Context, audioURL string) {
 			recordingsDir := bundledRecordingsDir()
 			c := exec.Command(bundled, "--port", "8765")
 			c.Env = append(os.Environ(), "RECORDINGS_DIR="+recordingsDir)
-			c.Stdout = os.Stdout
-			c.Stderr = os.Stderr
+			c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 			cmd = c
 			log.Printf("starting bundled audio service from %s", bundled)
 		}
