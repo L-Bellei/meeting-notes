@@ -100,7 +100,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
           <span className="text-xs text-muted-foreground mr-1">{countForTheme(theme.id)}</span>
 
           {/* actions: add sub-theme + edit + delete */}
-          <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
+          <div className="hidden group-hover:flex items-center gap-1 flex-shrink-0">
             <button
               title="Nova subcategoria"
               onClick={e => { e.stopPropagation(); setCreating(theme.id); setNewName("") }}
