@@ -98,6 +98,15 @@ type BoardCard struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+type AppLog struct {
+	ID        string  `json:"id"`
+	Level     string  `json:"level"`
+	Component string  `json:"component"`
+	Message   string  `json:"message"`
+	Metadata  *string `json:"metadata,omitempty"`
+	CreatedAt string  `json:"created_at"`
+}
+
 func (c *BoardCard) DisplayTitle(meeting *Meeting) string {
 	if c.MeetingID != nil {
 		if meeting != nil {
