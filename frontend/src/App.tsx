@@ -39,20 +39,22 @@ function AppInner() {
   const recordingHotkey = formatHotkey(settings?.recording_hotkey ?? "ctrl+shift+r")
 
   useEffect(() => {
+    let cancelled = false
     GetPort().then(async port => {
       initApi(port)
       const deadline = Date.now() + 15_000
       while (Date.now() < deadline) {
         try {
           const res = await fetch(`http://localhost:${port}/health`)
-          if (res.ok) { setReady(true); return }
+          if (res.ok) { if (!cancelled) setReady(true); return }
         } catch {
           // server not up yet
         }
         await new Promise(r => setTimeout(r, 500))
       }
-      setStartupError(true)
+      if (!cancelled) setStartupError(true)
     })
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {

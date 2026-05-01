@@ -38,8 +38,6 @@ export function RecordingModal({ open, onClose, onMeetingCreated, initialTitle }
       const m = await createMeeting.mutateAsync({ title: title.trim(), theme_id: themeId || undefined })
       createdId = m.id
       await api<void>(`/api/meetings/${m.id}/start`, { method: "POST" })
-      qc.invalidateQueries({ queryKey: ["meetings"] })
-      qc.invalidateQueries({ queryKey: ["meeting", m.id] })
       onMeetingCreated(m.id)
       setTitle("")
       setThemeId("")
