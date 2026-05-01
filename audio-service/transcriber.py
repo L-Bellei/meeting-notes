@@ -29,7 +29,16 @@ class Transcriber:
         self.default_language = default_language
         self.recordings_dir = Path(recordings_dir).resolve()
         self._setup_dll_paths()
-        self._model = WhisperModel(model_name, device=device, compute_type=compute_type)
+        try:
+            self._model = WhisperModel(model_name, device=device, compute_type=compute_type)
+        except Exception as e:
+            if device != "cpu":
+                import logging
+                logging.warning("whisper: %s device failed (%s), falling back to cpu", device, e)
+                self.device = "cpu"
+                self._model = WhisperModel(model_name, device="cpu", compute_type="int8")
+            else:
+                raise
         self.model_loaded = True
 
     def _setup_dll_paths(self):
