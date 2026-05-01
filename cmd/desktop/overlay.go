@@ -216,7 +216,10 @@ func (o *OverlayWindow) Show(ctx context.Context, port int, meetingID string) {
 	// Clip window to pill shape
 	rgn, _, _ := procCreateRoundRectRgn.Call(0, 0, overlayWidth, overlayHeight, overlayCorner, overlayCorner)
 	if rgn != 0 {
-		procSetWindowRgn.Call(o.hwnd, rgn, 0)
+		ret, _, _ := procSetWindowRgn.Call(o.hwnd, rgn, 1)
+		if ret == 0 {
+			procDeleteObject.Call(rgn)
+		}
 	}
 
 	// Position: 20px from top-right of primary monitor
@@ -239,6 +242,14 @@ func (o *OverlayWindow) Hide() {
 	}
 	o.mu.Unlock()
 	procShowWindow.Call(o.hwnd, swHide)
+}
+
+func (o *OverlayWindow) Destroy() {
+	if o.hwnd == 0 {
+		return
+	}
+	o.Hide()
+	procDestroyWindow.Call(o.hwnd)
 }
 
 func overlayWndProcImpl(hwnd, msg, wparam, lparam uintptr) uintptr {
@@ -477,7 +488,10 @@ func (o *OverlayWindow) onLButtonDown(clientX, clientY int32) {
 		x := int32(screenW) - overlayWidthConfirm - 20
 		rgn, _, _ := procCreateRoundRectRgn.Call(0, 0, overlayWidthConfirm, overlayHeight, overlayCorner, overlayCorner)
 		if rgn != 0 {
-			procSetWindowRgn.Call(o.hwnd, rgn, 0)
+			ret, _, _ := procSetWindowRgn.Call(o.hwnd, rgn, 1)
+			if ret == 0 {
+				procDeleteObject.Call(rgn)
+			}
 		}
 		procSetWindowPos.Call(o.hwnd, 0, uintptr(x), 20, overlayWidthConfirm, overlayHeight, swpNoActivate)
 		procInvalidateRect.Call(o.hwnd, 0, 1)
@@ -511,7 +525,10 @@ func (o *OverlayWindow) onLButtonDown(clientX, clientY int32) {
 		x := int32(screenW) - overlayWidth - 20
 		rgn, _, _ := procCreateRoundRectRgn.Call(0, 0, overlayWidth, overlayHeight, overlayCorner, overlayCorner)
 		if rgn != 0 {
-			procSetWindowRgn.Call(o.hwnd, rgn, 0)
+			ret, _, _ := procSetWindowRgn.Call(o.hwnd, rgn, 1)
+			if ret == 0 {
+				procDeleteObject.Call(rgn)
+			}
 		}
 		procSetWindowPos.Call(o.hwnd, 0, uintptr(x), 20, overlayWidth, overlayHeight, swpNoActivate)
 		procInvalidateRect.Call(o.hwnd, 0, 1)
@@ -561,7 +578,10 @@ func (o *OverlayWindow) confirmStop() {
 		x := int32(screenW) - overlayWidth - 20
 		rgn, _, _ := procCreateRoundRectRgn.Call(0, 0, overlayWidth, overlayHeight, overlayCorner, overlayCorner)
 		if rgn != 0 {
-			procSetWindowRgn.Call(o.hwnd, rgn, 0)
+			ret, _, _ := procSetWindowRgn.Call(o.hwnd, rgn, 1)
+			if ret == 0 {
+				procDeleteObject.Call(rgn)
+			}
 		}
 		procSetWindowPos.Call(o.hwnd, 0, uintptr(x), 20, overlayWidth, overlayHeight, swpNoActivate)
 		procInvalidateRect.Call(o.hwnd, 0, 1)
@@ -577,7 +597,10 @@ func (o *OverlayWindow) confirmStop() {
 		x := int32(screenW) - overlayWidth - 20
 		rgn, _, _ := procCreateRoundRectRgn.Call(0, 0, overlayWidth, overlayHeight, overlayCorner, overlayCorner)
 		if rgn != 0 {
-			procSetWindowRgn.Call(o.hwnd, rgn, 0)
+			ret, _, _ := procSetWindowRgn.Call(o.hwnd, rgn, 1)
+			if ret == 0 {
+				procDeleteObject.Call(rgn)
+			}
 		}
 		procSetWindowPos.Call(o.hwnd, 0, uintptr(x), 20, overlayWidth, overlayHeight, swpNoActivate)
 		procInvalidateRect.Call(o.hwnd, 0, 1)

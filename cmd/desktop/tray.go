@@ -319,7 +319,7 @@ func (t *TrayManager) Stop() {
 		return
 	}
 	if t.overlay != nil {
-		t.overlay.Hide()
+		t.overlay.Destroy()
 	}
 	procUnregisterHotKey.Call(t.hwnd, hotkeyID)
 	t.removeTrayIcon()
