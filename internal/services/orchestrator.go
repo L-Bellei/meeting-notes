@@ -100,7 +100,11 @@ func (o *Orchestrator) StartRecording(ctx context.Context, meetingID string) err
 		return err
 	}
 	m.Status = models.StatusRecording
-	return o.repo.Update(ctx, m)
+	if err := o.repo.Update(ctx, m); err != nil {
+		return err
+	}
+	o.notify(m.ID, m.Status)
+	return nil
 }
 
 func (o *Orchestrator) StopRecording(ctx context.Context, meetingID string) error {
