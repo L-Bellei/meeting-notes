@@ -142,26 +142,36 @@ var (
 const (
 	imageIcon      = 1
 	lrLoadFromFile = 0x0010
+	lrDefaultSize  = 0x0040
 )
 
 // loadEmbeddedIcon writes the embedded tray.ico to a temp file and loads it
 // via LoadImageW. Falls back to the default application icon on any error.
 func loadEmbeddedIcon() uintptr {
 	f, err := os.CreateTemp("", "tray-*.ico")
-	if err == nil {
-		_, err = f.Write(trayIconData)
-		f.Close()
-		if err == nil {
-			path, _ := syscall.UTF16PtrFromString(f.Name())
-			hIcon, _, _ := procLoadImageW.Call(0, uintptr(unsafe.Pointer(path)), imageIcon, 16, 16, lrLoadFromFile)
-			os.Remove(f.Name())
-			if hIcon != 0 {
-				return hIcon
-			}
-		}
-		os.Remove(f.Name())
+	if err != nil {
+		hIcon, _, _ := procLoadIconW.Call(0, idiApplication)
+		return hIcon
 	}
-	hIcon, _, _ := procLoadIconW.Call(0, idiApplication)
+	_, err = f.Write(trayIconData)
+	name := f.Name()
+	f.Close()
+	defer os.Remove(name)
+	if err != nil {
+		hIcon, _, _ := procLoadIconW.Call(0, idiApplication)
+		return hIcon
+	}
+	path, _ := syscall.UTF16PtrFromString(name)
+	// Try exact 16x16 first (tray size), then let Windows choose
+	hIcon, _, _ := procLoadImageW.Call(0, uintptr(unsafe.Pointer(path)), imageIcon, 16, 16, lrLoadFromFile)
+	if hIcon != 0 {
+		return hIcon
+	}
+	hIcon, _, _ = procLoadImageW.Call(0, uintptr(unsafe.Pointer(path)), imageIcon, 0, 0, lrLoadFromFile|lrDefaultSize)
+	if hIcon != 0 {
+		return hIcon
+	}
+	hIcon, _, _ = procLoadIconW.Call(0, idiApplication)
 	return hIcon
 }
 
