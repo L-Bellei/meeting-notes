@@ -29,17 +29,28 @@ class Transcriber:
         self.default_language = default_language
         self.recordings_dir = Path(recordings_dir).resolve()
         self._setup_dll_paths()
-        try:
-            self._model = WhisperModel(model_name, device=device, compute_type=compute_type)
-        except Exception as e:
-            if device != "cpu":
-                import logging
-                logging.warning("whisper: %s device failed (%s), falling back to cpu", device, e)
-                self.device = "cpu"
-                self._model = WhisperModel(model_name, device="cpu", compute_type="int8")
-            else:
-                raise
+        effective_device, effective_compute = self._resolve_device_compute(device, compute_type)
+        self.device = effective_device
+        self._model = WhisperModel(model_name, device=effective_device, compute_type=effective_compute)
         self.model_loaded = True
+
+    def _resolve_device_compute(self, device: str, compute_type: str) -> tuple[str, str]:
+        if device not in ("auto", "cuda"):
+            return device, compute_type
+
+        cuda_available = False
+        try:
+            import torch
+            cuda_available = torch.cuda.is_available()
+        except Exception:
+            pass
+
+        effective_device = "cuda" if cuda_available else "cpu"
+        if compute_type == "auto":
+            effective_compute = "int8_float16" if cuda_available else "int8"
+        else:
+            effective_compute = compute_type
+        return effective_device, effective_compute
 
     def _setup_dll_paths(self):
         self._dll_handles = []
