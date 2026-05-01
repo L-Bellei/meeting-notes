@@ -10,10 +10,10 @@
   "wailsjsdir": "../../frontend/src/wailsjs",
   "version": "2",
   "info": {
-    "companyName": "Vita IT",
+    "companyName": "GigaDevs",
     "productName": "Meeting Notes",
-    "productVersion": "2.0.0",
-    "copyright": "Copyright © 2025 Vita IT",
+    "productVersion": "2.1.0",
+    "copyright": "Copyright © 2026 GigaDevs",
     "comments": "Gravação e análise de reuniões com IA"
   }
 }
