@@ -135,7 +135,7 @@ export function SettingsModal({ open, onClose }: Props) {
   const apiKeyLabel = provider === "anthropic" ? "Chave de API Anthropic" : "Chave de API OpenAI"
 
   const content = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
       <div className="bg-[#1a1a1a] border border-border rounded-2xl shadow-2xl w-[440px] max-h-[90vh] overflow-y-auto">
         {/* header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
