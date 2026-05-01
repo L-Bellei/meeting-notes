@@ -16,6 +16,9 @@ __pycache__/
 /cmd/desktop/build/windows/tray.ico
 /cmd/desktop/build/windows/icon.ico
 /cmd/desktop/build/windows/wails_tools.nsh
+/cmd/desktop/build/windows/info.json
+/cmd/desktop/build/windows/installer/
+/cmd/desktop/build/windows/wails.exe.manifest
 /cmd/desktop/frontend/dist/
 /dist/
 desktop.exe
