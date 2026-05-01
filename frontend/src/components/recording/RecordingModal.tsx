@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import { useThemes } from "../../hooks/useThemes"
@@ -11,16 +11,21 @@ interface Props {
   open: boolean
   onClose: () => void
   onMeetingCreated: (id: string) => void
+  initialTitle?: string
 }
 
-export function RecordingModal({ open, onClose, onMeetingCreated }: Props) {
+export function RecordingModal({ open, onClose, onMeetingCreated, initialTitle }: Props) {
   const { data: themes = [] } = useThemes()
   const createMeeting = useCreateMeeting()
   const qc = useQueryClient()
-  const [title, setTitle] = useState("")
+  const [title, setTitle] = useState(initialTitle ?? "")
   const [themeId, setThemeId] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (open) setTitle(initialTitle ?? "")
+  }, [open, initialTitle])
 
   if (!open) return null
 
@@ -52,7 +57,7 @@ export function RecordingModal({ open, onClose, onMeetingCreated }: Props) {
   }
 
   const content = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
       <div className="bg-[#1a1a1a] border border-border rounded-2xl shadow-2xl shadow-black/50 w-96 p-6">
         <h2 className="text-base font-semibold mb-4 text-foreground">Nova Gravação</h2>
         <div className="space-y-3">

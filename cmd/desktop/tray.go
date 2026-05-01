@@ -17,7 +17,6 @@ import (
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"meeting-notes/internal/models"
 	"meeting-notes/internal/repository"
 	"meeting-notes/internal/services"
 )
@@ -422,6 +421,9 @@ func trayWndProcImpl(hwnd, msg, wparam, lparam uintptr) uintptr {
 
 func (t *TrayManager) toggleRecording() {
 	ctx := t.ctx
+	if ctx == nil || !isWailsContext(ctx) {
+		return
+	}
 
 	recording, err := t.meetingRepo.GetRecording(ctx)
 	if err != nil {
@@ -429,15 +431,19 @@ func (t *TrayManager) toggleRecording() {
 		return
 	}
 
+	// Always bring the window to front first
+	wailsruntime.Show(ctx)
+	wailsruntime.WindowUnminimise(ctx)
+
 	if recording != nil {
-		if err := t.orch.StopRecording(ctx, recording.ID); err != nil {
-			log.Printf("tray: StopRecording: %v", err)
-			return
-		}
-		t.UpdateState(false)
+		// Ask frontend to confirm stop
+		wailsruntime.EventsEmit(ctx, "hotkey:confirm-stop", map[string]string{
+			"meetingId": recording.ID,
+		})
 		return
 	}
 
+	// Build suggested title from template
 	nameTemplate := "Reunião {date}"
 	if all, err2 := t.settingsRepo.GetAll(ctx); err2 == nil {
 		if v := all["meeting_name_template"]; v != "" {
@@ -445,23 +451,15 @@ func (t *TrayManager) toggleRecording() {
 		}
 	}
 	now := time.Now()
-	meetingTitle := strings.NewReplacer(
+	suggestedTitle := strings.NewReplacer(
 		"{date}", now.Format("02/01/2006"),
 		"{time}", now.Format("15:04"),
 	).Replace(nameTemplate)
-	m, err := t.meetingSvc.Create(ctx, meetingTitle, "", string(models.StatusPending), nil)
-	if err != nil {
-		log.Printf("tray: Create meeting: %v", err)
-		return
-	}
-	if err := t.orch.StartRecording(ctx, m.ID); err != nil {
-		log.Printf("tray: StartRecording: %v", err)
-		return
-	}
-	t.UpdateState(true)
-	if t.ctx != nil && isWailsContext(t.ctx) {
-		wailsruntime.EventsEmit(t.ctx, "hotkey:recording-started", map[string]string{"meetingId": m.ID})
-	}
+
+	// Ask frontend to open the recording modal with suggested title
+	wailsruntime.EventsEmit(ctx, "hotkey:open-recording-modal", map[string]string{
+		"suggestedTitle": suggestedTitle,
+	})
 }
 
 // ---------------------------------------------------------------------------
