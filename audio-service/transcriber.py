@@ -40,8 +40,8 @@ class Transcriber:
 
         cuda_available = False
         try:
-            import torch
-            cuda_available = torch.cuda.is_available()
+            import ctranslate2
+            cuda_available = ctranslate2.get_cuda_device_count() > 0
         except Exception:
             pass
 
@@ -56,8 +56,8 @@ class Transcriber:
         self._dll_handles = []
         if sys.platform != "win32":
             return
+        import ctypes
         import importlib
-        extra_paths = []
         for pkg in ("nvidia.cudnn", "nvidia.cublas"):
             try:
                 module = importlib.import_module(pkg)
@@ -67,11 +67,18 @@ class Transcriber:
                 continue
             base = Path(module.__file__).parent
             for candidate in (base / "bin", base / "lib"):
-                if candidate.exists():
+                if not candidate.exists():
+                    continue
+                try:
                     self._dll_handles.append(os.add_dll_directory(str(candidate)))
-                    extra_paths.append(str(candidate))
-        if extra_paths:
-            os.environ["PATH"] = os.pathsep.join(extra_paths) + os.pathsep + os.environ.get("PATH", "")
+                except Exception:
+                    pass
+                # Pre-load each DLL so ctranslate2's LoadLibrary finds them
+                for dll in candidate.glob("*.dll"):
+                    try:
+                        ctypes.CDLL(str(dll))
+                    except Exception:
+                        pass
 
     def transcribe(self, path: Path, language: Optional[str] = None) -> TranscribeResult:
         resolved = Path(path).resolve()
