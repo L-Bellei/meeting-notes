@@ -438,8 +438,18 @@ func (t *TrayManager) toggleRecording() {
 		return
 	}
 
-	title := "Reunião - " + time.Now().Format("02/01/2006 15:04")
-	m, err := t.meetingSvc.Create(ctx, title, "", string(models.StatusPending), nil)
+	nameTemplate := "Reunião {date}"
+	if all, err2 := t.settingsRepo.GetAll(ctx); err2 == nil {
+		if v := all["meeting_name_template"]; v != "" {
+			nameTemplate = v
+		}
+	}
+	now := time.Now()
+	meetingTitle := strings.NewReplacer(
+		"{date}", now.Format("02/01/2006"),
+		"{time}", now.Format("15:04"),
+	).Replace(nameTemplate)
+	m, err := t.meetingSvc.Create(ctx, meetingTitle, "", string(models.StatusPending), nil)
 	if err != nil {
 		log.Printf("tray: Create meeting: %v", err)
 		return
