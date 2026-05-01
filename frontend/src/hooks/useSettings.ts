@@ -12,6 +12,7 @@ export interface Settings {
   whisper_language: string
   whisper_model: string
   recording_hotkey: string
+  meeting_name_template: string
 }
 
 export function useSettings() {
