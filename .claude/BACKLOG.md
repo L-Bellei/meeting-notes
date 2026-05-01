@@ -10,7 +10,6 @@ Itens fora do escopo das features já implementadas. Para features com plano ati
 - **Export** — exportar reunião (ou card do board) em PDF, Markdown ou Notion.
 - **Busca global** — busca full-text por transcrição, resumo e tasks em todas as reuniões.
 - **Notificações de pipeline** — notificação nativa do sistema operacional quando o processamento de uma reunião termina.
-- **Atalho de teclado para gravar** — iniciar/parar gravação sem abrir a janela.
 
 ---
 
