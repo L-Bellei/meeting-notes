@@ -133,7 +133,8 @@ type OverlayWindow struct {
 	dotOn      bool
 	stopCh     chan struct{}
 
-	elapsed int64 // atomic; seconds elapsed
+	elapsed  int64 // atomic; seconds elapsed
+	stopping int32 // atomic; 1 while confirmStop is in-flight
 }
 
 var globalOverlay *OverlayWindow
@@ -498,7 +499,9 @@ func (o *OverlayWindow) onLButtonDown(clientX, clientY int32) {
 
 	switch {
 	case inSim:
-		go o.confirmStop()
+		if atomic.CompareAndSwapInt32(&o.stopping, 0, 1) {
+			go o.confirmStop()
+		}
 	case inNao:
 		// Cancel → return to normal recording state, shrink pill
 		o.mu.Lock()
@@ -538,6 +541,8 @@ func (o *OverlayWindow) timerLoop(stopCh <-chan struct{}) {
 	}
 }
 func (o *OverlayWindow) confirmStop() {
+	defer atomic.StoreInt32(&o.stopping, 0)
+
 	o.mu.Lock()
 	meetingID := o.meetingID
 	port := o.port
@@ -547,12 +552,8 @@ func (o *OverlayWindow) confirmStop() {
 	url := fmt.Sprintf("http://localhost:%d/api/meetings/%s/stop", port, meetingID)
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Post(url, "application/json", nil)
-	if err != nil || (resp != nil && resp.StatusCode >= 300) {
-		if resp != nil {
-			resp.Body.Close()
-		}
+	if err != nil {
 		log.Printf("overlay: stop failed: %v", err)
-		// Return to recording state on error
 		o.mu.Lock()
 		o.confirming = false
 		o.mu.Unlock()
@@ -567,6 +568,21 @@ func (o *OverlayWindow) confirmStop() {
 		return
 	}
 	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		log.Printf("overlay: stop failed: status=%d", resp.StatusCode)
+		o.mu.Lock()
+		o.confirming = false
+		o.mu.Unlock()
+		screenW, _, _ := procGetSystemMetrics.Call(smCxscreen)
+		x := int32(screenW) - overlayWidth - 20
+		rgn, _, _ := procCreateRoundRectRgn.Call(0, 0, overlayWidth, overlayHeight, overlayCorner, overlayCorner)
+		if rgn != 0 {
+			procSetWindowRgn.Call(o.hwnd, rgn, 0)
+		}
+		procSetWindowPos.Call(o.hwnd, 0, uintptr(x), 20, overlayWidth, overlayHeight, swpNoActivate)
+		procInvalidateRect.Call(o.hwnd, 0, 1)
+		return
+	}
 
 	// Success: bring main window to front.
 	// The overlay hides when the orchestrator emits "transcribing" status (via app.go notify).
