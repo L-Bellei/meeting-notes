@@ -33,16 +33,24 @@ export function RecordingModal({ open, onClose, onMeetingCreated, initialTitle }
     if (!title.trim()) { setError("Título obrigatório"); return }
     setError("")
     setLoading(true)
+    let createdId: string | null = null
     try {
       const m = await createMeeting.mutateAsync({ title: title.trim(), theme_id: themeId || undefined })
+      createdId = m.id
       await api<void>(`/api/meetings/${m.id}/start`, { method: "POST" })
-      qc.invalidateQueries({ queryKey: ["meetings"] })
-      qc.invalidateQueries({ queryKey: ["meeting", m.id] })
       onMeetingCreated(m.id)
       setTitle("")
       setThemeId("")
       onClose()
     } catch (e: any) {
+      if (createdId) {
+        try {
+          await api<void>(`/api/meetings/${createdId}`, { method: "DELETE" })
+          qc.invalidateQueries({ queryKey: ["meetings"] })
+        } catch {
+          // ignore cleanup error — meeting stays pending but doesn't block the user
+        }
+      }
       const msg: string = e.message ?? ""
       if (msg.includes("503") || msg.toLowerCase().includes("unavailable")) {
         setError("Serviço de áudio indisponível")

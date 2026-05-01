@@ -87,6 +87,22 @@ func (a *App) OnStartup(ctx context.Context) {
 			}
 			wailsruntime.EventsEmit(ctx, "pipeline:status", payload{MeetingID: meetingID, Status: status})
 		}
+		switch status {
+		case "recording":
+			if a.tray != nil {
+				if a.tray.overlay != nil {
+					a.tray.overlay.Show(ctx, a.port, meetingID)
+				}
+				a.tray.UpdateState(true)
+			}
+		case "transcribing", "processing", "completed", "failed":
+			if a.tray != nil {
+				if a.tray.overlay != nil {
+					a.tray.overlay.Hide()
+				}
+				a.tray.UpdateState(false)
+			}
+		}
 	})
 
 	boardHandler := handlers.NewBoardHandler(boardColumnSvc, boardCardSvc)
