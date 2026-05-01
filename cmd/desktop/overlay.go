@@ -433,7 +433,28 @@ func (o *OverlayWindow) paintConfirmation(hdc uintptr, rc winRect) {
 
 func (o *OverlayWindow) onNcHitTest(hwnd, lparam uintptr) uintptr { return htCaption }
 func (o *OverlayWindow) onLButtonDown(x, y int32)                 {}
-func (o *OverlayWindow) timerLoop(stopCh <-chan struct{})          {}
+func (o *OverlayWindow) timerLoop(stopCh <-chan struct{}) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	ticks := 0
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-ticker.C:
+			ticks++
+			o.mu.Lock()
+			o.dotOn = !o.dotOn
+			o.mu.Unlock()
+			if ticks%2 == 0 { // every second
+				atomic.AddInt64(&o.elapsed, 1)
+			}
+			if o.hwnd != 0 {
+				procInvalidateRect.Call(o.hwnd, 0, 0)
+			}
+		}
+	}
+}
 func (o *OverlayWindow) confirmStop()                              {}
 
 // ---------------------------------------------------------------------------
@@ -442,6 +463,5 @@ func (o *OverlayWindow) confirmStop()                              {}
 
 var (
 	_ = http.DefaultClient
-	_ = time.Second
 	_ = wailsruntime.Show
 )
