@@ -81,9 +81,11 @@ Function .onInit
     StrCmp $R1 "" 0 +2
         StrCpy $R1 "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
 
-    # Terminate any running instance before removing files
+    # Terminate any running instance before removing files (kill process tree)
     ExecWait 'taskkill /F /IM "${PRODUCT_EXECUTABLE}" /T'
-    Sleep 1000
+    ExecWait 'taskkill /F /IM "meeting-notes.exe" /T'
+    ExecWait 'taskkill /F /IM "audio-service.exe" /T'
+    Sleep 3000
 
     # Run the previous silent uninstaller and wait for it to finish
     ExecWait '$R0 _?=$R1'
