@@ -11,8 +11,8 @@ from transcriber import Transcriber
 
 RECORDINGS_DIR = Path(os.getenv("RECORDINGS_DIR", "./tmp")).resolve()
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "medium")
-WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cuda")
-WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8_float16")
+WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "auto")
+WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "auto")
 WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "pt")
 
 recorder: Optional[Recorder] = None
