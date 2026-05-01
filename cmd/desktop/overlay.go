@@ -265,7 +265,6 @@ func overlayWndProcImpl(hwnd, msg, wparam, lparam uintptr) uintptr {
 	return ret
 }
 
-// Stubs — implemented in later tasks
 func (o *OverlayWindow) onPaint() {
 	var ps paintStruct
 	hdc, _, _ := procBeginPaint.Call(o.hwnd, uintptr(unsafe.Pointer(&ps)))
@@ -431,6 +430,7 @@ func (o *OverlayWindow) paintConfirmation(hdc uintptr, rc winRect) {
 	procDrawTextW.Call(hdc, uintptr(unsafe.Pointer(naoText)), ^uintptr(0),
 		uintptr(unsafe.Pointer(&naoRC)), dtSingleline|dtVcenter|dtCenter)
 }
+
 func (o *OverlayWindow) onNcHitTest(hwnd, lparam uintptr) uintptr { return htCaption }
 func (o *OverlayWindow) onLButtonDown(x, y int32)                 {}
 func (o *OverlayWindow) timerLoop(stopCh <-chan struct{})          {}
