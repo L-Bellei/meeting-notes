@@ -2,6 +2,30 @@
 
 ---
 
+## [2026-05-01] Recording Overlay + Fixes de gravação — v2.2.0
+
+**Features/Fixes:** Overlay Win32, delete de reunião órfã, poll de /health no startup, CUDA auto-detect.
+
+**Planos Superpowers:**
+- `docs/superpowers/plans/2026-05-01-fixes-recording-startup.md` — concluído
+- `docs/superpowers/plans/2026-05-01-recording-overlay-widget.md` — concluído
+
+**Fase final:** `finishing` — todos os PRs (#8-#15) mergeados, release v2.2.0 publicada no GitHub com installer atualizado.
+
+**O que foi entregue:** Ver STATE.md — lista completa dos 6 entregáveis.
+
+**Decisões transversais registradas em DECISIONS.md:**
+- Win32 overlay: `LockOSThread` + canal `ready` para thread affinity
+- CUDA audio-service: pré-load de DLLs via `ctypes.CDLL` + detecção via `ctranslate2.get_cuda_device_count()`
+
+**Bloqueios encontrados:**
+- Overlay nunca aparecia: `StartRecording` atualizava status no banco mas não chamava `o.notify()` — corrigido
+- Overlay Win32 thread affinity: janela criada em goroutine sem `LockOSThread`, eventos nunca chegavam ao loop — corrigido movendo criação para dentro da goroutine fixada
+- Transcrição travada em "transcribing": ctranslate2 não encontrava `cublas64_12.dll` porque usa `LoadLibrary` ignorando `os.add_dll_directory` — corrigido com pré-load via `ctypes.CDLL`
+- Serviço de áudio com código antigo após reinício do dev: processo `audio-service.exe` persistia entre sessões — matar com `taskkill /F /IM audio-service.exe` antes de `wails dev`
+
+---
+
 ## [2026-04-29] Publicação v2.0.0 e infraestrutura do repositório
 
 **Feature:** Nenhuma nova — sessão de publicação e organização.

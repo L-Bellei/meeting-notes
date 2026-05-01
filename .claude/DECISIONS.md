@@ -52,6 +52,36 @@ Registro de decisões transversais ao projeto. Decisões específicas de cada fe
 
 ---
 
+## [2026-05-01] Win32 overlay: criação de janela e message loop no mesmo OS thread
+
+**Contexto:** Ao criar uma janela Win32 em Go via goroutine, os eventos WM_* nunca chegam ao `GetMessage` se o loop roda em thread diferente da criação (Win32 thread affinity).
+
+**Alternativas:**
+- Criar janela na goroutine principal (inviável em Wails — bloquearia o runtime)
+- Usar `PostThreadMessage` para despachar para outra thread (complexo)
+- Criar janela e rodar o message loop na mesma goroutine fixada ao OS thread
+
+**Escolha:** Goroutine dedicada com `runtime.LockOSThread()` / `defer runtime.UnlockOSThread()`. Canal `ready chan struct{}` sinaliza o HWND de volta ao chamador após `CreateWindowEx`.
+
+**Justificativa:** Pattern simples, correto por especificação Win32, sem overhead extra. Qualquer janela Win32 criada em Go deve seguir este padrão.
+
+---
+
+## [2026-05-01] CUDA no audio-service: pré-load de DLLs + detecção via ctranslate2
+
+**Contexto:** ctranslate2 usa `LoadLibrary` internamente e ignora `os.add_dll_directory`. Em Windows, `cublas64_12.dll` e DLLs do cudnn não são encontradas sem pré-carregamento explícito.
+
+**Alternativas:**
+- Adicionar DLLs ao PATH do sistema (requer configuração manual por máquina)
+- Detectar CUDA via `torch.cuda.is_available()` (torch não está no venv do audio-service)
+- Pré-carregar via `ctypes.CDLL` + detectar via `ctranslate2.get_cuda_device_count()`
+
+**Escolha:** `_setup_dll_paths()` carrega todos os `.dll` de `nvidia.cudnn` e `nvidia.cublas` via `ctypes.CDLL` antes de instanciar `WhisperModel`. Detecção de GPU: `ctranslate2.get_cuda_device_count() > 0`.
+
+**Justificativa:** Sem dependência de torch. Funciona em qualquer Windows com ou sem GPU NVIDIA. Em máquinas sem CUDA, os pacotes nvidia.* não estão instalados e o bloco é ignorado silenciosamente.
+
+---
+
 ## [2026-04-29] Processo de build do installer
 
 **Contexto:** `wails build` não encontra `makensis` no PATH por padrão.
