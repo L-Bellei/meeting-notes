@@ -231,6 +231,7 @@ type TrayManager struct {
 	hotkeyMods     uint32
 	hotkeyVK       uint32
 	hotkeyUpdateCh chan string
+	overlay        *OverlayWindow
 }
 
 func NewTrayManager(
@@ -253,6 +254,7 @@ func NewTrayManager(
 // Start registers the hotkey, adds the tray icon, and launches the message loop goroutine.
 func (t *TrayManager) Start(ctx context.Context) error {
 	t.ctx = ctx
+	t.overlay = NewOverlayWindow()
 	globalTray = t
 
 	hInstance, _, _ := procGetModuleHandleW.Call(0)
@@ -315,6 +317,9 @@ func (t *TrayManager) Start(ctx context.Context) error {
 func (t *TrayManager) Stop() {
 	if !t.running.Swap(false) {
 		return
+	}
+	if t.overlay != nil {
+		t.overlay.Hide()
 	}
 	procUnregisterHotKey.Call(t.hwnd, hotkeyID)
 	t.removeTrayIcon()
