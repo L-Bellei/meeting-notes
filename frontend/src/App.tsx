@@ -23,6 +23,7 @@ const queryClient = new QueryClient({
 
 function AppInner() {
   const [ready, setReady] = useState(false)
+  const [startupError, setStartupError] = useState(false)
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null)
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null)
   const [recordingModalOpen, setRecordingModalOpen] = useState(false)
@@ -38,9 +39,19 @@ function AppInner() {
   const recordingHotkey = formatHotkey(settings?.recording_hotkey ?? "ctrl+shift+r")
 
   useEffect(() => {
-    GetPort().then(port => {
+    GetPort().then(async port => {
       initApi(port)
-      setReady(true)
+      const deadline = Date.now() + 15_000
+      while (Date.now() < deadline) {
+        try {
+          const res = await fetch(`http://localhost:${port}/health`)
+          if (res.ok) { setReady(true); return }
+        } catch {
+          // server not up yet
+        }
+        await new Promise(r => setTimeout(r, 500))
+      }
+      setStartupError(true)
     })
   }, [])
 
@@ -90,8 +101,16 @@ function AppInner() {
   if (!ready) {
     return (
       <div className="flex h-screen items-center justify-center flex-col gap-3 text-muted-foreground text-sm animate-fade-in">
-        <Spinner size={24} className="text-primary" />
-        Iniciando...
+        {startupError ? (
+          <p className="text-destructive text-center px-8">
+            Não foi possível conectar ao servidor. Tente reiniciar o app.
+          </p>
+        ) : (
+          <>
+            <Spinner size={24} className="text-primary" />
+            Iniciando...
+          </>
+        )}
       </div>
     )
   }
