@@ -70,6 +70,13 @@ ShowInstDetails show
 Function .onInit
     !insertmacro wails.checkArchitecture
 
+    # Always kill any running instance first (covers fresh install over a running app
+    # as well as upgrades where QuietUninstallString may not exist yet).
+    ExecWait 'taskkill /F /IM "${PRODUCT_EXECUTABLE}" /T'
+    ExecWait 'taskkill /F /IM "meeting-notes.exe" /T'
+    ExecWait 'taskkill /F /IM "audio-service.exe" /T'
+    Sleep 3000
+
     # --- Upgrade: silently remove previous version if already installed ---
     ReadRegStr $R0 HKLM "${UNINST_KEY}" "QuietUninstallString"
     StrCmp $R0 "" done_upgrade
@@ -80,10 +87,6 @@ Function .onInit
     ReadRegStr $R1 HKLM "${UNINST_KEY}" "InstallLocation"
     StrCmp $R1 "" 0 +2
         StrCpy $R1 "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
-
-    # Terminate any running instance before removing files
-    ExecWait 'taskkill /F /IM "${PRODUCT_EXECUTABLE}" /T'
-    Sleep 1000
 
     # Run the previous silent uninstaller and wait for it to finish
     ExecWait '$R0 _?=$R1'
@@ -99,6 +102,11 @@ Section
     SetOutPath $INSTDIR
 
     !insertmacro wails.files
+
+    # Bundle the Python audio service (PyInstaller onedir build)
+    SetOutPath $INSTDIR\audio-service
+    File /r "..\..\bin\audio-service\*.*"
+    SetOutPath $INSTDIR
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"

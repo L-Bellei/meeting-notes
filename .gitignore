@@ -30,6 +30,10 @@ desktop.exe
 # Claude local settings
 /.claude/settings.local.json
 
+# PyInstaller build artifacts
+/audio-service/build/
+/audio-service/dist/
+
 # Stray files
 /docs/estado-da-conversa-*.md
 /migrations/

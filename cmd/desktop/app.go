@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -221,32 +222,50 @@ func (a *App) OnShutdown(ctx context.Context) {
 
 func (a *App) GetPort() int { return a.port }
 
-// startAudioService locates the audio-service directory and launches uvicorn via the
-// project venv. If the service is already responding it skips spawning a new process.
+// startAudioService launches the audio service. It prefers the bundled PyInstaller
+// executable next to the main EXE (production), falling back to uvicorn via the
+// project venv (development). Skips spawning if the port is already in use.
 func (a *App) startAudioService(ctx context.Context, audioURL string) {
-	// If something is already listening on the audio port, reuse it.
 	if a.audioServiceAlive(audioURL) {
 		log.Printf("audio service already running, skipping start")
 		go a.waitAudioReady(ctx, audioURL)
 		return
 	}
 
-	dir := findAudioServiceDir()
-	if dir == "" {
-		log.Printf("audio-service directory not found; skipping auto-start")
-		return
+	var cmd *exec.Cmd
+
+	// Production: bundled audio-service.exe next to the main executable.
+	if exe, err := os.Executable(); err == nil {
+		bundled := filepath.Join(filepath.Dir(exe), "audio-service", "audio-service.exe")
+		if _, err := os.Stat(bundled); err == nil {
+			recordingsDir := bundledRecordingsDir()
+			c := exec.Command(bundled, "--port", "8765")
+			c.Env = append(os.Environ(), "RECORDINGS_DIR="+recordingsDir)
+			c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+			cmd = c
+			log.Printf("starting bundled audio service from %s", bundled)
+		}
 	}
 
-	uvicorn := filepath.Join(dir, ".venv", "Scripts", "uvicorn.exe")
-	if _, err := os.Stat(uvicorn); err != nil {
-		log.Printf("uvicorn not found at %s; skipping audio service auto-start", uvicorn)
-		return
+	// Development: uvicorn via the project venv.
+	if cmd == nil {
+		dir := findAudioServiceDir()
+		if dir == "" {
+			log.Printf("audio-service not found; skipping auto-start")
+			return
+		}
+		uvicorn := filepath.Join(dir, ".venv", "Scripts", "uvicorn.exe")
+		if _, err := os.Stat(uvicorn); err != nil {
+			log.Printf("uvicorn not found at %s; skipping audio service auto-start", uvicorn)
+			return
+		}
+		c := exec.Command(uvicorn, "main:app", "--port", "8765")
+		c.Dir = dir
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+		cmd = c
+		log.Printf("starting audio service via uvicorn from %s", dir)
 	}
-
-	cmd := exec.Command(uvicorn, "main:app", "--port", "8765")
-	cmd.Dir = dir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
 		log.Printf("start audio service: %v", err)
@@ -256,6 +275,16 @@ func (a *App) startAudioService(ctx context.Context, audioURL string) {
 	log.Printf("audio service started (pid %d)", cmd.Process.Pid)
 
 	go a.waitAudioReady(ctx, audioURL)
+}
+
+// bundledRecordingsDir returns %AppData%\Meeting Notes\recordings, creating it if needed.
+func bundledRecordingsDir() string {
+	if dir, err := os.UserConfigDir(); err == nil {
+		p := filepath.Join(dir, "Meeting Notes", "recordings")
+		_ = os.MkdirAll(p, 0755)
+		return p
+	}
+	return filepath.Join(".", "recordings")
 }
 
 func (a *App) audioServiceAlive(audioURL string) bool {
