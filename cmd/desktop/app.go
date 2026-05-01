@@ -89,17 +89,17 @@ func (a *App) OnStartup(ctx context.Context) {
 		}
 		switch status {
 		case "recording":
-			if a.tray != nil && a.tray.overlay != nil {
-				a.tray.overlay.Show(ctx, a.port, meetingID)
-			}
 			if a.tray != nil {
+				if a.tray.overlay != nil {
+					a.tray.overlay.Show(ctx, a.port, meetingID)
+				}
 				a.tray.UpdateState(true)
 			}
 		case "transcribing", "processing", "completed", "failed":
-			if a.tray != nil && a.tray.overlay != nil {
-				a.tray.overlay.Hide()
-			}
 			if a.tray != nil {
+				if a.tray.overlay != nil {
+					a.tray.overlay.Hide()
+				}
 				a.tray.UpdateState(false)
 			}
 		}
