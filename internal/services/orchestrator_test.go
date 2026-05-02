@@ -405,7 +405,7 @@ func TestOrchestrator_NotifyFn_CalledOnStatusChange(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	wantStatuses := []string{"transcribing", "processing", "completed"}
+	wantStatuses := []string{"recording", "transcribing", "processing", "completed"}
 	if len(calls) != len(wantStatuses) {
 		t.Fatalf("expected %d notify calls, got %d: %+v", len(wantStatuses), len(calls), calls)
 	}
