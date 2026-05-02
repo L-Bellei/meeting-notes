@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -81,7 +80,31 @@ func main() {
 		AllowedHeaders: []string{"Accept", "Content-Type"},
 	}))
 
-	r.Get("/health", healthHandler(db))
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		dbStatus := "ok"
+		statusCode := http.StatusOK
+
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
+		if err := db.PingContext(ctx); err != nil {
+			dbStatus = "error"
+			statusCode = http.StatusServiceUnavailable
+		}
+
+		modelLoaded := false
+		if h, err := audioClient.Health(r.Context()); err == nil {
+			modelLoaded = h.ModelLoaded
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+		json.NewEncoder(w).Encode(map[string]any{
+			"status":       "ok",
+			"database":     dbStatus,
+			"model_loaded": modelLoaded,
+		})
+	})
 
 	r.Route("/api/themes", func(r chi.Router) {
 		r.Get("/", themeHandler.List)
@@ -152,30 +175,13 @@ func main() {
 	r.Get("/api/search", searchHandler.Search)
 	r.Get("/api/logs", logHandler.List)
 
+	aiHealthHandler := handlers.NewAIHealthHandler(func(ctx context.Context) (bool, error) {
+		return ai.Ping(ctx, settingsRepo)
+	})
+	r.Get("/api/ai/health", aiHealthHandler.Check)
+
 	log.Printf("server listening on :%s", cfg.HTTPPort)
 	if err := http.ListenAndServe(":"+cfg.HTTPPort, r); err != nil {
 		log.Fatalf("server error: %v", err)
-	}
-}
-
-func healthHandler(db *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		dbStatus := "ok"
-		statusCode := http.StatusOK
-
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-
-		if err := db.PingContext(ctx); err != nil {
-			dbStatus = "error"
-			statusCode = http.StatusServiceUnavailable
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(statusCode)
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":   "ok",
-			"database": dbStatus,
-		})
 	}
 }

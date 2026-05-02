@@ -129,8 +129,13 @@ func (a *App) OnStartup(ctx context.Context) {
 	}))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		modelLoaded := false
+		if h, err := audioClient.Health(r.Context()); err == nil {
+			modelLoaded = h.ModelLoaded
+		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"status":"ok"}`)
+		fmt.Fprintf(w, `{"status":"ok","model_loaded":%v}`, modelLoaded)
 	})
 
 	r.Route("/api/themes", func(r chi.Router) {
@@ -197,6 +202,11 @@ func (a *App) OnStartup(ctx context.Context) {
 
 	r.Get("/api/search", searchHandler.Search)
 	r.Get("/api/logs", logHandler.List)
+
+	aiHealthHandler := handlers.NewAIHealthHandler(func(ctx context.Context) (bool, error) {
+		return ai.Ping(ctx, settingsRepo)
+	})
+	r.Get("/api/ai/health", aiHealthHandler.Check)
 
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
