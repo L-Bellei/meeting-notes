@@ -41,7 +41,16 @@ class Transcriber:
         cuda_available = False
         try:
             import ctranslate2
-            cuda_available = ctranslate2.get_cuda_device_count() > 0
+            if ctranslate2.get_cuda_device_count() > 0:
+                # Verify the CUDA compute DLLs are actually loadable before committing to GPU
+                import ctypes
+                for dll in ("cublas64_12.dll", "cublas64_11.dll"):
+                    try:
+                        ctypes.CDLL(dll)
+                        cuda_available = True
+                        break
+                    except OSError:
+                        continue
         except Exception:
             pass
 
@@ -98,18 +107,20 @@ class Transcriber:
         lang = language or self.default_language
         try:
             segments, info = self._model.transcribe(str(resolved), language=lang)
+            # Consume the generator inside the try block — errors from lazy CUDA ops surface here
+            text = " ".join(seg.text.strip() for seg in segments).strip()
         except Exception as e:
             err = str(e).lower()
             if self.device == "cuda" and any(kw in err for kw in ("dll", "cublas", "cudnn", "library", "not found", "cannot be loaded")):
-                # GPU inference failed due to missing CUDA DLL — reload model on CPU
+                # GPU inference failed due to missing CUDA DLL — reload model on CPU and retry
                 import logging
                 logging.warning("CUDA inference failed (%s), reloading model on CPU", e)
                 self._model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
                 self.device = "cpu"
                 segments, info = self._model.transcribe(str(resolved), language=lang)
+                text = " ".join(seg.text.strip() for seg in segments).strip()
             else:
                 raise
-        text = " ".join(seg.text.strip() for seg in segments).strip()
         return TranscribeResult(
             transcript=text,
             language=info.language,

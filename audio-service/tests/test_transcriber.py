@@ -7,16 +7,16 @@ import pytest
 from transcriber import Transcriber, TranscribeResult
 
 
-@pytest.fixture
-def transcriber(tmp_path):
-    """Build a Transcriber with WhisperModel and DLL setup mocked."""
+def _make_transcriber(tmp_path, device="cuda", compute_type="int8_float16"):
+    """Build a Transcriber with WhisperModel, DLL setup, and device resolution mocked."""
     fake_model = MagicMock()
     with patch("transcriber.WhisperModel", return_value=fake_model), \
-         patch.object(Transcriber, "_setup_dll_paths"):
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch.object(Transcriber, "_resolve_device_compute", return_value=(device, compute_type)):
         t = Transcriber(
             model_name="medium",
-            device="cuda",
-            compute_type="int8_float16",
+            device=device,
+            compute_type=compute_type,
             default_language="pt",
             recordings_dir=tmp_path,
         )
@@ -24,10 +24,16 @@ def transcriber(tmp_path):
     return t
 
 
+@pytest.fixture
+def transcriber(tmp_path):
+    return _make_transcriber(tmp_path)
+
+
 def test_init_loads_model_and_sets_attributes(tmp_path):
     fake_model = MagicMock()
     with patch("transcriber.WhisperModel", return_value=fake_model) as mock_cls, \
-         patch.object(Transcriber, "_setup_dll_paths") as mock_setup:
+         patch.object(Transcriber, "_setup_dll_paths") as mock_setup, \
+         patch.object(Transcriber, "_resolve_device_compute", return_value=("cuda", "int8_float16")):
         t = Transcriber("medium", "cuda", "int8_float16", "pt", tmp_path)
     mock_cls.assert_called_once_with("medium", device="cuda", compute_type="int8_float16")
     mock_setup.assert_called_once()
@@ -100,23 +106,30 @@ def test_transcribe_uses_provided_language(transcriber, tmp_path):
 
 
 def test_transcribe_cuda_dll_error_falls_back_to_cpu(tmp_path):
-    """When CUDA inference fails with a DLL error, model reloads on CPU and retries."""
-    cpu_model = MagicMock()
-    seg = MagicMock()
-    seg.text = "fallback"
-    info = MagicMock()
-    info.language = "pt"
-    info.duration = 3.0
-    cpu_model.transcribe.return_value = (iter([seg]), info)
+    """When CUDA inference fails with a DLL error (lazy generator), model reloads on CPU and retries."""
+    cpu_seg = MagicMock()
+    cpu_seg.text = "fallback"
+    cpu_info = MagicMock()
+    cpu_info.language = "pt"
+    cpu_info.duration = 3.0
 
+    cpu_model = MagicMock()
+    cpu_model.transcribe.return_value = (iter([cpu_seg]), cpu_info)
+
+    def bad_segments():
+        raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+        yield  # make it a generator
+
+    gpu_info = MagicMock()
     gpu_model = MagicMock()
-    gpu_model.transcribe.side_effect = RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+    gpu_model.transcribe.return_value = (bad_segments(), gpu_info)
 
     wav = tmp_path / "rec.wav"
     wav.write_bytes(b"fake")
 
     with patch("transcriber.WhisperModel", side_effect=[gpu_model, cpu_model]) as mock_cls, \
-         patch.object(Transcriber, "_setup_dll_paths"):
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch.object(Transcriber, "_resolve_device_compute", return_value=("cuda", "int8_float16")):
         t = Transcriber("medium", "cuda", "int8_float16", "pt", tmp_path)
         t._model = gpu_model
 
@@ -137,7 +150,8 @@ def test_transcribe_non_dll_error_propagates(tmp_path):
     wav.write_bytes(b"fake")
 
     with patch("transcriber.WhisperModel", return_value=gpu_model), \
-         patch.object(Transcriber, "_setup_dll_paths"):
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch.object(Transcriber, "_resolve_device_compute", return_value=("cuda", "int8_float16")):
         t = Transcriber("medium", "cuda", "int8_float16", "pt", tmp_path)
         t._model = gpu_model
 
