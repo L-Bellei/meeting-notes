@@ -1,6 +1,50 @@
 # Decisões Arquiteturais
 
+---
+
+## [2026-05-02] Wails/OnStartup: GetPort() deve bloquear via channel, nunca retornar 0
+
+**Contexto:** Wails v2 carrega o frontend (WebView2) concorrentemente com `OnStartup`. Se `GetPort()` for chamado antes de `a.port` ser definido em `OnStartup`, retorna 0. O frontend então faz poll em `localhost:0` indefinidamente até o timeout, exibindo erro falso de servidor.
+
+**Alternativas:**
+- Retornar `a.port` diretamente (race condition — era o bug)
+- Polling com sleep em `GetPort()` (funciona mas tem data race sem sync)
+- Channel `portReady chan struct{}` fechado logo após `net.Listen` ter sucesso
+
+**Escolha:** `portReady chan struct{}` inicializado em `NewApp()`, fechado com `sync.Once` imediatamente após `a.port = ln.Addr().Port` (antes de `tray.Start()`). `GetPort()` bloqueia em `<-portReady` com timeout de 30 s.
+
+**Justificativa:** O channel é fechado ANTES de `tray.Start()` para que o frontend não precise esperar o tray inicializar (Shell_NotifyIconW pode ser lento no primeiro boot). O `sync.Once` garante que todos os caminhos de erro em `OnStartup` também fecham o channel (via `defer signalPort()`), evitando deadlock.
+
 Registro de decisões transversais ao projeto. Decisões específicas de cada feature estão nos planos do Superpowers correspondentes.
+
+---
+
+## [2026-05-02] faster-whisper: gerador lazy exige consumo dentro do bloco try
+
+**Contexto:** `WhisperModel.transcribe()` retorna um gerador Python. A computação CUDA real ocorre ao iterar os segmentos (lazy), não na chamada a `transcribe()`. Erros de DLL CUDA (ex: `cublas64_12.dll not found`) surfaceiam apenas durante `join(seg.text for seg in segments)`, fora de qualquer `try` que envolva só o `transcribe()`.
+
+**Alternativas:**
+- Wrapping apenas de `transcribe()` — não captura erros lazy (era o bug)
+- Consumir o gerador imediatamente com `list(segments)` antes do try — funciona mas perde o streaming
+- Consumir o gerador **dentro** do bloco `try` junto com `transcribe()`
+
+**Escolha:** `segments, info = self._model.transcribe(...)` e `text = " ".join(...)` no mesmo bloco `try`.
+
+**Justificativa:** Qualquer integração com `faster-whisper` que precise capturar erros de inferência deve consumir o gerador dentro do try. Padrão a seguir em futuras alterações do `transcriber.py`.
+
+---
+
+## [2026-05-02] CUDA: detecção antecipada via ctypes antes de carregar o modelo
+
+**Contexto:** `_resolve_device_compute` agora tenta `ctypes.CDLL("cublas64_12.dll")` antes de comprometer-se com device `cuda`. Se a DLL não estiver acessível, o device cai para `cpu` sem nunca instanciar o modelo GPU.
+
+**Alternativas:**
+- Carregar modelo GPU e lidar com falha ao transcrever (fallback reativo — era o PR #23)
+- Detectar antecipadamente (fallback proativo — PR #24)
+
+**Escolha:** Detecção antecipada em `_resolve_device_compute` + fallback reativo em `transcribe()` como segunda linha de defesa.
+
+**Justificativa:** Evita carregar modelo pesado na GPU para depois descobrir que as DLLs não estão disponíveis. O fallback reativo ainda existe para cobrir casos em que a DLL é carregável mas falha durante a inferência.
 
 ---
 

@@ -1,35 +1,40 @@
-# Estado do Projeto — 2026-05-01
+# Estado do Projeto — 2026-05-02
 
 ## Sessão
-- **Data:** 2026-05-01
-- **Branch:** `master`
+- **Data:** 2026-05-02
+- **Branch atual:** `docs/rewrite-readme` (PR #27 aberto, aguardando merge)
 - **Worktree:** nenhum ativo
 
-## Features trabalhadas
-**Fixes de gravação + Overlay Widget + Fixes pós-release** — tudo concluído e mergeado em master (PRs #8-#15).
+## Trabalho desta sessão
 
-- Spec fixes: `docs/superpowers/specs/2026-05-01-fixes-recording-startup.md`
-- Spec overlay: `docs/superpowers/specs/2026-05-01-recording-overlay-widget.md`
-- Plano fixes: `docs/superpowers/plans/2026-05-01-fixes-recording-startup.md`
-- Plano overlay: `docs/superpowers/plans/2026-05-01-recording-overlay-widget.md`
+Dois entregáveis, ambos sem plano formal do Superpowers (hotfix + docs):
 
-### O que foi entregue
-1. **Fix — Delete orphaned meeting quando /start falha** (`RecordingModal.tsx`): track `createdId`, faz DELETE no catch se criação ocorreu mas start falhou.
-2. **Fix — Poll /health antes de marcar app ready** (`App.tsx`): polling 500ms até 15s; erro de startup exibido se servidor não responder; cleanup flag no useEffect.
-3. **Feature — Win32 Overlay Widget** (`cmd/desktop/overlay.go`, `tray.go`, `app.go`): pílula always-on-top com dot pulsante, timer MM:SS, botão de stop com confirmação, drag nativo via WM_NCHITTEST, integração com eventos do Orchestrator.
-4. **Fix — Overlay Win32 thread affinity** (`overlay.go`): janela criada e message loop no mesmo OS thread via `LockOSThread` + canal `ready` para sincronização.
-5. **Fix — `StartRecording` sem notify** (`orchestrator.go`): `o.notify()` não era chamado após atualizar status, overlay nunca aparecia.
-6. **Fix — Transcrição GPU/CPU automático** (`audio-service/transcriber.py`, `main.py`): `WHISPER_DEVICE=auto`, DLLs CUDA pré-carregadas via `ctypes.CDLL`, detecção via `ctranslate2.get_cuda_device_count()`.
+1. **Fix primeiro boot — v2.2.3** (`fix/getport-race-on-first-boot`, mergeado via PR #26)
+   - Race condition em `GetPort()`: retornava 0 quando chamado antes de `OnStartup` definir `a.port`
+   - Fix: `portReady chan struct{}` com `sync.Once`; `GetPort()` bloqueia até porta disponível
+   - Release v2.2.3 publicada com installer
+
+2. **README profissional** (`docs/rewrite-readme`, PR #27 aberto)
+   - Reescrita completa: instalação, funcionalidades detalhadas, fluxo de uso, arquitetura, API, histórico
+   - Aguarda merge do PR #27
+
+## Plano de loading screen
+- Plano: `docs/superpowers/plans/2026-05-02-loading-screen.md` (**untracked** — não commitado)
+- Status: **obsoleto** — toda a implementação já está no código (`LoadingScreen.tsx`, `App.tsx`, `/api/ai/health`, `internal/ai/validate.go`)
+- Ação recomendada: descartar o plano (não commitar) ou commitar apenas como referência histórica
 
 ## Estado do repositório
 - Repositório público: `https://github.com/L-Bellei/meeting-notes`
-- Branch `master` protegida por ruleset `protect-master` (PRs obrigatórios, sem force push)
-- PRs mergeados nesta sessão: #8 (overlay), #9 (docs), #10 (gitignore), #11 (version bump), #12 (overlay+notify fix), #13 (whisper cpu fallback), #14 (whisper auto device), #15 (whisper cuda dll preload)
-- Release v2.2.0 publicado com instalador atualizado (inclui todos os fixes)
-- Working tree completamente limpa — nada pendente
+- Branch `master` protegida (PRs obrigatórios)
+- PRs mergeados esta sessão: #21, #22, #23, #24, #25, #26
+- PR aberto: #27 (README)
+- Release v2.2.3 publicada: `dist/meeting-notes-2.2.3-windows-amd64-installer.exe`
 
-## Próximo passo imediato
-Nenhum. Ver `BACKLOG.md` para próximas features.
+## Fase Superpowers
+N/A nesta sessão — hotfix direto + docs. Nenhum plano ativo em execução.
+
+## Próximo passo
+Ver `BACKLOG.md` para próximas features. Iniciar nova feature com `superpowers:brainstorming`.
 
 ## Worktrees paralelos
 Nenhum.

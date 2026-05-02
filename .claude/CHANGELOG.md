@@ -2,6 +2,63 @@
 
 ---
 
+## [2026-05-02] README profissional
+
+**Contexto:** README existente tinha boa estrutura mas sem profundidade de uso, sem badges, sem fluxo step-by-step.
+
+**Sem plano Superpowers** — documentação pura.
+
+**Fase do workflow Superpowers:** N/A.
+
+**O que foi entregue:**
+- Reescrita completa do README: header com logo/badges, instalação rápida, tela de carregamento, todas as funcionalidades em profundidade, fluxo de uso típico, arquitetura, setup de desenvolvimento, API REST completa, histórico de versões
+- PR #27 aberto (`docs/rewrite-readme`)
+
+**Decisões transversais registradas em DECISIONS.md:** nenhuma.
+
+---
+
+## [2026-05-02] Fix primeiro boot + v2.2.3
+
+**Contexto:** Bug reportado: ao iniciar o computador e abrir o app pela primeira vez, a loading screen exibia erro "Servidor HTTP — Não foi possível conectar". Segunda abertura funcionava normalmente.
+
+**Sem plano Superpowers** — hotfix direto.
+
+**Causa raiz:** Race condition entre `OnStartup` (Go) e o carregamento do frontend (Wails carrega o WebView2 concorrentemente). No primeiro boot, `OnStartup` é mais lenta; `GetPort()` era chamado antes de `a.port` ser definido, retornando `0`. Frontend fazia poll em `localhost:0` (connection refused imediato) por 15 s até exibir o erro.
+
+**O que foi entregue:**
+- Fix `GetPort()` — usa `portReady chan struct{}` para bloquear até a porta estar disponível (PR #26)
+- Version bump + release v2.2.3
+
+**Decisões transversais registradas em DECISIONS.md:** sim (race condition Wails/OnStartup).
+
+---
+
+## [2026-05-02] Bug fixes pós-release + v2.2.2
+
+**Contexto:** Três bugs críticos identificados após publicação da v2.2.1.
+
+**Sem plano Superpowers** — hotfixes diretos (nenhuma brainstorming/plan session formal).
+
+**Fase do workflow Superpowers:** N/A.
+
+**O que foi entregue:**
+- Fix React Rules of Hooks no `SettingsModal` (PR #21)
+- Fix template de nome no `RecordingModal` ao abrir pelo Toolbar (PR #22)
+- Fix CUDA `cublas64_12.dll`: DLL dirs carregadas antes dos DLLs + fallback CPU (PR #23)
+- Fix CUDA lazy generator: segmentos consumidos dentro do `try` + detecção antecipada em `_resolve_device_compute` (PR #24)
+- Version bump + release v2.2.2 com installer (PR #25)
+
+**Decisões transversais registradas em DECISIONS.md:**
+- `faster-whisper`: gerador lazy deve ser consumido dentro do bloco `try`
+- CUDA: detecção antecipada via `ctypes.CDLL` + fallback reativo como segunda linha de defesa
+
+**Bloqueios encontrados:**
+- Fix de CUDA do PR #23 não resolveu o problema: `transcribe()` retorna gerador, erro só aparece ao iterar os segmentos (fora do try original) — corrigido no PR #24
+- Testes do `transcriber.py` falharam após mudança em `_resolve_device_compute` (passa a tentar carregar DLLs reais) — corrigido com `_make_transcriber()` helper que mocka o método
+
+---
+
 ## [2026-05-01] Recording Overlay + Fixes de gravação — v2.2.0
 
 **Features/Fixes:** Overlay Win32, delete de reunião órfã, poll de /health no startup, CUDA auto-detect.
