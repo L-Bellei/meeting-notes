@@ -99,6 +99,54 @@ def test_transcribe_uses_provided_language(transcriber, tmp_path):
     assert kwargs["language"] == "en"
 
 
+def test_transcribe_cuda_dll_error_falls_back_to_cpu(tmp_path):
+    """When CUDA inference fails with a DLL error, model reloads on CPU and retries."""
+    cpu_model = MagicMock()
+    seg = MagicMock()
+    seg.text = "fallback"
+    info = MagicMock()
+    info.language = "pt"
+    info.duration = 3.0
+    cpu_model.transcribe.return_value = (iter([seg]), info)
+
+    gpu_model = MagicMock()
+    gpu_model.transcribe.side_effect = RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+
+    wav = tmp_path / "rec.wav"
+    wav.write_bytes(b"fake")
+
+    with patch("transcriber.WhisperModel", side_effect=[gpu_model, cpu_model]) as mock_cls, \
+         patch.object(Transcriber, "_setup_dll_paths"):
+        t = Transcriber("medium", "cuda", "int8_float16", "pt", tmp_path)
+        t._model = gpu_model
+
+        result = t.transcribe(wav)
+
+    assert result.transcript == "fallback"
+    assert t.device == "cpu"
+    assert mock_cls.call_count == 2
+    mock_cls.assert_called_with("medium", device="cpu", compute_type="int8")
+
+
+def test_transcribe_non_dll_error_propagates(tmp_path):
+    """Non-DLL errors from GPU inference are re-raised without CPU fallback."""
+    gpu_model = MagicMock()
+    gpu_model.transcribe.side_effect = ValueError("invalid audio format")
+
+    wav = tmp_path / "rec.wav"
+    wav.write_bytes(b"fake")
+
+    with patch("transcriber.WhisperModel", return_value=gpu_model), \
+         patch.object(Transcriber, "_setup_dll_paths"):
+        t = Transcriber("medium", "cuda", "int8_float16", "pt", tmp_path)
+        t._model = gpu_model
+
+        with pytest.raises(ValueError, match="invalid audio format"):
+            t.transcribe(wav)
+
+    assert t.device == "cuda"
+
+
 def test_setup_dll_paths_noop_on_non_windows(tmp_path, monkeypatch):
     """The DLL setup should be a no-op on non-Windows platforms."""
     monkeypatch.setattr(sys, "platform", "linux")

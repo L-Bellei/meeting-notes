@@ -58,7 +58,10 @@ class Transcriber:
             return
         import ctypes
         import importlib
-        for pkg in ("nvidia.cudnn", "nvidia.cublas"):
+        # Collect all NVIDIA DLL directories first so dependency resolution works
+        # when we later pre-load individual DLLs (cublas depends on cudart, etc.)
+        nvidia_dirs: list[Path] = []
+        for pkg in ("nvidia.cuda_runtime", "nvidia.cudnn", "nvidia.cublas", "nvidia.cufft"):
             try:
                 module = importlib.import_module(pkg)
             except ImportError:
@@ -67,18 +70,21 @@ class Transcriber:
                 continue
             base = Path(module.__file__).parent
             for candidate in (base / "bin", base / "lib"):
-                if not candidate.exists():
-                    continue
+                if candidate.exists():
+                    nvidia_dirs.append(candidate)
+        # Add all dirs to search path before loading any DLL
+        for d in nvidia_dirs:
+            try:
+                self._dll_handles.append(os.add_dll_directory(str(d)))
+            except Exception:
+                pass
+        # Pre-load each DLL now that all directories are in the search path
+        for d in nvidia_dirs:
+            for dll in d.glob("*.dll"):
                 try:
-                    self._dll_handles.append(os.add_dll_directory(str(candidate)))
+                    ctypes.CDLL(str(dll))
                 except Exception:
                     pass
-                # Pre-load each DLL so ctranslate2's LoadLibrary finds them
-                for dll in candidate.glob("*.dll"):
-                    try:
-                        ctypes.CDLL(str(dll))
-                    except Exception:
-                        pass
 
     def transcribe(self, path: Path, language: Optional[str] = None) -> TranscribeResult:
         resolved = Path(path).resolve()
@@ -90,7 +96,19 @@ class Transcriber:
             raise ValueError(f"path does not exist: {path}")
 
         lang = language or self.default_language
-        segments, info = self._model.transcribe(str(resolved), language=lang)
+        try:
+            segments, info = self._model.transcribe(str(resolved), language=lang)
+        except Exception as e:
+            err = str(e).lower()
+            if self.device == "cuda" and any(kw in err for kw in ("dll", "cublas", "cudnn", "library", "not found", "cannot be loaded")):
+                # GPU inference failed due to missing CUDA DLL — reload model on CPU
+                import logging
+                logging.warning("CUDA inference failed (%s), reloading model on CPU", e)
+                self._model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
+                self.device = "cpu"
+                segments, info = self._model.transcribe(str(resolved), language=lang)
+            else:
+                raise
         text = " ".join(seg.text.strip() for seg in segments).strip()
         return TranscribeResult(
             transcript=text,
