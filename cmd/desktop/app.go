@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -28,20 +29,28 @@ import (
 )
 
 type App struct {
-	ctx       context.Context
-	db        *sql.DB
-	port      int
-	server    *http.Server
-	audioProc *exec.Cmd
-	allowQuit bool
-	tray      *TrayManager
+	ctx        context.Context
+	db         *sql.DB
+	port       int
+	server     *http.Server
+	audioProc  *exec.Cmd
+	allowQuit  bool
+	tray       *TrayManager
+	portReady  chan struct{}
 }
 
-func NewApp() *App { return &App{} }
+func NewApp() *App { return &App{portReady: make(chan struct{})} }
 
 func (a *App) OnStartup(ctx context.Context) {
 	a.ctx = ctx
 	cfg := config.Load()
+
+	// Ensure portReady is always closed when OnStartup exits, even on error.
+	// On the success path it is closed early (before tray.Start) so GetPort()
+	// doesn't block while the tray is setting up Win32 internals.
+	var closeOnce sync.Once
+	signalPort := func() { closeOnce.Do(func() { close(a.portReady) }) }
+	defer signalPort()
 
 	a.startAudioService(ctx, cfg.AudioServiceURL)
 
@@ -219,6 +228,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	a.port = ln.Addr().(*net.TCPAddr).Port
 	a.server = &http.Server{Handler: r}
 	go a.server.Serve(ln)
+	signalPort() // unblock GetPort() before tray.Start(), which may be slow on first boot
 
 	a.tray = NewTrayManager(a, orch, meetingRepo, meetingSvc, settingsRepo)
 	if err := a.tray.Start(ctx); err != nil {
@@ -249,7 +259,16 @@ func (a *App) OnShutdown(ctx context.Context) {
 	}
 }
 
-func (a *App) GetPort() int { return a.port }
+// GetPort blocks until OnStartup has bound the HTTP server, then returns the
+// port. A 30-second timeout guards against a startup failure where the port is
+// never set (returns 0, which the frontend will surface as a server error).
+func (a *App) GetPort() int {
+	select {
+	case <-a.portReady:
+	case <-time.After(30 * time.Second):
+	}
+	return a.port
+}
 
 // startAudioService launches the audio service. It prefers the bundled PyInstaller
 // executable next to the main EXE (production), falling back to uvicorn via the
