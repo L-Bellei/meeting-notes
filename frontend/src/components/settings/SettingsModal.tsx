@@ -104,6 +104,11 @@ export function SettingsModal({ open, onClose }: Props) {
     if (open && settings) setForm(settings)
   }, [open, settings])
 
+  const handleHotkeyChange = useCallback(
+    (v: string) => setForm(f => ({ ...f, recording_hotkey: v })),
+    []
+  )
+
   if (!open) return null
 
   function set<K extends keyof Settings>(key: K, value: Settings[K]) {
@@ -119,11 +124,6 @@ export function SettingsModal({ open, onClose }: Props) {
       setError(e.message ?? "Erro ao salvar")
     }
   }
-
-  const handleHotkeyChange = useCallback(
-    (v: string) => setForm(f => ({ ...f, recording_hotkey: v })),
-    []
-  )
 
   const provider = form.ai_provider ?? "anthropic"
   const models = provider === "anthropic" ? ANTHROPIC_MODELS : OPENAI_MODELS
