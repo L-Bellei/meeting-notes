@@ -25,7 +25,7 @@ func Ping(ctx context.Context, settings SettingsReader) (configured bool, err er
 		}
 		model := m["anthropic_model"]
 		if model == "" {
-			model = "claude-haiku-4-5-20251001"
+			model = "claude-sonnet-4-6"
 		}
 		c := anthropic.NewClient(option.WithAPIKey(key))
 		_, pingErr := c.Messages.New(ctx, anthropic.MessageNewParams{
@@ -39,6 +39,7 @@ func Ping(ctx context.Context, settings SettingsReader) (configured bool, err er
 		if key == "" {
 			return false, nil
 		}
+		// TODO: validate OpenAI key via API call (currently existence-check only)
 		return true, nil
 	default:
 		return false, nil

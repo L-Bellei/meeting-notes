@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"encoding/json"
 	"log"
 	"net"
 	"net/http"
@@ -135,7 +135,10 @@ func (a *App) OnStartup(ctx context.Context) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"status":"ok","model_loaded":%v}`, modelLoaded)
+		json.NewEncoder(w).Encode(map[string]any{
+			"status":       "ok",
+			"model_loaded": modelLoaded,
+		})
 	})
 
 	r.Route("/api/themes", func(r chi.Router) {
