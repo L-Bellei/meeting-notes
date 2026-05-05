@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/wailsapp/wails/v2/pkg/options"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"meeting-notes/internal/ai"
@@ -234,6 +235,11 @@ func (a *App) OnStartup(ctx context.Context) {
 	if err := a.tray.Start(ctx); err != nil {
 		log.Printf("tray: %v", err)
 	}
+}
+
+func (a *App) onSecondInstanceLaunch(_ options.SecondInstanceData) {
+	wailsruntime.Show(a.ctx)
+	wailsruntime.WindowUnminimise(a.ctx)
 }
 
 func (a *App) OnBeforeClose(ctx context.Context) bool {
