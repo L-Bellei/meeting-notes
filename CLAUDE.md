@@ -44,9 +44,8 @@ Specs em: `docs/superpowers/specs/`
 Planos em: `docs/superpowers/plans/`
 
 ## Build do installer (Windows)
-```bash
-cd cmd/desktop
-PATH="$PATH:/c/Program Files (x86)/NSIS" wails build -nsis
-cp "build/bin/Meeting Notes-amd64-installer.exe" "../../dist/meeting-notes-X.Y.Z-windows-amd64-installer.exe"
+Usar o script `build.ps1` na raiz (requer NSIS e Wails no PATH):
+```powershell
+.\build.ps1 -Version X.Y.Z   # atualiza wails.json, roda testes, gera installer em dist/
 ```
-Atualizar `productVersion` em `cmd/desktop/wails.json` antes de cada release.
+**Atenção:** `build.ps1` usa `-clean`, que limpa `cmd/desktop/build/bin/`. O bundle do audio-service (`audio-service/build/dist/audio-service/`) deve ser copiado manualmente para `cmd/desktop/build/bin/audio-service/` após o build do Wails e antes do NSIS. Ver débito técnico em `.claude/BACKLOG.md`.
