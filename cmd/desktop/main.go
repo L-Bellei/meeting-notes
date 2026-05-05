@@ -19,6 +19,10 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId:               "com.vitait.meeting-notes",
+			OnSecondInstanceLaunch: app.onSecondInstanceLaunch,
+		},
 		OnStartup:     app.OnStartup,
 		OnShutdown:    app.OnShutdown,
 		OnBeforeClose: app.OnBeforeClose,
