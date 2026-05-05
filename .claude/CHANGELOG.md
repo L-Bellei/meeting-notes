@@ -2,6 +2,25 @@
 
 ---
 
+## [2026-05-05] Fix segunda instância + Release v2.2.4
+
+**Sem plano Superpowers** — bugfix direto.
+
+**Fase do workflow Superpowers:** N/A.
+
+**Problema:** Ao fechar a janela e reabrir o app pelo atalho do Windows, um novo processo Wails era lançado e travava (colisão de SQLite, tray duplicado, porta HTTP diferente). Reinicialização da máquina era necessária.
+
+**Causa raiz:** Nenhum mecanismo de single-instance existia no projeto.
+
+**O que foi entregue:**
+- `options.SingleInstanceLock` adicionado ao `options.App{}` em `cmd/desktop/main.go`
+- Método `onSecondInstanceLaunch` em `cmd/desktop/app.go` (unexported para evitar geração de bindings TypeScript desnecessários) — chama `Show` + `WindowUnminimise` na instância existente; segunda instância encerra limpa
+- Build v2.2.4 gerado e release publicada no GitHub (PR #28)
+
+**Decisões transversais registradas em DECISIONS.md:** nenhuma.
+
+---
+
 ## [2026-05-01] Recording Overlay + Fixes de gravação — v2.2.0
 
 **Features/Fixes:** Overlay Win32, delete de reunião órfã, poll de /health no startup, CUDA auto-detect.
