@@ -105,8 +105,21 @@ class Transcriber:
             raise ValueError(f"path does not exist: {path}")
 
         lang = language or self.default_language
+        transcribe_kwargs = dict(
+            language=lang,
+            # Prevents hallucination feedback loops: each 30s chunk is decoded
+            # independently, so a bad segment can't poison subsequent ones.
+            condition_on_previous_text=False,
+            # Silero VAD: skip silence/noise at end of recording that triggers
+            # the "E aí E aí..." repetition hallucination pattern.
+            vad_filter=True,
+            # Discard segments that are already highly repetitive internally.
+            compression_ratio_threshold=1.8,
+            # Small penalty for token repetition within a segment.
+            repetition_penalty=1.1,
+        )
         try:
-            segments, info = self._model.transcribe(str(resolved), language=lang)
+            segments, info = self._model.transcribe(str(resolved), **transcribe_kwargs)
             # Consume the generator inside the try block — errors from lazy CUDA ops surface here
             text = " ".join(seg.text.strip() for seg in segments).strip()
         except Exception as e:
@@ -117,7 +130,7 @@ class Transcriber:
                 logging.warning("CUDA inference failed (%s), reloading model on CPU", e)
                 self._model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
                 self.device = "cpu"
-                segments, info = self._model.transcribe(str(resolved), language=lang)
+                segments, info = self._model.transcribe(str(resolved), **transcribe_kwargs)
                 text = " ".join(seg.text.strip() for seg in segments).strip()
             else:
                 raise
