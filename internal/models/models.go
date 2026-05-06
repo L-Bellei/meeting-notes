@@ -33,6 +33,8 @@ type Meeting struct {
 	Status          MeetingStatus `json:"status"`
 	Transcript      *string       `json:"transcript"`
 	Notes           *string       `json:"notes"`
+	AudioPath       *string       `json:"audio_path"`
+	ErrorMessage    *string       `json:"error_message"`
 	CreatedAt       time.Time     `json:"created_at"`
 }
 

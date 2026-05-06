@@ -29,7 +29,7 @@ type ListFilters struct {
 }
 
 func (r *MeetingRepository) List(ctx context.Context, f ListFilters) ([]models.Meeting, error) {
-	query := `SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, created_at FROM meetings`
+	query := `SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, audio_path, error_message, created_at FROM meetings`
 	var args []any
 	var conditions []string
 
@@ -107,7 +107,7 @@ func (r *MeetingRepository) Create(ctx context.Context, m *models.Meeting) error
 
 func (r *MeetingRepository) GetByID(ctx context.Context, id string) (*models.Meeting, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, created_at FROM meetings WHERE id = ?`, id,
+		`SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, audio_path, error_message, created_at FROM meetings WHERE id = ?`, id,
 	)
 	m, err := scanMeeting(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -126,8 +126,8 @@ func (r *MeetingRepository) Update(ctx context.Context, m *models.Meeting) error
 		startedAt = &s
 	}
 	result, err := r.db.ExecContext(ctx,
-		`UPDATE meetings SET theme_id = ?, title = ?, started_at = ?, duration_seconds = ?, status = ?, transcript = ?, notes = ? WHERE id = ?`,
-		m.ThemeID, m.Title, startedAt, m.DurationSeconds, string(m.Status), m.Transcript, m.Notes, m.ID,
+		`UPDATE meetings SET theme_id = ?, title = ?, started_at = ?, duration_seconds = ?, status = ?, transcript = ?, notes = ?, audio_path = ?, error_message = ? WHERE id = ?`,
+		m.ThemeID, m.Title, startedAt, m.DurationSeconds, string(m.Status), m.Transcript, m.Notes, m.AudioPath, m.ErrorMessage, m.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update meeting: %w", err)
@@ -159,8 +159,8 @@ func (r *MeetingRepository) Delete(ctx context.Context, id string) error {
 
 func (r *MeetingRepository) GetRecording(ctx context.Context) (*models.Meeting, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, created_at
-		 FROM meetings WHERE status = 'recording' LIMIT 1`,
+		`SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, audio_path, error_message, created_at
+     FROM meetings WHERE status = 'recording' LIMIT 1`,
 	)
 	m, err := scanMeeting(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -183,10 +183,13 @@ func scanMeeting(row meetingScanner) (*models.Meeting, error) {
 	var duration sql.NullInt64
 	var transcript sql.NullString
 	var notes sql.NullString
+	var audioPath sql.NullString
+	var errorMessage sql.NullString
 	var createdAt string
 	var status string
 
-	err := row.Scan(&m.ID, &themeID, &m.Title, &startedAt, &duration, &status, &transcript, &notes, &createdAt)
+	err := row.Scan(&m.ID, &themeID, &m.Title, &startedAt, &duration, &status,
+		&transcript, &notes, &audioPath, &errorMessage, &createdAt)
 	if err != nil {
 		return nil, err
 	}
@@ -213,6 +216,14 @@ func scanMeeting(row meetingScanner) (*models.Meeting, error) {
 	if notes.Valid {
 		v := notes.String
 		m.Notes = &v
+	}
+	if audioPath.Valid {
+		v := audioPath.String
+		m.AudioPath = &v
+	}
+	if errorMessage.Valid {
+		v := errorMessage.String
+		m.ErrorMessage = &v
 	}
 	m.Status = models.MeetingStatus(status)
 	if m.CreatedAt, err = parseTime(createdAt); err != nil {
