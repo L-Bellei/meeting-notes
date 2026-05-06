@@ -1,7 +1,8 @@
-import { useRef, useEffect, RefObject } from "react"
+import { useRef, useEffect } from "react"
+import type { RefObject } from "react"
 
 interface Props {
-  audioRef: RefObject<HTMLAudioElement>
+  audioRef: RefObject<HTMLAudioElement | null>
   playing: boolean
 }
 
