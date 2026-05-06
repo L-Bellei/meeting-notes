@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from "react"
-import { Play, Square, RefreshCw, Wand2, Trash2 } from "lucide-react"
+import { Play, Square, RefreshCw, Wand2, Trash2, Volume2 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import {
   useMeeting, useUpdateMeeting, useStartRecording, useStopRecording,
   useReprocess, useGenerateSummary, useGenerateKeyPoints, useGenerateTasks,
-  useUpdateTask,
+  useUpdateTask, useRetranscribe,
 } from "../../hooks/useMeeting"
+import { AudioPlayer } from "../ui/AudioPlayer"
 import { useDeleteMeeting } from "../../hooks/useMeetings"
 import { useSettings } from "../../hooks/useSettings"
 import { useCardForMeeting, useCreateCard } from "../../hooks/useBoard"
@@ -28,6 +29,8 @@ export function MeetingDetail({ meetingId, onDeleted, highlightQuery }: Props) {
   const { data: meeting } = useMeeting(meetingId)
   const { data: settings } = useSettings()
   const [tab, setTab] = useState<Tab>("transcript")
+  const [playerOpen, setPlayerOpen] = useState(false)
+  const retranscribe = useRetranscribe(meeting?.id ?? "")
 
   const generateSummary   = useGenerateSummary(meetingId ?? "")
   const generateKeyPoints = useGenerateKeyPoints(meetingId ?? "")
@@ -78,7 +81,12 @@ export function MeetingDetail({ meetingId, onDeleted, highlightQuery }: Props) {
 
   return (
     <div className="flex-1 h-full flex flex-col overflow-hidden animate-fade-in">
-      <MeetingHeader meeting={meeting} onDeleted={onDeleted} highlightQuery={query} />
+      <MeetingHeader meeting={meeting} onDeleted={onDeleted} highlightQuery={query} playerOpen={playerOpen} setPlayerOpen={setPlayerOpen} retranscribe={retranscribe} />
+      {meeting.status === "failed" && meeting.error_message && (
+        <div className="mx-4 mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span className="font-semibold">Erro: </span>{meeting.error_message}
+        </div>
+      )}
       {meetingId && !existingCard && meeting?.status === "completed" && (
         <div className="px-4 pb-2">
           <Button
@@ -123,11 +131,18 @@ export function MeetingDetail({ meetingId, onDeleted, highlightQuery }: Props) {
         {tab === "tasks" && <TasksTab meeting={meeting} highlightQuery={query} />}
         {tab === "notes" && <NotesTab meeting={meeting} />}
       </div>
+      {playerOpen && meeting.audio_path && meeting.id && (
+        <AudioPlayer
+          meetingId={meeting.id}
+          meetingTitle={meeting.title}
+          onClose={() => setPlayerOpen(false)}
+        />
+      )}
     </div>
   )
 }
 
-function MeetingHeader({ meeting, onDeleted, highlightQuery }: { meeting: any; onDeleted?: () => void; highlightQuery: string }) {
+function MeetingHeader({ meeting, onDeleted, highlightQuery, playerOpen, setPlayerOpen, retranscribe }: { meeting: any; onDeleted?: () => void; highlightQuery: string; playerOpen: boolean; setPlayerOpen: (fn: (o: boolean) => boolean) => void; retranscribe: { isPending: boolean; mutate: () => void } }) {
   const start = useStartRecording(meeting.id)
   const stop = useStopRecording(meeting.id)
   const reprocess = useReprocess(meeting.id)
@@ -156,6 +171,15 @@ function MeetingHeader({ meeting, onDeleted, highlightQuery }: { meeting: any; o
         <h2 className="text-base font-semibold truncate" dangerouslySetInnerHTML={{ __html: highlightText(meeting.title, highlightQuery) }} />
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <Badge variant={statusVariant(meeting.status)}>{meeting.status}</Badge>
+          {meeting.audio_path && (
+            <button
+              className={cn("inline-flex items-center justify-center rounded-md h-8 w-8 hover:bg-muted transition-colors", playerOpen && "text-primary")}
+              title="Reproduzir áudio da reunião"
+              onClick={() => setPlayerOpen(o => !o)}
+            >
+              <Volume2 className="h-4 w-4" />
+            </button>
+          )}
           <button
             onClick={handleDelete}
             title={confirmDelete ? "Clique novamente para confirmar" : "Excluir reunião"}
@@ -189,6 +213,16 @@ function MeetingHeader({ meeting, onDeleted, highlightQuery }: { meeting: any; o
             {reprocess.isPending ? <Spinner size={14} className="mr-1.5" /> : <RefreshCw size={14} className="mr-1" />}
             Reprocessar
           </Button>
+        )}
+        {meeting.status === "failed" && meeting.audio_path && (
+          <button
+            disabled={retranscribe.isPending}
+            onClick={() => retranscribe.mutate()}
+            className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Tentar transcrever novamente
+          </button>
         )}
       </div>
     </div>
