@@ -23,6 +23,11 @@ export function AudioSpectrumVisualizer({ audioRef, playing }: Props) {
     analyser.connect(audioCtx.destination)
     ctxRef.current = audioCtx
     analyserRef.current = analyser
+    return () => {
+      audioCtx.close()
+      ctxRef.current = null
+      analyserRef.current = null
+    }
   }, [audioRef])
 
   // Draw loop

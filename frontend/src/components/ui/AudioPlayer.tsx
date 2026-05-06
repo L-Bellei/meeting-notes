@@ -28,8 +28,8 @@ export function AudioPlayer({ meetingId, meetingTitle, onClose }: Props) {
   const toggle = useCallback(() => {
     const a = audioRef.current
     if (!a) return
-    if (playing) { a.pause() } else { a.play() }
-  }, [playing])
+    a.paused ? a.play() : a.pause()
+  }, [])
 
   const skip = useCallback((delta: number) => {
     const a = audioRef.current

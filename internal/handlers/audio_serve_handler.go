@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"meeting-notes/internal/repository"
@@ -32,7 +34,13 @@ func (h *AudioServeHandler) ServeAudio(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no audio file", http.StatusNotFound)
 		return
 	}
-	f, err := os.Open(*m.AudioPath)
+	// Sanitize path: must be absolute and must not contain traversal sequences
+	clean := filepath.Clean(*m.AudioPath)
+	if !filepath.IsAbs(clean) || strings.Contains(clean, "..") {
+		http.Error(w, "invalid audio path", http.StatusForbidden)
+		return
+	}
+	f, err := os.Open(clean)
 	if err != nil {
 		http.Error(w, "audio file not found on disk", http.StatusNotFound)
 		return
