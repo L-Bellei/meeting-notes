@@ -10,6 +10,8 @@ export interface Meeting {
   status: "pending" | "recording" | "transcribing" | "processing" | "completed" | "failed"
   transcript: string | null
   notes: string | null
+  audio_path: string | null
+  error_message: string | null
   created_at: string
 }
 

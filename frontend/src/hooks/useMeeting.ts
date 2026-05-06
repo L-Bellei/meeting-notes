@@ -118,3 +118,11 @@ export function useUpdateTask(meetingId: string, taskId: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["meeting", meetingId] }),
   })
 }
+
+export function useRetranscribe(meetingId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api(`/api/meetings/${meetingId}/retranscribe`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["meeting", meetingId] }),
+  })
+}
