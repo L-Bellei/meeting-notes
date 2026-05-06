@@ -18,7 +18,7 @@ import (
 // MeetingOrchestrator abstracts the orchestration service for testability.
 type MeetingOrchestrator interface {
 	StartRecording(ctx context.Context, meetingID string) error
-	StopRecording(ctx context.Context, meetingID string) error
+	StopRecording(ctx context.Context, meetingID string, keepAudio bool) error
 	Reprocess(ctx context.Context, meetingID string) error
 	SetTranscriptAndProcess(ctx context.Context, meetingID, transcript string) error
 }
@@ -215,10 +215,16 @@ func (h *MeetingHandler) Start(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
+type stopRequest struct {
+	KeepAudio bool `json:"keep_audio"`
+}
+
 // POST /api/meetings/{id}/stop
 func (h *MeetingHandler) Stop(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if err := h.orch.StopRecording(r.Context(), id); err != nil {
+	var req stopRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if err := h.orch.StopRecording(r.Context(), id, req.KeepAudio); err != nil {
 		writeOrchError(w, err)
 		return
 	}

@@ -287,7 +287,7 @@ func TestOrchestrator_StopRecording_FiresGoroutine(t *testing.T) {
 	m.Status = models.StatusRecording
 	mr.Update(context.Background(), m)
 
-	if err := orch.StopRecording(context.Background(), id); err != nil {
+	if err := orch.StopRecording(context.Background(), id, false); err != nil {
 		t.Fatalf("StopRecording: %v", err)
 	}
 
@@ -301,7 +301,7 @@ func TestOrchestrator_StopRecording_FiresGoroutine(t *testing.T) {
 
 func TestOrchestrator_StopRecording_NotRecording(t *testing.T) {
 	orch, _, id := newOrchTest(t, &fakeAudioClient{}, &fakeAI{})
-	err := orch.StopRecording(context.Background(), id)
+	err := orch.StopRecording(context.Background(), id, false)
 	var ve *services.ValidationError
 	if !errors.As(err, &ve) {
 		t.Errorf("expected ValidationError, got %v", err)
@@ -407,7 +407,7 @@ func TestOrchestrator_NotifyFn_CalledOnStatusChange(t *testing.T) {
 	if err := orch.StartRecording(context.Background(), id); err != nil {
 		t.Fatalf("StartRecording: %v", err)
 	}
-	if err := orch.StopRecording(context.Background(), id); err != nil {
+	if err := orch.StopRecording(context.Background(), id, false); err != nil {
 		t.Fatalf("StopRecording: %v", err)
 	}
 	orch.WaitPipelines()

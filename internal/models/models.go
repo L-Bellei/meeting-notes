@@ -35,6 +35,7 @@ type Meeting struct {
 	Notes           *string       `json:"notes"`
 	AudioPath       *string       `json:"audio_path"`
 	ErrorMessage    *string       `json:"error_message"`
+	KeepAudio       bool          `json:"keep_audio"`
 	CreatedAt       time.Time     `json:"created_at"`
 }
 

@@ -107,13 +107,17 @@ func (o *Orchestrator) StartRecording(ctx context.Context, meetingID string) err
 	return nil
 }
 
-func (o *Orchestrator) StopRecording(ctx context.Context, meetingID string) error {
+func (o *Orchestrator) StopRecording(ctx context.Context, meetingID string, keepAudio bool) error {
 	m, err := o.repo.GetByID(ctx, meetingID)
 	if err != nil {
 		return err
 	}
 	if m.Status != models.StatusRecording {
 		return &ValidationError{"meeting is not recording"}
+	}
+	m.KeepAudio = keepAudio
+	if err := o.repo.Update(ctx, m); err != nil {
+		return err
 	}
 	o.spawnPipeline(meetingID, o.RunCapturePipeline)
 	return nil
@@ -196,9 +200,9 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 		return err
 	}
 
-	whisperLang := "pt"
+	whisperLang := ""
 	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
-		if v := s["whisper_language"]; v != "" {
+		if v := s["whisper_language"]; v != "" && v != "auto" {
 			whisperLang = v
 		}
 	}
@@ -217,11 +221,7 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 	}
 	o.notify(m.ID, m.Status)
 
-	keepAudio := false
-	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
-		keepAudio = s["keep_audio"] == "true"
-	}
-	if !keepAudio {
+	if !m.KeepAudio {
 		if err := os.Remove(stopResp.Path); err != nil && !os.IsNotExist(err) {
 			log.Printf("warning: delete WAV %s: %v", stopResp.Path, err)
 		} else {
@@ -383,9 +383,9 @@ func (o *Orchestrator) RunRetranscribePipeline(ctx context.Context, meetingID st
 		return err
 	}
 
-	whisperLang := "pt"
+	whisperLang := ""
 	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
-		if v := s["whisper_language"]; v != "" {
+		if v := s["whisper_language"]; v != "" && v != "auto" {
 			whisperLang = v
 		}
 	}
@@ -406,11 +406,7 @@ func (o *Orchestrator) RunRetranscribePipeline(ctx context.Context, meetingID st
 	}
 	o.notify(m.ID, m.Status)
 
-	keepAudio := false
-	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
-		keepAudio = s["keep_audio"] == "true"
-	}
-	if !keepAudio {
+	if !m.KeepAudio {
 		if err := os.Remove(audioPath); err != nil && !os.IsNotExist(err) {
 			log.Printf("warning: delete WAV %s: %v", audioPath, err)
 		} else {
