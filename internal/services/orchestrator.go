@@ -177,7 +177,22 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 
 	stopResp, err := o.audio.StopRecording(ctx)
 	if err != nil {
-		o.markFailed(ctx, m)
+		o.markFailed(ctx, m, fmt.Sprintf("falha ao parar gravação: %v", err))
+		return err
+	}
+
+	// Persist audio path immediately — before any failure that might follow
+	m.AudioPath = &stopResp.Path
+	if err := o.repo.Update(ctx, m); err != nil {
+		return err
+	}
+
+	if err := CheckModelLoaded(ctx, o.audio); err != nil {
+		o.markFailed(ctx, m, err.Error())
+		return err
+	}
+	if err := ValidateWAVFile(stopResp.Path); err != nil {
+		o.markFailed(ctx, m, err.Error())
 		return err
 	}
 
@@ -189,7 +204,7 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 	}
 	trResp, err := o.audio.Transcribe(ctx, stopResp.Path, whisperLang)
 	if err != nil {
-		o.markFailed(ctx, m)
+		o.markFailed(ctx, m, fmt.Sprintf("transcrição falhou: %v", err))
 		return err
 	}
 
@@ -202,8 +217,17 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 	}
 	o.notify(m.ID, m.Status)
 
-	if err := os.Remove(stopResp.Path); err != nil && !os.IsNotExist(err) {
-		log.Printf("warning: delete WAV %s: %v", stopResp.Path, err)
+	keepAudio := false
+	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
+		keepAudio = s["keep_audio"] == "true"
+	}
+	if !keepAudio {
+		if err := os.Remove(stopResp.Path); err != nil && !os.IsNotExist(err) {
+			log.Printf("warning: delete WAV %s: %v", stopResp.Path, err)
+		} else {
+			m.AudioPath = nil
+			_ = o.repo.Update(ctx, m)
+		}
 	}
 
 	autoGen := true
@@ -212,7 +236,7 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 	}
 	if autoGen {
 		if err := o.runAIGeneration(ctx, m); err != nil {
-			o.markFailed(ctx, m)
+			o.markFailed(ctx, m, fmt.Sprintf("geração de IA falhou: %v", err))
 			return err
 		}
 	}
@@ -241,7 +265,7 @@ func (o *Orchestrator) RunAIPipeline(ctx context.Context, meetingID string) erro
 	o.notify(m.ID, m.Status)
 
 	if err := o.runAIGeneration(ctx, m); err != nil {
-		o.markFailed(ctx, m)
+		o.markFailed(ctx, m, fmt.Sprintf("geração de IA falhou: %v", err))
 		return err
 	}
 
@@ -305,8 +329,11 @@ func (o *Orchestrator) runAIGeneration(ctx context.Context, m *models.Meeting) e
 	return nil
 }
 
-func (o *Orchestrator) markFailed(ctx context.Context, m *models.Meeting) {
+func (o *Orchestrator) markFailed(ctx context.Context, m *models.Meeting, errMsg string) {
 	m.Status = models.StatusFailed
+	if errMsg != "" {
+		m.ErrorMessage = &errMsg
+	}
 	if err := o.repo.Update(ctx, m); err != nil {
 		log.Printf("warning: mark failed %s: %v", m.ID, err)
 		o.persistLog("warn", "orchestrator", fmt.Sprintf("mark failed %s: %v", m.ID, err))
