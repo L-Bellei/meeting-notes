@@ -298,6 +298,29 @@ export function SettingsModal({ open, onClose }: Props) {
                 </select>
                 <p className="text-[10px] text-muted-foreground/60 mt-1">Modelos maiores transcrevem melhor, mas demoram mais. Requer reinício do serviço de áudio para ter efeito.</p>
               </div>
+
+              {/* Áudio */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-foreground">Guardar áudio das reuniões</p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                    Preserva o arquivo de áudio após transcrição para reprodução posterior.
+                    Desativado: áudio é deletado após transcrição bem-sucedida.
+                  </p>
+                </div>
+                <button
+                  onClick={() => set("keep_audio", form.keep_audio === "true" ? "false" : "true")}
+                  className={cn(
+                    "w-10 h-6 rounded-full transition-colors relative flex-shrink-0",
+                    form.keep_audio === "true" ? "bg-primary" : "bg-muted"
+                  )}
+                >
+                  <span className={cn(
+                    "absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all",
+                    form.keep_audio === "true" ? "right-1" : "left-1"
+                  )} />
+                </button>
+              </div>
             </div>
           )}
 
