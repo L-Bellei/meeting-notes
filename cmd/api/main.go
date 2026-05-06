@@ -180,6 +180,11 @@ func main() {
 	})
 	r.Get("/api/ai/health", aiHealthHandler.Check)
 
+	audioServeHandler := handlers.NewAudioServeHandler(meetingRepo)
+	retranscribeHandler := handlers.NewRetranscribeHandler(orchestrator)
+	r.Get("/api/meetings/{id}/audio", audioServeHandler.ServeAudio)
+	r.Post("/api/meetings/{id}/retranscribe", retranscribeHandler.Retranscribe)
+
 	log.Printf("server listening on :%s", cfg.HTTPPort)
 	if err := http.ListenAndServe(":"+cfg.HTTPPort, r); err != nil {
 		log.Fatalf("server error: %v", err)
