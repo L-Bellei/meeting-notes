@@ -149,12 +149,17 @@ function MeetingHeader({ meeting, onDeleted, highlightQuery, playerOpen, setPlay
   const deleteMeeting = useDeleteMeeting()
   const [error, setError] = useState("")
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showStopConfirm, setShowStopConfirm] = useState(false)
+  const [keepAudio, setKeepAudio] = useState(false)
 
   async function handleStart() {
     try { await start.mutateAsync() } catch (e: any) { setError(e.message) }
   }
   async function handleStop() {
-    try { await stop.mutateAsync() } catch (e: any) { setError(e.message) }
+    try {
+      await stop.mutateAsync(keepAudio)
+      setShowStopConfirm(false)
+    } catch (e: any) { setError(e.message) }
   }
   async function handleReprocess() {
     try { await reprocess.mutateAsync() } catch (e: any) { setError(e.message) }
@@ -202,11 +207,43 @@ function MeetingHeader({ meeting, onDeleted, highlightQuery, playerOpen, setPlay
             Start
           </Button>
         )}
-        {meeting.status === "recording" && (
-          <Button size="sm" variant="destructive" onClick={handleStop} disabled={stop.isPending}>
-            {stop.isPending ? <Spinner size={14} className="mr-1.5" /> : <Square size={14} className="mr-1" />}
+        {meeting.status === "recording" && !showStopConfirm && (
+          <Button size="sm" variant="destructive" onClick={() => setShowStopConfirm(true)}>
+            <Square size={14} className="mr-1" />
             Stop
           </Button>
+        )}
+        {meeting.status === "recording" && showStopConfirm && (
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5">
+            <label className="flex items-center gap-1.5 cursor-pointer text-xs select-none">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={keepAudio}
+                onClick={() => setKeepAudio(v => !v)}
+                className={cn(
+                  "relative inline-flex h-4 w-7 flex-shrink-0 rounded-full transition-colors",
+                  keepAudio ? "bg-primary" : "bg-muted"
+                )}
+              >
+                <span className={cn(
+                  "absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform",
+                  keepAudio ? "translate-x-3.5" : "translate-x-0.5"
+                )} />
+              </button>
+              Guardar áudio
+            </label>
+            <Button size="sm" variant="destructive" onClick={handleStop} disabled={stop.isPending}>
+              {stop.isPending ? <Spinner size={14} className="mr-1" /> : null}
+              Parar
+            </Button>
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setShowStopConfirm(false)}
+            >
+              Cancelar
+            </button>
+          </div>
         )}
         {(meeting.status === "failed" || meeting.status === "completed") && meeting.transcript && (
           <Button size="sm" variant="outline" onClick={handleReprocess} disabled={reprocess.isPending}>

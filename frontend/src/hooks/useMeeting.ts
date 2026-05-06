@@ -70,7 +70,11 @@ export function useStartRecording(id: string) {
 export function useStopRecording(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: () => api<void>(`/api/meetings/${id}/stop`, { method: "POST" }),
+    mutationFn: (keepAudio: boolean) =>
+      api<void>(`/api/meetings/${id}/stop`, {
+        method: "POST",
+        body: JSON.stringify({ keep_audio: keepAudio }),
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["meeting", id] })
       qc.invalidateQueries({ queryKey: ["meetings"] })
