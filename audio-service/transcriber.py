@@ -110,9 +110,6 @@ class Transcriber:
             # Prevents hallucination feedback loops: each 30s chunk is decoded
             # independently, so a bad segment can't poison subsequent ones.
             condition_on_previous_text=False,
-            # Silero VAD: skip silence/noise at end of recording that triggers
-            # the "E aí E aí..." repetition hallucination pattern.
-            vad_filter=True,
             # Discard segments that are already highly repetitive internally.
             compression_ratio_threshold=1.8,
             # Small penalty for token repetition within a segment.
