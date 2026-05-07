@@ -2,6 +2,28 @@
 
 ---
 
+## [2026-05-07] AudioPlayer fixes, settings save fix, release v2.3.0
+
+**Sem plano Superpowers** — correções pós-finishing sobre `fix/whisper-hallucination-2.2.5`.
+
+**Fase do workflow Superpowers:** N/A.
+
+**Problemas encontrados e corrigidos:**
+- `keep_audio` ausente no `validSettings` — qualquer PUT em `/api/settings` falhava silenciosamente
+- AudioContext capturava permanentemente o `<audio>` element; fechar o contexto silenciava o áudio — removido completamente
+- `bg-card` invisível (transparente): cor `card` não existia na paleta Tailwind do projeto
+- Player ficava atrás de outros elementos apesar de `z-[9999]`: stacking context do componente pai limitava o z-index — corrigido com `createPortal(content, document.body)`
+- Drag com `left/top` causava salto na primeira movimentação — substituído por `transform: translate(x, y)`
+
+**Decisões transversais registradas em DECISIONS.md:**
+- `createPortal` para widgets flutuantes
+- AudioPlayer sem AudioContext (plain `<audio>`)
+- Tailwind config com cor `card` explícita
+
+**Entregável:** release v2.3.0 publicada no GitHub (PR #30), installer em `dist/`.
+
+---
+
 ## [2026-05-06] Audio Resilience, Player & Transcription Diagnostics (v2.2.5)
 
 **Plano Superpowers:** `docs/superpowers/plans/2026-05-06-audio-resilience-player.md`
