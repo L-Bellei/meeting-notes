@@ -30,4 +30,4 @@ Itens fora do escopo das features já implementadas. Para features com plano ati
 
 ## Bugs conhecidos (sem plano)
 
-- Nenhum no momento.
+- **Whisper "auto" language não é detecção automática real** — quando `whisper_language = "auto"`, o orchestrator passa `""` para o audio-service, que por sua vez faz `language or default_language` em Python. Se `default_language = "pt"`, o áudio sempre é transcrito como português. Corrigir: remover o `default_language` fallback no `transcriber.py` ou garantir que `""` seja tratado como None pelo faster-whisper.

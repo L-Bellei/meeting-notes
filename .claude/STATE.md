@@ -1,33 +1,34 @@
-# Estado do Projeto — 2026-05-06
+# Estado do Projeto — 2026-05-07
 
 ## Sessão
-- **Data:** 2026-05-06
-- **Branch atual:** `fix/whisper-hallucination-2.2.5`
+- **Data:** 2026-05-07
+- **Branch atual:** `master` (sincronizado com origin)
 - **Worktree:** nenhum ativo
 
 ## Trabalho desta sessão
 
-**Audio Resilience, Player & Transcription Diagnostics (v2.2.5)**
+**Correções e finalização do AudioPlayer (continuação de fix/whisper-hallucination-2.2.5)**
 
-Implementação completa via Subagent-Driven Development. Todas as 12 tarefas concluídas e revisadas.
+Sessão de debugging e correção de bugs introduzidos durante a implementação da feature de áudio resiliente. Nenhum plano Superpowers novo — trabalho reativo sobre a entrega anterior.
 
-→ Spec: `docs/superpowers/specs/2026-05-06-audio-resilience-player-design.md`
-→ Plano: `docs/superpowers/plans/2026-05-06-audio-resilience-player.md`
+→ Plano relacionado (já concluído): `docs/superpowers/plans/2026-05-06-audio-resilience-player.md`
 
 ## Fase Superpowers
 
-**finishing** — implementação e build de testes prontos. Aguardando validação do usuário para decidir entre merge local / PR / manter branch.
+**N/A** — correções pós-finishing da feature anterior. Nenhuma feature nova em andamento.
 
 ## Próximo passo imediato
 
-Após teste do installer `dist/meeting-notes-2.2.5-windows-amd64-installer.exe`:
-- Se aprovado: escolher opção de finalização (PR ou merge local em master) e fazer release v2.2.5
-- Se bugs: corrigir na branch antes de finalizar
+Retomar a feature de loading screen (plano pronto, aguardando priorização):
+→ `docs/superpowers/plans/2026-05-02-loading-screen.md`
+
+Iniciar com `/superpowers:execute-plan` referenciando o plano acima.
 
 ## Worktrees paralelos
 
 Nenhum.
 
-## Plano pendente (não iniciado)
+## Estado de release
 
-- **Loading screen** → `docs/superpowers/plans/2026-05-02-loading-screen.md` — aguardando priorização
+- **v2.3.0** publicada em https://github.com/L-Bellei/meeting-notes/releases/tag/v2.3.0
+- Installer: `dist/meeting-notes-2.3.0-windows-amd64-installer.exe`

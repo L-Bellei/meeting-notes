@@ -115,6 +115,46 @@ cp "build/bin/Meeting Notes-amd64-installer.exe" "../../dist/meeting-notes-X.Y.Z
 
 ---
 
+## [2026-05-07] Widgets flutuantes usam createPortal(content, document.body)
+
+**Contexto:** AudioPlayer renderizado dentro da árvore React ficava limitado pelo stacking context do componente pai, mesmo com `z-[9999]`.
+
+**Alternativas:**
+- Aumentar z-index indefinidamente (não resolve stacking context de pai com `transform`, `filter`, `will-change`)
+- Mover o componente para mais alto na árvore (acopla desnecessariamente)
+- `createPortal(content, document.body)` — renderiza fora de qualquer stacking context
+
+**Escolha:** `createPortal` para qualquer widget flutuante (modais, players, tooltips que precisam sobrepor tudo).
+
+**Justificativa:** Solução canônica do React. Mantém o estado e event handlers dentro da árvore React mas insere o DOM diretamente no `body`.
+
+---
+
+## [2026-05-07] AudioPlayer usa plain `<audio>` sem AudioContext
+
+**Contexto:** `AudioContext.createMediaElementSource()` captura o elemento `<audio>` permanentemente. Ao fechar o AudioContext no cleanup do useEffect, o áudio fica mudo (roteado para contexto fechado). React StrictMode agrava com double-mount.
+
+**Alternativas:**
+- Gerenciar AudioContext sem fechar no cleanup (leak de recursos)
+- Nunca reconectar após o primeiro mount (frágil)
+- Usar plain `<audio>` sem AudioContext
+
+**Escolha:** Remover AudioContext do AudioPlayer inteiramente. O visualizador de espectro usa animação canvas aleatória (fake) em vez de Web Audio API real.
+
+**Justificativa:** Playback correto tem prioridade sobre visualizador preciso. Animação fake é indistinguível para o usuário. Elimina toda a complexidade de captura/cleanup.
+
+---
+
+## [2026-05-07] Tailwind config com cor card explícita (não CSS variable)
+
+**Contexto:** Este projeto usa Tailwind com paleta de cores custom hardcoded (não o sistema de CSS variables do shadcn/ui). Classes como `bg-card` resolvem para `transparent` se `card` não estiver na paleta.
+
+**Escolha:** Adicionar todas as cores necessárias diretamente em `tailwind.config.js` como valores hex. Não migrar para CSS variables.
+
+**Justificativa:** O projeto já usa este padrão desde o início. Migrar para CSS variables seria refactor sem benefício para app single-user sem theming dinâmico.
+
+---
+
 ## [2026-05-06] vad_filter removido do transcriber.py (não compatível com PyInstaller)
 
 **Contexto:** `vad_filter=True` foi adicionado para suprimir loops de alucinação do Whisper, mas causa falha completa de transcrição no bundle PyInstaller — os arquivos do modelo Silero VAD não estão incluídos no `.spec`.
