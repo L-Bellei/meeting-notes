@@ -221,6 +221,11 @@ func (a *App) OnStartup(ctx context.Context) {
 	})
 	r.Get("/api/ai/health", aiHealthHandler.Check)
 
+	audioServeHandler := handlers.NewAudioServeHandler(meetingRepo)
+	retranscribeHandler := handlers.NewRetranscribeHandler(orch)
+	r.Get("/api/meetings/{id}/audio", audioServeHandler.ServeAudio)
+	r.Post("/api/meetings/{id}/retranscribe", retranscribeHandler.Retranscribe)
+
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
 		log.Printf("listen: %v", err)

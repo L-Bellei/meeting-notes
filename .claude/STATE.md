@@ -1,39 +1,33 @@
-# Estado do Projeto — 2026-05-05
+# Estado do Projeto — 2026-05-06
 
 ## Sessão
-- **Data:** 2026-05-05
-- **Branch atual:** `master` (pós-merge PR #28 + PR #29 chore/bump-version-2.2.4)
+- **Data:** 2026-05-06
+- **Branch atual:** `fix/whisper-hallucination-2.2.5`
 - **Worktree:** nenhum ativo
 
 ## Trabalho desta sessão
 
-**Fix single-instance + Release v2.2.4**
+**Audio Resilience, Player & Transcription Diagnostics (v2.2.5)**
 
-1. **Fix: segunda instância trava ao reabrir pelo atalho** (`fix/single-instance-lock`, PR #28, mergeado)
-   - Problema: ao fechar a janela e reabrir pelo atalho do Windows, novo processo Wails colidia com a instância em background (SQLite lock, tray duplicado, porta HTTP diferente)
-   - Fix: `options.SingleInstanceLock` do Wails v2 — segunda instância detecta a primeira via named pipe, traz janela ao primeiro plano, encerra limpa
-   - Arquivos: `cmd/desktop/main.go`, `cmd/desktop/app.go`
+Implementação completa via Subagent-Driven Development. Todas as 12 tarefas concluídas e revisadas.
 
-2. **Checagem de auto-suficiência**
-   - Go binary: 100% estático, sem CGO, sem DLLs externas
-   - Audio service: PyInstaller onedir bundled no installer
-   - WebView2: bootstrapper incluído (Windows 11 nativo, Windows 10 faz download ~100 MB)
-   - Resultado: app completamente auto-suficiente na instalação
-
-3. **Release v2.2.4** — installer publicado no GitHub
-
-## Estado do repositório
-- Repositório público: `https://github.com/L-Bellei/meeting-notes`
-- Branch `master` protegida (PRs obrigatórios)
-- PRs mergeados esta sessão: #28 (single-instance fix), #29 (bump 2.2.4)
-- Release publicada: `v2.2.4`
-- Versão atual: `2.2.4`
+→ Spec: `docs/superpowers/specs/2026-05-06-audio-resilience-player-design.md`
+→ Plano: `docs/superpowers/plans/2026-05-06-audio-resilience-player.md`
 
 ## Fase Superpowers
-N/A nesta sessão — bugfix direto. Nenhum plano ativo em execução.
 
-## Próximo passo
-Ver `BACKLOG.md` para próximas features. Iniciar nova feature com `superpowers:brainstorming`.
+**finishing** — implementação e build de testes prontos. Aguardando validação do usuário para decidir entre merge local / PR / manter branch.
+
+## Próximo passo imediato
+
+Após teste do installer `dist/meeting-notes-2.2.5-windows-amd64-installer.exe`:
+- Se aprovado: escolher opção de finalização (PR ou merge local em master) e fazer release v2.2.5
+- Se bugs: corrigir na branch antes de finalizar
 
 ## Worktrees paralelos
+
 Nenhum.
+
+## Plano pendente (não iniciado)
+
+- **Loading screen** → `docs/superpowers/plans/2026-05-02-loading-screen.md` — aguardando priorização

@@ -1,5 +1,9 @@
 let baseURL = ""
 
+export function getApiBase(): string {
+  return baseURL
+}
+
 export function initApi(port: number) {
   baseURL = `http://localhost:${port}`
 }

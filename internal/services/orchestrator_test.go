@@ -42,7 +42,13 @@ type fakeAudioClient struct {
 }
 
 func (f *fakeAudioClient) Health(ctx context.Context) (*audio.HealthResponse, error) {
-	return f.healthResp, f.healthErr
+	if f.healthErr != nil {
+		return nil, f.healthErr
+	}
+	if f.healthResp != nil {
+		return f.healthResp, nil
+	}
+	return &audio.HealthResponse{Status: "ok", ModelLoaded: true}, nil
 }
 func (f *fakeAudioClient) StartRecording(ctx context.Context) (*audio.StartResponse, error) {
 	f.startCalls++
@@ -138,9 +144,13 @@ func TestOrchestrator_StartRecording_NotFound(t *testing.T) {
 	}
 }
 
+func fakeWAVBytes() []byte {
+	return make([]byte, 12*1024)
+}
+
 func TestOrchestrator_RunCapturePipeline_Success(t *testing.T) {
 	wavPath := t.TempDir() + "/rec-1.wav"
-	if err := os.WriteFile(wavPath, []byte("fake"), 0o644); err != nil {
+	if err := os.WriteFile(wavPath, fakeWAVBytes(), 0o644); err != nil {
 		t.Fatalf("write wav: %v", err)
 	}
 
@@ -177,7 +187,7 @@ func TestOrchestrator_RunCapturePipeline_Success(t *testing.T) {
 
 func TestOrchestrator_RunCapturePipeline_TranscribeFails(t *testing.T) {
 	wavPath := t.TempDir() + "/rec-1.wav"
-	os.WriteFile(wavPath, []byte("fake"), 0o644)
+	os.WriteFile(wavPath, fakeWAVBytes(), 0o644)
 
 	fa := &fakeAudioClient{
 		stopResp:      &audio.StopResponse{Path: wavPath},
@@ -204,7 +214,7 @@ func TestOrchestrator_RunCapturePipeline_TranscribeFails(t *testing.T) {
 
 func TestOrchestrator_RunCapturePipeline_AIFails(t *testing.T) {
 	wavPath := t.TempDir() + "/rec-1.wav"
-	os.WriteFile(wavPath, []byte("fake"), 0o644)
+	os.WriteFile(wavPath, fakeWAVBytes(), 0o644)
 
 	fa := &fakeAudioClient{
 		stopResp:       &audio.StopResponse{Path: wavPath, DurationSeconds: 12.5},
@@ -264,7 +274,7 @@ func TestOrchestrator_RunAIPipeline_NoTranscript(t *testing.T) {
 
 func TestOrchestrator_StopRecording_FiresGoroutine(t *testing.T) {
 	wavPath := t.TempDir() + "/rec-1.wav"
-	os.WriteFile(wavPath, []byte("fake"), 0o644)
+	os.WriteFile(wavPath, fakeWAVBytes(), 0o644)
 
 	fa := &fakeAudioClient{
 		stopResp:       &audio.StopResponse{Path: wavPath, DurationSeconds: 5.0},
@@ -277,7 +287,7 @@ func TestOrchestrator_StopRecording_FiresGoroutine(t *testing.T) {
 	m.Status = models.StatusRecording
 	mr.Update(context.Background(), m)
 
-	if err := orch.StopRecording(context.Background(), id); err != nil {
+	if err := orch.StopRecording(context.Background(), id, false); err != nil {
 		t.Fatalf("StopRecording: %v", err)
 	}
 
@@ -291,7 +301,7 @@ func TestOrchestrator_StopRecording_FiresGoroutine(t *testing.T) {
 
 func TestOrchestrator_StopRecording_NotRecording(t *testing.T) {
 	orch, _, id := newOrchTest(t, &fakeAudioClient{}, &fakeAI{})
-	err := orch.StopRecording(context.Background(), id)
+	err := orch.StopRecording(context.Background(), id, false)
 	var ve *services.ValidationError
 	if !errors.As(err, &ve) {
 		t.Errorf("expected ValidationError, got %v", err)
@@ -371,7 +381,7 @@ func TestOrchestrator_SetTranscriptAndProcess_Success(t *testing.T) {
 func TestOrchestrator_NotifyFn_CalledOnStatusChange(t *testing.T) {
 	transcript := "hello world"
 	wavPath := t.TempDir() + "/rec.wav"
-	if err := os.WriteFile(wavPath, []byte("fake"), 0o644); err != nil {
+	if err := os.WriteFile(wavPath, fakeWAVBytes(), 0o644); err != nil {
 		t.Fatalf("write wav: %v", err)
 	}
 	fa := &fakeAudioClient{
@@ -397,7 +407,7 @@ func TestOrchestrator_NotifyFn_CalledOnStatusChange(t *testing.T) {
 	if err := orch.StartRecording(context.Background(), id); err != nil {
 		t.Fatalf("StartRecording: %v", err)
 	}
-	if err := orch.StopRecording(context.Background(), id); err != nil {
+	if err := orch.StopRecording(context.Background(), id, false); err != nil {
 		t.Fatalf("StopRecording: %v", err)
 	}
 	orch.WaitPipelines()

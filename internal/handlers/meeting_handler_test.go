@@ -34,7 +34,7 @@ func (f *fakeOrchestrator) StartRecording(_ context.Context, meetingID string) e
 	return f.startErr
 }
 
-func (f *fakeOrchestrator) StopRecording(_ context.Context, meetingID string) error {
+func (f *fakeOrchestrator) StopRecording(_ context.Context, meetingID string, _ bool) error {
 	f.lastMeetingID = meetingID
 	return f.stopErr
 }

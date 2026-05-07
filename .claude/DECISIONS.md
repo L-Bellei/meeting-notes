@@ -94,3 +94,31 @@ cp "build/bin/Meeting Notes-amd64-installer.exe" "../../dist/meeting-notes-X.Y.Z
 ```
 
 **Justificativa:** NSIS está instalado em `C:\Program Files (x86)\NSIS` mas não está no PATH padrão do bash.
+
+---
+
+## [2026-05-06] WAV permanece no dir do audio-service (Approach A)
+
+**Contexto:** Pipeline de transcrição precisava de resiliência — nunca perder o áudio gravado e permitir retry enquanto o WAV existir.
+
+**Alternativas:**
+- Approach A: WAV fica em `recordings/` do audio-service; Go guarda o path absoluto no banco e serve via HTTP diretamente.
+- Approach B: Copiar o WAV para um diretório controlado pelo Go backend após StopRecording.
+
+**Escolha:** Approach A — sem cópia ou movimentação de arquivos.
+
+**Justificativa:** Retry chama `/transcribe` no audio-service passando o path já existente. Sem overhead de cópia, sem gerência de segundo diretório. Path é persistido imediatamente após `StopRecording`, antes de qualquer falha possível.
+
+**Política de delete:**
+- Falha na transcrição: WAV nunca deletado (independente de `keep_audio`), para que retry seja sempre possível.
+- Sucesso na transcrição: deletar somente se `keep_audio = false`. Se `keep_audio = true`, manter indefinidamente.
+
+---
+
+## [2026-05-06] vad_filter removido do transcriber.py (não compatível com PyInstaller)
+
+**Contexto:** `vad_filter=True` foi adicionado para suprimir loops de alucinação do Whisper, mas causa falha completa de transcrição no bundle PyInstaller — os arquivos do modelo Silero VAD não estão incluídos no `.spec`.
+
+**Escolha:** Remover `vad_filter`. Manter os demais parâmetros anti-alucinação: `condition_on_previous_text=False`, `compression_ratio_threshold=1.8`, `repetition_penalty=1.1`.
+
+**Justificativa:** Silero VAD requer dados do modelo que precisariam ser explicitamente adicionados ao `.spec` (testado e não incluído). Os outros três parâmetros resolvem o loop de alucinação sem dependência externa.

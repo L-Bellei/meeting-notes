@@ -70,7 +70,11 @@ export function useStartRecording(id: string) {
 export function useStopRecording(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: () => api<void>(`/api/meetings/${id}/stop`, { method: "POST" }),
+    mutationFn: (keepAudio: boolean) =>
+      api<void>(`/api/meetings/${id}/stop`, {
+        method: "POST",
+        body: JSON.stringify({ keep_audio: keepAudio }),
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["meeting", id] })
       qc.invalidateQueries({ queryKey: ["meetings"] })
@@ -115,6 +119,14 @@ export function useUpdateTask(meetingId: string, taskId: string) {
   return useMutation({
     mutationFn: (data: Partial<Task>) =>
       api<Task>(`/api/meetings/${meetingId}/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(data) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["meeting", meetingId] }),
+  })
+}
+
+export function useRetranscribe(meetingId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api(`/api/meetings/${meetingId}/retranscribe`, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["meeting", meetingId] }),
   })
 }
