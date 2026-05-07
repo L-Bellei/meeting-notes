@@ -1,92 +1,61 @@
 import { useRef, useEffect } from "react"
-import type { RefObject } from "react"
 
 interface Props {
-  audioRef: RefObject<HTMLAudioElement | null>
   playing: boolean
 }
 
-export function AudioSpectrumVisualizer({ audioRef, playing }: Props) {
+export function AudioSpectrumVisualizer({ playing }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const ctxRef = useRef<AudioContext | null>(null)
-  const analyserRef = useRef<AnalyserNode | null>(null)
   const rafRef = useRef(0)
+  const stateRef = useRef({
+    targets: Array.from({ length: 22 }, () => 0),
+    current: Array.from({ length: 22 }, () => 4),
+  })
 
-  // Wire up Web Audio API once
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio || ctxRef.current) return
-    const audioCtx = new AudioContext()
-    const analyser = audioCtx.createAnalyser()
-    analyser.fftSize = 64 // 32 frequency buckets
-    const source = audioCtx.createMediaElementSource(audio)
-    source.connect(analyser)
-    analyser.connect(audioCtx.destination)
-    ctxRef.current = audioCtx
-    analyserRef.current = analyser
-    return () => {
-      audioCtx.close()
-      ctxRef.current = null
-      analyserRef.current = null
-    }
-  }, [audioRef])
-
-  // Draw loop
   useEffect(() => {
     const canvas = canvasRef.current
-    const analyser = analyserRef.current
-    if (!canvas || !analyser) return
+    if (!canvas) return
+    const g = canvas.getContext("2d")
+    if (!g) return
+
+    cancelAnimationFrame(rafRef.current)
+
+    const barW = 4
+    const gap = 3
+    const count = Math.min(stateRef.current.current.length, Math.floor(canvas.width / (barW + gap)))
 
     if (!playing) {
-      cancelAnimationFrame(rafRef.current)
-      // Clear to flat bars
-      const g = canvas.getContext("2d")
-      if (g) {
-        g.clearRect(0, 0, canvas.width, canvas.height)
-        const barW = 4
-        const gap = 3
-        const count = Math.floor(canvas.width / (barW + gap))
-        g.fillStyle = "rgba(99,102,241,0.25)"
-        for (let i = 0; i < count; i++) {
-          g.beginPath()
-          g.roundRect(i * (barW + gap), canvas.height - 4, barW, 4, 2)
-          g.fill()
-        }
+      g.clearRect(0, 0, canvas.width, canvas.height)
+      g.fillStyle = "rgba(99,102,241,0.25)"
+      for (let i = 0; i < count; i++) {
+        g.beginPath()
+        g.roundRect(i * (barW + gap), canvas.height - 4, barW, 4, 2)
+        g.fill()
       }
       return
     }
 
-    ctxRef.current?.resume()
-
+    const s = stateRef.current
     const draw = () => {
-      if (!analyser || !canvas) return
-      const g = canvas.getContext("2d")
-      if (!g) return
-
-      const data = new Uint8Array(analyser.frequencyBinCount)
-      analyser.getByteFrequencyData(data)
+      for (let i = 0; i < count; i++) {
+        if (Math.random() < 0.08) {
+          s.targets[i] = 4 + Math.random() * (canvas.height - 4)
+        }
+        s.current[i] += (s.targets[i] - s.current[i]) * 0.18
+      }
 
       g.clearRect(0, 0, canvas.width, canvas.height)
-
-      const barW = 4
-      const gap = 3
-      const count = Math.min(data.length, Math.floor(canvas.width / (barW + gap)))
-
       for (let i = 0; i < count; i++) {
-        const ratio = data[i] / 255
-        const h = Math.max(4, ratio * canvas.height)
+        const h = Math.max(4, s.current[i])
         const y = canvas.height - h
-
         const grad = g.createLinearGradient(0, y, 0, canvas.height)
         grad.addColorStop(0, "rgba(129,140,248,0.9)")
         grad.addColorStop(1, "rgba(79,70,229,0.9)")
         g.fillStyle = grad
-
         g.beginPath()
         g.roundRect(i * (barW + gap), y, barW, h, 2)
         g.fill()
       }
-
       rafRef.current = requestAnimationFrame(draw)
     }
 
