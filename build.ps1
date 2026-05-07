@@ -98,18 +98,48 @@ if (-not $SkipTests) {
 
 Write-Step "Compilando aplicação (versão $Version)"
 
+$AudioServiceSrc  = Join-Path $ProjectRoot "audio-service\build\dist\audio-service"
+$AudioServiceDest = Join-Path $WailsDir    "build\bin\audio-service"
+
+if (-not $NoNSIS) {
+    if (-not (Test-Path $AudioServiceSrc)) {
+        Write-Fail "Bundle do audio-service não encontrado em: $AudioServiceSrc"
+        Write-Host "  Rebuild com PyInstaller:" -ForegroundColor Yellow
+        Write-Host "    cd audio-service" -ForegroundColor Yellow
+        Write-Host "    .venv\Scripts\activate" -ForegroundColor Yellow
+        Write-Host "    pyinstaller build\pyinstaller\audio-service.spec --distpath build\dist --workpath build\work --noconfirm" -ForegroundColor Yellow
+        exit 1
+    }
+}
+
 Push-Location $WailsDir
 
-$wailsFlags = @("-clean")
-if (-not $NoNSIS) { $wailsFlags += "-nsis" }
-
-wails build @wailsFlags
+# Step 1: clean build (binary only, no NSIS yet)
+wails build -clean
 $buildExit = $LASTEXITCODE
 Pop-Location
 
 if ($buildExit -ne 0) {
     Write-Fail "wails build falhou (código $buildExit)"
     exit 1
+}
+
+if (-not $NoNSIS) {
+    # Step 2: copy audio-service bundle (must happen after -clean)
+    Write-Step "Copiando bundle do audio-service"
+    Copy-Item $AudioServiceSrc $AudioServiceDest -Recurse -Force
+    Write-Ok "audio-service copiado para build\bin"
+
+    # Step 3: regenerate wails_tools.nsh and run NSIS (no -clean, audio-service survives)
+    Push-Location $WailsDir
+    wails build -nsis
+    $nsisExit = $LASTEXITCODE
+    Pop-Location
+
+    if ($nsisExit -ne 0) {
+        Write-Fail "NSIS falhou (código $nsisExit)"
+        exit 1
+    }
 }
 
 Write-Ok "Compilação concluída"

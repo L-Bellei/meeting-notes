@@ -107,13 +107,17 @@ func (o *Orchestrator) StartRecording(ctx context.Context, meetingID string) err
 	return nil
 }
 
-func (o *Orchestrator) StopRecording(ctx context.Context, meetingID string) error {
+func (o *Orchestrator) StopRecording(ctx context.Context, meetingID string, keepAudio bool) error {
 	m, err := o.repo.GetByID(ctx, meetingID)
 	if err != nil {
 		return err
 	}
 	if m.Status != models.StatusRecording {
 		return &ValidationError{"meeting is not recording"}
+	}
+	m.KeepAudio = keepAudio
+	if err := o.repo.Update(ctx, m); err != nil {
+		return err
 	}
 	o.spawnPipeline(meetingID, o.RunCapturePipeline)
 	return nil
@@ -177,19 +181,34 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 
 	stopResp, err := o.audio.StopRecording(ctx)
 	if err != nil {
-		o.markFailed(ctx, m)
+		o.markFailed(ctx, m, fmt.Sprintf("falha ao parar gravação: %v", err))
 		return err
 	}
 
-	whisperLang := "pt"
+	// Persist audio path immediately — before any failure that might follow
+	m.AudioPath = &stopResp.Path
+	if err := o.repo.Update(ctx, m); err != nil {
+		return err
+	}
+
+	if err := CheckModelLoaded(ctx, o.audio); err != nil {
+		o.markFailed(ctx, m, err.Error())
+		return err
+	}
+	if err := ValidateWAVFile(stopResp.Path); err != nil {
+		o.markFailed(ctx, m, err.Error())
+		return err
+	}
+
+	whisperLang := ""
 	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
-		if v := s["whisper_language"]; v != "" {
+		if v := s["whisper_language"]; v != "" && v != "auto" {
 			whisperLang = v
 		}
 	}
 	trResp, err := o.audio.Transcribe(ctx, stopResp.Path, whisperLang)
 	if err != nil {
-		o.markFailed(ctx, m)
+		o.markFailed(ctx, m, fmt.Sprintf("transcrição falhou: %v", err))
 		return err
 	}
 
@@ -202,8 +221,13 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 	}
 	o.notify(m.ID, m.Status)
 
-	if err := os.Remove(stopResp.Path); err != nil && !os.IsNotExist(err) {
-		log.Printf("warning: delete WAV %s: %v", stopResp.Path, err)
+	if !m.KeepAudio {
+		if err := os.Remove(stopResp.Path); err != nil && !os.IsNotExist(err) {
+			log.Printf("warning: delete WAV %s: %v", stopResp.Path, err)
+		} else {
+			m.AudioPath = nil
+			_ = o.repo.Update(ctx, m)
+		}
 	}
 
 	autoGen := true
@@ -212,7 +236,7 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 	}
 	if autoGen {
 		if err := o.runAIGeneration(ctx, m); err != nil {
-			o.markFailed(ctx, m)
+			o.markFailed(ctx, m, fmt.Sprintf("geração de IA falhou: %v", err))
 			return err
 		}
 	}
@@ -241,7 +265,7 @@ func (o *Orchestrator) RunAIPipeline(ctx context.Context, meetingID string) erro
 	o.notify(m.ID, m.Status)
 
 	if err := o.runAIGeneration(ctx, m); err != nil {
-		o.markFailed(ctx, m)
+		o.markFailed(ctx, m, fmt.Sprintf("geração de IA falhou: %v", err))
 		return err
 	}
 
@@ -305,12 +329,107 @@ func (o *Orchestrator) runAIGeneration(ctx context.Context, m *models.Meeting) e
 	return nil
 }
 
-func (o *Orchestrator) markFailed(ctx context.Context, m *models.Meeting) {
+func (o *Orchestrator) markFailed(ctx context.Context, m *models.Meeting, errMsg string) {
 	m.Status = models.StatusFailed
+	if errMsg != "" {
+		m.ErrorMessage = &errMsg
+	}
 	if err := o.repo.Update(ctx, m); err != nil {
 		log.Printf("warning: mark failed %s: %v", m.ID, err)
 		o.persistLog("warn", "orchestrator", fmt.Sprintf("mark failed %s: %v", m.ID, err))
 		return
 	}
 	o.notify(m.ID, m.Status)
+}
+
+func (o *Orchestrator) RetranscribeRecording(ctx context.Context, meetingID string) error {
+	m, err := o.repo.GetByID(ctx, meetingID)
+	if err != nil {
+		return err
+	}
+	if m.AudioPath == nil || *m.AudioPath == "" {
+		return &ValidationError{Message: "nenhum arquivo de áudio disponível para transcrição"}
+	}
+	if m.Status == models.StatusRecording || m.Status == models.StatusTranscribing || m.Status == models.StatusProcessing {
+		return &ValidationError{Message: "a reunião já está sendo processada"}
+	}
+	o.spawnPipeline(meetingID, o.RunRetranscribePipeline)
+	return nil
+}
+
+func (o *Orchestrator) RunRetranscribePipeline(ctx context.Context, meetingID string) error {
+	m, err := o.repo.GetByID(ctx, meetingID)
+	if err != nil {
+		return err
+	}
+	if m.AudioPath == nil {
+		return &ValidationError{Message: "audio_path is nil"}
+	}
+	audioPath := *m.AudioPath
+
+	m.Status = models.StatusTranscribing
+	m.ErrorMessage = nil
+	if err := o.repo.Update(ctx, m); err != nil {
+		return err
+	}
+	o.notify(m.ID, m.Status)
+
+	if err := CheckModelLoaded(ctx, o.audio); err != nil {
+		o.markFailed(ctx, m, err.Error())
+		return err
+	}
+	if err := ValidateWAVFile(audioPath); err != nil {
+		o.markFailed(ctx, m, err.Error())
+		return err
+	}
+
+	whisperLang := ""
+	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
+		if v := s["whisper_language"]; v != "" && v != "auto" {
+			whisperLang = v
+		}
+	}
+	trResp, err := o.audio.Transcribe(ctx, audioPath, whisperLang)
+	if err != nil {
+		o.markFailed(ctx, m, fmt.Sprintf("transcrição falhou: %v", err))
+		return err
+	}
+
+	m.Transcript = &trResp.Transcript
+	if trResp.DurationSeconds > 0 {
+		dur := int(trResp.DurationSeconds)
+		m.DurationSeconds = &dur
+	}
+	m.Status = models.StatusProcessing
+	if err := o.repo.Update(ctx, m); err != nil {
+		return err
+	}
+	o.notify(m.ID, m.Status)
+
+	if !m.KeepAudio {
+		if err := os.Remove(audioPath); err != nil && !os.IsNotExist(err) {
+			log.Printf("warning: delete WAV %s: %v", audioPath, err)
+		} else {
+			m.AudioPath = nil
+			_ = o.repo.Update(ctx, m)
+		}
+	}
+
+	autoGen := true
+	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
+		autoGen = s["auto_generate"] != "false"
+	}
+	if autoGen {
+		if err := o.runAIGeneration(ctx, m); err != nil {
+			o.markFailed(ctx, m, fmt.Sprintf("geração de IA falhou: %v", err))
+			return err
+		}
+	}
+
+	m.Status = models.StatusCompleted
+	if err := o.repo.Update(ctx, m); err != nil {
+		return err
+	}
+	o.notify(m.ID, m.Status)
+	return nil
 }

@@ -7,6 +7,7 @@ export default {
       current: "currentColor",
       background:  "#111111",
       foreground:  "#ede9ff",
+      card:        "#1a1a1a",
       border:      "#2a2a2a",
       input:       "#1c1c1c",
       primary: {

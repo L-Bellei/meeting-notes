@@ -298,6 +298,7 @@ export function SettingsModal({ open, onClose }: Props) {
                 </select>
                 <p className="text-[10px] text-muted-foreground/60 mt-1">Modelos maiores transcrevem melhor, mas demoram mais. Requer reinício do serviço de áudio para ter efeito.</p>
               </div>
+
             </div>
           )}
 

@@ -2,6 +2,33 @@
 
 ---
 
+## [2026-05-06] Audio Resilience, Player & Transcription Diagnostics (v2.2.5)
+
+**Plano Superpowers:** `docs/superpowers/plans/2026-05-06-audio-resilience-player.md`
+**Spec:** `docs/superpowers/specs/2026-05-06-audio-resilience-player-design.md`
+**Fase do workflow Superpowers:** finishing (aguardando decisão do usuário pós-teste).
+
+**O que foi entregue (12 tarefas via Subagent-Driven Development):**
+- Fix imediato: `vad_filter=True` removido do `transcriber.py` (causava falha completa no PyInstaller bundle)
+- Migrations 011 (`audio_path`, `error_message`) e 012 (`keep_audio` setting)
+- `Meeting` struct + repository atualizados (AudioPath, ErrorMessage em todas as queries)
+- Pre-flight checks de transcrição: `CheckModelLoaded` + `ValidateWAVFile` (TDD)
+- Orchestrator revisado: `audio_path` persistido imediatamente após `StopRecording`, erro real salvo em `error_message`, lógica `keep_audio` pós-transcrição
+- `RetranscribeRecording` + `RunRetranscribePipeline` no orchestrator
+- Handlers: `GET /api/meetings/{id}/audio` + `POST /api/meetings/{id}/retranscribe` (com testes)
+- Frontend: tipos `audio_path`/`error_message`, `keep_audio` em Settings, `useRetranscribe` hook
+- SettingsModal: toggle "Guardar áudio das reuniões" na aba Transcrição
+- MeetingDetail: ícone Volume2, display de `error_message`, botão retry
+- `AudioSpectrumVisualizer`: Web Audio API + Canvas animado
+- `AudioPlayer`: widget flutuante `fixed bottom-4 right-4`, seek, ±15s centralizados, espectro
+- Build v2.2.5 gerado: `dist/meeting-notes-2.2.5-windows-amd64-installer.exe`
+
+**Decisões transversais registradas em DECISIONS.md:**
+- WAV permanece no dir do audio-service (Approach A)
+- `vad_filter` removido do PyInstaller bundle
+
+---
+
 ## [2026-05-05] Fix segunda instância + Release v2.2.4
 
 **Sem plano Superpowers** — bugfix direto.
