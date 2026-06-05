@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -266,7 +268,10 @@ func (a *App) OnShutdown(ctx context.Context) {
 		a.db.Close()
 	}
 	if a.audioProc != nil && a.audioProc.Process != nil {
-		a.audioProc.Process.Kill()
+		pid := a.audioProc.Process.Pid
+		if err := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(pid)).Run(); err != nil {
+			_ = a.audioProc.Process.Kill()
+		}
 	}
 }
 
@@ -294,13 +299,15 @@ func (a *App) startAudioService(ctx context.Context, audioURL string) {
 	var cmd *exec.Cmd
 
 	// Production: bundled audio-service.exe next to the main executable.
-	if exe, err := os.Executable(); err == nil {
+	// Skip when running as the wails dev binary (ends in -dev.exe) to avoid
+	// accidentally using a stale release bundle from a previous build.
+	if exe, err := os.Executable(); err == nil && !strings.HasSuffix(strings.ToLower(exe), "-dev.exe") {
 		bundled := filepath.Join(filepath.Dir(exe), "audio-service", "audio-service.exe")
 		if _, err := os.Stat(bundled); err == nil {
 			recordingsDir := bundledRecordingsDir()
 			c := exec.Command(bundled, "--port", "8765")
 			c.Env = append(os.Environ(), "RECORDINGS_DIR="+recordingsDir)
-			c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+			c.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000} // CREATE_NO_WINDOW: no console for process tree
 			cmd = c
 			log.Printf("starting bundled audio service from %s", bundled)
 		}
@@ -322,6 +329,7 @@ func (a *App) startAudioService(ctx context.Context, audioURL string) {
 		c.Dir = dir
 		c.Stdout = os.Stdout
 		c.Stderr = os.Stderr
+		c.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000} // CREATE_NO_WINDOW
 		cmd = c
 		log.Printf("starting audio service via uvicorn from %s", dir)
 	}
@@ -409,9 +417,15 @@ func findAudioServiceDir() string {
 		if err != nil {
 			continue
 		}
-		if info, err := os.Stat(abs); err == nil && info.IsDir() {
-			return abs
+		info, err := os.Stat(abs)
+		if err != nil || !info.IsDir() {
+			continue
 		}
+		// Require main.py to distinguish the source dir from a PyInstaller bundle dir.
+		if _, err := os.Stat(filepath.Join(abs, "main.py")); err != nil {
+			continue
+		}
+		return abs
 	}
 	return ""
 }
