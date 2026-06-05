@@ -6,7 +6,7 @@ Itens fora do escopo das features já implementadas. Para features com plano ati
 
 ## Features com plano pronto (não iniciadas)
 
-- **Loading screen** → `docs/superpowers/plans/2026-05-02-loading-screen.md`
+- _(nenhuma no momento — loading screen concluída em 2026-06-05; guard de IA em review na PR #32)_
 
 ---
 
@@ -25,6 +25,7 @@ Itens fora do escopo das features já implementadas. Para features com plano ati
 - **Chunk size warning no build do frontend** — bundle JS de ~518 kB. Considerar code-splitting com `React.lazy` para BoardView e modais pesados.
 - **`frontend/dist/` duplicado** — existe `frontend/dist/` com arquivos obsoletos além do `cmd/desktop/frontend/dist/` que é o correto. Remover o diretório obsoleto (já no `.gitignore`, mas o diretório físico ainda existe).
 - **Silero VAD no PyInstaller** — `vad_filter=True` foi removido por falhar no bundle. Se quisermos reativar no futuro, os dados do modelo Silero precisam ser adicionados explicitamente ao `.spec`.
+- **Validação de chave OpenAI é só existência** — `ai.Ping`/`Configured` para `openai` apenas checa se a chave não é vazia (não faz chamada à API). `/api/ai/health` retorna `valid:true` sem validar de fato. Implementar um ping real à API da OpenAI (TODO em `internal/ai/validate.go`).
 
 ---
 
