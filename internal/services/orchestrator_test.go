@@ -63,7 +63,17 @@ func (f *fakeAudioClient) Transcribe(ctx context.Context, path, language string)
 	return f.transcribeResp, f.transcribeErr
 }
 
+// configuredAISettings reflects the production invariant: when a working AI
+// client is injected, the settings hold a usable provider + key.
+func configuredAISettings() map[string]string {
+	return map[string]string{"ai_provider": "anthropic", "anthropic_api_key": "sk-test"}
+}
+
 func newOrchTest(t *testing.T, audioClient audio.Client, aiClient ai.AIClient) (*services.Orchestrator, *repository.MeetingRepository, string) {
+	return newOrchTestSettings(t, audioClient, aiClient, configuredAISettings())
+}
+
+func newOrchTestSettings(t *testing.T, audioClient audio.Client, aiClient ai.AIClient, settings map[string]string) (*services.Orchestrator, *repository.MeetingRepository, string) {
 	t.Helper()
 	db, err := database.Open(t.TempDir() + "/test.db")
 	if err != nil {
@@ -81,7 +91,7 @@ func newOrchTest(t *testing.T, audioClient audio.Client, aiClient ai.AIClient) (
 	keyPointSvc := services.NewKeyPointService(kpr, aiClient)
 	taskSvc := services.NewTaskService(tr, aiClient)
 
-	orch := services.NewOrchestrator(mr, thr, summarySvc, keyPointSvc, taskSvc, audioClient, &fakeSettings{}, nil)
+	orch := services.NewOrchestrator(mr, thr, summarySvc, keyPointSvc, taskSvc, audioClient, &fakeSettings{data: settings}, nil)
 
 	now := time.Now().UTC()
 	m := &models.Meeting{ID: "m-1", Title: "R", StartedAt: &now, Status: models.StatusPending}
@@ -237,6 +247,35 @@ func TestOrchestrator_RunCapturePipeline_AIFails(t *testing.T) {
 	}
 	if got.Transcript == nil || *got.Transcript != "olá" {
 		t.Errorf("transcript should be persisted even when AI fails, got %v", got.Transcript)
+	}
+}
+
+func TestOrchestrator_RunCapturePipeline_SkipsAIWhenNotConfigured(t *testing.T) {
+	wavPath := t.TempDir() + "/rec-1.wav"
+	if err := os.WriteFile(wavPath, fakeWAVBytes(), 0o644); err != nil {
+		t.Fatalf("write wav: %v", err)
+	}
+	fa := &fakeAudioClient{
+		stopResp:       &audio.StopResponse{Path: wavPath, DurationSeconds: 12.5},
+		transcribeResp: &audio.TranscribeResponse{Transcript: "olá mundo", Language: "pt", DurationSeconds: 12.5},
+	}
+	// If AI were invoked despite missing config, this error would mark the meeting failed.
+	fai := &fakeAI{err: errors.New("AI must not be called when not configured")}
+	orch, mr, id := newOrchTestSettings(t, fa, fai, map[string]string{}) // no provider/key
+
+	m, _ := mr.GetByID(context.Background(), id)
+	m.Status = models.StatusRecording
+	mr.Update(context.Background(), m)
+
+	if err := orch.RunCapturePipeline(context.Background(), id); err != nil {
+		t.Fatalf("RunCapturePipeline: %v", err)
+	}
+	got, _ := mr.GetByID(context.Background(), id)
+	if got.Status != models.StatusCompleted {
+		t.Errorf("status = %q, want completed (graceful skip)", got.Status)
+	}
+	if got.Transcript == nil || *got.Transcript != "olá mundo" {
+		t.Errorf("transcript should be preserved, got %v", got.Transcript)
 	}
 }
 
@@ -447,7 +486,7 @@ func newOrchTestWithDB(t *testing.T, audioClient audio.Client, aiClient ai.AICli
 	keyPointSvc := services.NewKeyPointService(kpr, aiClient)
 	taskSvc := services.NewTaskService(tr, aiClient)
 
-	orch := services.NewOrchestrator(mr, thr, summarySvc, keyPointSvc, taskSvc, audioClient, &fakeSettings{}, nil)
+	orch := services.NewOrchestrator(mr, thr, summarySvc, keyPointSvc, taskSvc, audioClient, &fakeSettings{data: configuredAISettings()}, nil)
 
 	now := time.Now().UTC()
 	m := &models.Meeting{ID: "m-orch", Title: "Orch Test", StartedAt: &now, Status: models.StatusPending}

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { X } from "lucide-react"
 import { useUpdateTheme, type Theme } from "../../hooks/useThemes"
+import { useAIConfigured } from "../../hooks/useAIConfigured"
 import { Button } from "../ui/button"
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 
 export function ThemeEditModal({ theme, onClose }: Props) {
   const updateTheme = useUpdateTheme()
+  const { configured: aiConfigured } = useAIConfigured()
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [color, setColor] = useState("#7c3aed")
@@ -94,9 +96,14 @@ export function ThemeEditModal({ theme, onClose }: Props) {
               value={customPrompt}
               onChange={e => setCustomPrompt(e.target.value)}
               rows={4}
-              className="w-full text-sm rounded-lg px-3 py-2 bg-[#111] border border-border focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+              disabled={!aiConfigured}
+              title={!aiConfigured ? "Disponível quando a IA estiver configurada" : undefined}
+              className="w-full text-sm rounded-lg px-3 py-2 bg-[#111] border border-border focus:outline-none focus:ring-1 focus:ring-primary resize-none disabled:opacity-50 disabled:cursor-not-allowed"
               placeholder="Ex: Foque em oportunidades comerciais, objeções e próximos passos. Deixe em branco para usar o comportamento padrão."
             />
+            {!aiConfigured && (
+              <p className="text-[10px] text-amber-500 mt-1">Disponível quando a IA estiver configurada (Configurações → IA).</p>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

@@ -213,6 +213,7 @@ function AppInner() {
                   meetingId={selectedMeetingId}
                   onDeleted={() => setSelectedMeetingId(null)}
                   highlightQuery={highlightQuery}
+                  onOpenSettings={() => setSettingsOpen(true)}
                 />
               </>
             )}

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"meeting-notes/internal/ai"
 	"meeting-notes/internal/audio"
 	"meeting-notes/internal/models"
 	"meeting-notes/internal/repository"
@@ -230,15 +231,8 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 		}
 	}
 
-	autoGen := true
-	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
-		autoGen = s["auto_generate"] != "false"
-	}
-	if autoGen {
-		if err := o.runAIGeneration(ctx, m); err != nil {
-			o.markFailed(ctx, m, fmt.Sprintf("geração de IA falhou: %v", err))
-			return err
-		}
+	if err := o.maybeGenerate(ctx, m); err != nil {
+		return err
 	}
 
 	m.Status = models.StatusCompleted
@@ -247,6 +241,34 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 	}
 	o.notify(m.ID, m.Status)
 	return nil
+}
+
+// maybeGenerate runs AI generation when auto_generate is on and the AI is
+// configured. When the AI is not configured it skips generation gracefully
+// (the meeting keeps its transcript and completes) instead of failing.
+func (o *Orchestrator) maybeGenerate(ctx context.Context, m *models.Meeting) error {
+	s, _ := o.settings.GetAll(ctx)
+	autoGen := s["auto_generate"] != "false"
+	if autoGen && !ai.Configured(s) {
+		o.persistLog("warn", "orchestrator", "auto-generate pulado: IA não configurada")
+		autoGen = false
+	}
+	if !autoGen {
+		return nil
+	}
+	if err := o.runAIGeneration(ctx, m); err != nil {
+		o.markFailed(ctx, m, friendlyAIError(err))
+		return err
+	}
+	return nil
+}
+
+// friendlyAIError converts a raw generation error into a user-facing message.
+func friendlyAIError(err error) string {
+	if ai.IsAuthError(err) {
+		return "Chave de IA inválida ou expirada — verifique em Configurações → IA"
+	}
+	return fmt.Sprintf("geração de IA falhou: %v", err)
 }
 
 func (o *Orchestrator) RunAIPipeline(ctx context.Context, meetingID string) error {
@@ -265,7 +287,7 @@ func (o *Orchestrator) RunAIPipeline(ctx context.Context, meetingID string) erro
 	o.notify(m.ID, m.Status)
 
 	if err := o.runAIGeneration(ctx, m); err != nil {
-		o.markFailed(ctx, m, fmt.Sprintf("geração de IA falhou: %v", err))
+		o.markFailed(ctx, m, friendlyAIError(err))
 		return err
 	}
 
@@ -415,15 +437,8 @@ func (o *Orchestrator) RunRetranscribePipeline(ctx context.Context, meetingID st
 		}
 	}
 
-	autoGen := true
-	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
-		autoGen = s["auto_generate"] != "false"
-	}
-	if autoGen {
-		if err := o.runAIGeneration(ctx, m); err != nil {
-			o.markFailed(ctx, m, fmt.Sprintf("geração de IA falhou: %v", err))
-			return err
-		}
+	if err := o.maybeGenerate(ctx, m); err != nil {
+		return err
 	}
 
 	m.Status = models.StatusCompleted

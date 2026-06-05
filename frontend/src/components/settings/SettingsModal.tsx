@@ -128,6 +128,7 @@ export function SettingsModal({ open, onClose }: Props) {
   const provider = form.ai_provider ?? "anthropic"
   const models = provider === "anthropic" ? ANTHROPIC_MODELS : OPENAI_MODELS
   const apiKeyField = provider === "anthropic" ? "anthropic_api_key" : "openai_api_key"
+  const hasKey = Boolean((form[apiKeyField] as string)?.trim())
   const modelField  = provider === "anthropic" ? "anthropic_model"   : "openai_model"
   const apiKeyPlaceholder = provider === "anthropic" ? "sk-ant-api03-..." : "sk-proj-..."
   const apiKeyHint = provider === "anthropic"
@@ -230,6 +231,9 @@ export function SettingsModal({ open, onClose }: Props) {
                   </Button>
                 </div>
                 <p className="text-[10px] text-muted-foreground/60 mt-1">{apiKeyHint}</p>
+                {!hasKey && (
+                  <p className="text-[10px] text-amber-500 mt-1">Necessário para gerar resumos, pontos-chave e tarefas.</p>
+                )}
               </div>
 
               {/* model */}
@@ -250,13 +254,20 @@ export function SettingsModal({ open, onClose }: Props) {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-foreground">Auto-gerar ao terminar gravação</p>
-                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">Gera resumo, pontos-chave e tarefas automaticamente</p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                    {hasKey
+                      ? "Gera resumo, pontos-chave e tarefas automaticamente"
+                      : "Adicione uma chave de API para habilitar"}
+                  </p>
                 </div>
                 <button
+                  disabled={!hasKey}
+                  title={!hasKey ? "Adicione uma chave de API para habilitar" : undefined}
                   onClick={() => set("auto_generate", form.auto_generate === "true" ? "false" : "true")}
                   className={cn(
                     "w-10 h-6 rounded-full transition-colors relative flex-shrink-0",
-                    form.auto_generate === "true" ? "bg-primary" : "bg-muted"
+                    form.auto_generate === "true" && hasKey ? "bg-primary" : "bg-muted",
+                    !hasKey && "opacity-50 cursor-not-allowed"
                   )}
                 >
                   <span className={cn(

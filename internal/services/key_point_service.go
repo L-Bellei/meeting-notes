@@ -72,7 +72,7 @@ func (s *KeyPointService) Generate(ctx context.Context, meeting *models.Meeting,
 	}
 	points, _, _, err := s.ai.GenerateKeyPoints(ctx, *meeting.Transcript, notes, customPrompt)
 	if err != nil {
-		return nil, err
+		return nil, mapAIError(err)
 	}
 	if err := s.repo.DeleteByMeetingID(ctx, meeting.ID); err != nil {
 		return nil, err

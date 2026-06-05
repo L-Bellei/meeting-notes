@@ -1,5 +1,6 @@
-import { Menu, Mic, Settings, Search } from "lucide-react"
+import { Menu, Mic, Settings, Search, AlertTriangle } from "lucide-react"
 import { Button } from "../ui/button"
+import { useAudioStatus } from "../../hooks/useAudioStatus"
 
 interface ToolbarProps {
   onToggleSidebar: () => void
@@ -12,8 +13,10 @@ interface ToolbarProps {
 }
 
 export function Toolbar({ onToggleSidebar, onRecord, onSettings, onSearch, recordingHotkey, activeView, onChangeView }: ToolbarProps) {
+  const audioReady = useAudioStatus()
   return (
-    <div className="h-14 border-b border-border flex items-center px-4 gap-3 flex-shrink-0 bg-background">
+    <div className="flex-shrink-0 bg-background">
+    <div className="h-14 border-b border-border flex items-center px-4 gap-3">
       <Button variant="ghost" size="icon" onClick={onToggleSidebar}>
         <Menu size={18} />
       </Button>
@@ -44,7 +47,12 @@ export function Toolbar({ onToggleSidebar, onRecord, onSettings, onSearch, recor
           Ctrl K
         </kbd>
       </button>
-      <Button size="sm" onClick={onRecord}>
+      <Button
+        size="sm"
+        onClick={onRecord}
+        disabled={!audioReady}
+        title={!audioReady ? "Serviço de áudio indisponível" : undefined}
+      >
         <Mic size={14} className="mr-1.5" />
         Gravar
         {recordingHotkey && (
@@ -56,6 +64,13 @@ export function Toolbar({ onToggleSidebar, onRecord, onSettings, onSearch, recor
       <Button variant="ghost" size="icon" onClick={onSettings}>
         <Settings size={18} />
       </Button>
+    </div>
+    {!audioReady && (
+      <div className="flex items-center gap-2 px-4 py-1.5 bg-amber-500/10 border-b border-amber-500/30 text-amber-500 text-xs">
+        <AlertTriangle size={13} className="flex-shrink-0" />
+        Serviço de áudio indisponível — tentando reconectar…
+      </div>
+    )}
     </div>
   )
 }

@@ -13,6 +13,22 @@ import (
 )
 
 var ErrAINotConfigured = errors.New("AI client not configured")
+var ErrAIAuthFailed = errors.New("AI authentication failed")
+
+// mapAIError normalizes provider/SDK errors into stable service sentinels so
+// handlers can map them to the right HTTP status without string matching.
+func mapAIError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, ai.ErrNotConfigured) {
+		return ErrAINotConfigured
+	}
+	if ai.IsAuthError(err) {
+		return ErrAIAuthFailed
+	}
+	return err
+}
 
 type SummaryService struct {
 	repo *repository.SummaryRepository
@@ -61,7 +77,7 @@ func (s *SummaryService) Generate(ctx context.Context, meeting *models.Meeting, 
 	}
 	content, inputTokens, outputTokens, err := s.ai.GenerateSummary(ctx, *meeting.Transcript, notes, customPrompt)
 	if err != nil {
-		return nil, err
+		return nil, mapAIError(err)
 	}
 	summary := &models.Summary{
 		ID:           uuid.New().String(),

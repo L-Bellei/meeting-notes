@@ -242,6 +242,8 @@ func (a *App) OnStartup(ctx context.Context) {
 	if err := a.tray.Start(ctx); err != nil {
 		log.Printf("tray: %v", err)
 	}
+
+	go a.monitorAudioHealth(ctx, cfg.AudioServiceURL)
 }
 
 func (a *App) onSecondInstanceLaunch(_ options.SecondInstanceData) {
@@ -384,6 +386,33 @@ func (a *App) waitAudioReady(ctx context.Context, audioURL string) {
 		time.Sleep(2 * time.Second)
 	}
 	log.Printf("audio service did not become ready within 90 s")
+}
+
+// monitorAudioHealth polls the audio service and emits "audio:down"/"audio:ready"
+// events on each state transition so the UI can react when the service drops or
+// recovers mid-session. It runs for the app lifetime.
+func (a *App) monitorAudioHealth(ctx context.Context, audioURL string) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	lastAlive := true
+	for range ticker.C {
+		alive := a.audioServiceAlive(audioURL)
+		if alive == lastAlive {
+			continue
+		}
+		lastAlive = alive
+		if alive {
+			log.Printf("audio service recovered")
+			if isWailsContext(ctx) {
+				wailsruntime.EventsEmit(ctx, "audio:ready", nil)
+			}
+		} else {
+			log.Printf("audio service became unavailable")
+			if isWailsContext(ctx) {
+				wailsruntime.EventsEmit(ctx, "audio:down", nil)
+			}
+		}
+	}
 }
 
 // findAudioServiceDir searches for the audio-service directory relative to both
