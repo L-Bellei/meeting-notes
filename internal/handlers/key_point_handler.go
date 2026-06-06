@@ -113,7 +113,11 @@ func (h *KeyPointHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	kps, err := h.svc.Generate(r.Context(), meeting, customPrompt)
 	if err != nil {
 		if errors.Is(err, services.ErrAINotConfigured) {
-			writeError(w, http.StatusServiceUnavailable, "AI service not configured")
+			writeError(w, http.StatusServiceUnavailable, "IA não configurada — abra Configurações → IA")
+			return
+		}
+		if errors.Is(err, services.ErrAIAuthFailed) {
+			writeError(w, http.StatusBadGateway, "Chave de API inválida ou expirada — verifique em Configurações → IA")
 			return
 		}
 		var ve *services.ValidationError

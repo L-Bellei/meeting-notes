@@ -156,6 +156,24 @@ func TestSummaryService_Generate_AINotConfigured(t *testing.T) {
 	}
 }
 
+func TestSummaryService_Generate_MapsNotConfigured(t *testing.T) {
+	fake := &fakeAI{err: ai.ErrNotConfigured}
+	svc, meeting := newSummaryTestService(t, fake)
+	_, err := svc.Generate(context.Background(), meeting, "")
+	if !errors.Is(err, services.ErrAINotConfigured) {
+		t.Errorf("expected ErrAINotConfigured, got %v", err)
+	}
+}
+
+func TestSummaryService_Generate_MapsAuthError(t *testing.T) {
+	fake := &fakeAI{err: errors.New("authentication_error: invalid x-api-key")}
+	svc, meeting := newSummaryTestService(t, fake)
+	_, err := svc.Generate(context.Background(), meeting, "")
+	if !errors.Is(err, services.ErrAIAuthFailed) {
+		t.Errorf("expected ErrAIAuthFailed, got %v", err)
+	}
+}
+
 func TestSummaryService_Generate_CustomPromptPassedThrough(t *testing.T) {
 	fake := &fakeAI{summaryText: "Resumo"}
 	svc, meeting := newSummaryTestService(t, fake)

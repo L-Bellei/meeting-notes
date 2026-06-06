@@ -2,6 +2,27 @@
 
 ---
 
+## [2026-06-05] Fix audio-service em dev + guard de IA não-configurada e resiliência
+
+**Sem plano Superpowers** — conduzido via plan-mode ad-hoc. PR #32 (branch `feat/ai-config-guard-and-resilience`).
+
+**Fase do workflow Superpowers:** finishing (PR aberta, aguardando review/merge).
+
+**Entregue:**
+- **Fix audio-service em dev** (`f4aad63`): `startAudioService` usava bundle de release stale; agora pula `-dev.exe` e `findAudioServiceDir` exige `main.py`. Também `taskkill /F /T` no shutdown e `CREATE_NO_WINDOW`.
+- **Guard de IA + avisos** (`f1e673b`): desabilita UI dependente de IA (banner/tooltip), degradação graciosa do pipeline (transcrição preservada em vez de FAILED), sentinels de erro (`ai.ErrNotConfigured`/`ErrAIAuthFailed`) corrigindo o caminho 503 morto, e monitor de saúde do audio-service mid-session.
+
+**Verificação:** `go test ./internal/...` ✅, builds ✅, `tsc` ✅; 5 cenários validados manualmente via wails dev (baseline configurada, banner não-configurada + restauração reativa, barra de áudio indisponível + recuperação).
+
+**Decisões transversais registradas em DECISIONS.md:**
+- Degradação graciosa do pipeline quando IA não configurada
+- Sentinels de erro de IA para mapeamento de status HTTP
+- Monitor de saúde do audio-service é desktop-only (eventos Wails)
+
+**Outros:** loading screen (`docs/superpowers/plans/2026-05-02-loading-screen.md`) verificada como completa.
+
+---
+
 ## [2026-05-07] AudioPlayer fixes, settings save fix, release v2.3.0
 
 **Sem plano Superpowers** — correções pós-finishing sobre `fix/whisper-hallucination-2.2.5`.

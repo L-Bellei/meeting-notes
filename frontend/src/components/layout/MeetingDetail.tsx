@@ -10,6 +10,7 @@ import {
 import { AudioPlayer } from "../ui/AudioPlayer"
 import { useDeleteMeeting } from "../../hooks/useMeetings"
 import { useSettings } from "../../hooks/useSettings"
+import { useAIConfigured } from "../../hooks/useAIConfigured"
 import { useCardForMeeting, useCreateCard } from "../../hooks/useBoard"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
@@ -17,7 +18,7 @@ import { Spinner } from "../ui/spinner"
 import { cn } from "../../lib/utils"
 import { highlightText } from "../../lib/highlight"
 
-interface Props { meetingId: string | null; onDeleted?: () => void; highlightQuery?: string }
+interface Props { meetingId: string | null; onDeleted?: () => void; highlightQuery?: string; onOpenSettings?: () => void }
 
 type Tab = "transcript" | "summary" | "keypoints" | "tasks" | "notes"
 
@@ -25,9 +26,10 @@ function statusVariant(s: string) {
   return s as any
 }
 
-export function MeetingDetail({ meetingId, onDeleted, highlightQuery }: Props) {
+export function MeetingDetail({ meetingId, onDeleted, highlightQuery, onOpenSettings }: Props) {
   const { data: meeting } = useMeeting(meetingId)
   const { data: settings } = useSettings()
+  const { configured: aiConfigured, valid: aiValid } = useAIConfigured()
   const [tab, setTab] = useState<Tab>("transcript")
   const [playerOpen, setPlayerOpen] = useState(false)
   const retranscribe = useRetranscribe(meeting?.id ?? "")
@@ -40,6 +42,7 @@ export function MeetingDetail({ meetingId, onDeleted, highlightQuery }: Props) {
     if (
       meeting?.status === "completed" &&
       settings?.auto_generate === "true" &&
+      aiConfigured &&
       !meeting.summary &&
       (!meeting.key_points || meeting.key_points.length === 0) &&
       (!meeting.tasks || meeting.tasks.length === 0) &&
@@ -58,6 +61,7 @@ export function MeetingDetail({ meetingId, onDeleted, highlightQuery }: Props) {
     meeting?.key_points,
     meeting?.tasks,
     settings?.auto_generate,
+    aiConfigured,
     generateSummary,
     generateKeyPoints,
     generateTasks,
@@ -85,6 +89,22 @@ export function MeetingDetail({ meetingId, onDeleted, highlightQuery }: Props) {
       {meeting.status === "failed" && meeting.error_message && (
         <div className="mx-4 mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <span className="font-semibold">Erro: </span>{meeting.error_message}
+        </div>
+      )}
+      {meeting.transcript && !aiConfigured && (
+        <div className="mx-4 mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-500 flex items-center justify-between gap-3">
+          <span><span className="font-semibold">IA não configurada — </span>resumo, pontos-chave e tarefas não serão gerados.</span>
+          {onOpenSettings && (
+            <button onClick={onOpenSettings} className="underline whitespace-nowrap hover:opacity-80">Abrir Configurações</button>
+          )}
+        </div>
+      )}
+      {meeting.transcript && aiConfigured && aiValid === false && (
+        <div className="mx-4 mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive flex items-center justify-between gap-3">
+          <span><span className="font-semibold">Chave de IA inválida — </span>verifique sua chave de API.</span>
+          {onOpenSettings && (
+            <button onClick={onOpenSettings} className="underline whitespace-nowrap hover:opacity-80">Abrir Configurações</button>
+          )}
         </div>
       )}
       {meetingId && !existingCard && meeting?.status === "completed" && (
@@ -147,6 +167,7 @@ function MeetingHeader({ meeting, onDeleted, highlightQuery, playerOpen, setPlay
   const stop = useStopRecording(meeting.id)
   const reprocess = useReprocess(meeting.id)
   const deleteMeeting = useDeleteMeeting()
+  const { configured: aiConfigured } = useAIConfigured()
   const [error, setError] = useState("")
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showStopConfirm, setShowStopConfirm] = useState(false)
@@ -246,7 +267,13 @@ function MeetingHeader({ meeting, onDeleted, highlightQuery, playerOpen, setPlay
           </div>
         )}
         {(meeting.status === "failed" || meeting.status === "completed") && meeting.transcript && (
-          <Button size="sm" variant="outline" onClick={handleReprocess} disabled={reprocess.isPending}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleReprocess}
+            disabled={reprocess.isPending || !aiConfigured}
+            title={!aiConfigured ? "Configure a IA em Configurações → IA para reprocessar" : undefined}
+          >
             {reprocess.isPending ? <Spinner size={14} className="mr-1.5" /> : <RefreshCw size={14} className="mr-1" />}
             Reprocessar
           </Button>
@@ -291,10 +318,16 @@ function TranscriptTab({ meeting }: { meeting: any }) {
 
 function SummaryTab({ meeting, highlightQuery }: { meeting: any; highlightQuery: string }) {
   const generate = useGenerateSummary(meeting.id)
+  const { configured } = useAIConfigured()
   return (
     <div>
       <div className="flex justify-end mb-3">
-        <Button size="sm" onClick={() => generate.mutate()} disabled={generate.isPending || !meeting.transcript}>
+        <Button
+          size="sm"
+          onClick={() => generate.mutate()}
+          disabled={generate.isPending || !meeting.transcript || !configured}
+          title={!configured ? "Configure a IA em Configurações → IA para gerar" : undefined}
+        >
           {generate.isPending ? <Spinner size={14} className="mr-1.5" /> : <Wand2 size={14} className="mr-1" />}
           {generate.isPending ? "Gerando..." : "Gerar resumo"}
         </Button>
@@ -304,20 +337,28 @@ function SummaryTab({ meeting, highlightQuery }: { meeting: any; highlightQuery:
       ) : (
         <p className="text-sm text-muted-foreground">Nenhum resumo ainda.</p>
       )}
+      {generate.isError && <p className="text-xs text-destructive mt-2">{(generate.error as Error).message}</p>}
     </div>
   )
 }
 
 function KeyPointsTab({ meeting, highlightQuery }: { meeting: any; highlightQuery: string }) {
   const generate = useGenerateKeyPoints(meeting.id)
+  const { configured } = useAIConfigured()
   return (
     <div>
       <div className="flex justify-end mb-3">
-        <Button size="sm" onClick={() => generate.mutate()} disabled={generate.isPending || !meeting.transcript}>
+        <Button
+          size="sm"
+          onClick={() => generate.mutate()}
+          disabled={generate.isPending || !meeting.transcript || !configured}
+          title={!configured ? "Configure a IA em Configurações → IA para gerar" : undefined}
+        >
           {generate.isPending ? <Spinner size={14} className="mr-1.5" /> : <Wand2 size={14} className="mr-1" />}
           {generate.isPending ? "Gerando..." : "Gerar pontos"}
         </Button>
       </div>
+      {generate.isError && <p className="text-xs text-destructive mb-2">{(generate.error as Error).message}</p>}
       {meeting.key_points.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nenhum ponto-chave ainda.</p>
       ) : (
@@ -336,14 +377,21 @@ function KeyPointsTab({ meeting, highlightQuery }: { meeting: any; highlightQuer
 
 function TasksTab({ meeting, highlightQuery }: { meeting: any; highlightQuery: string }) {
   const generate = useGenerateTasks(meeting.id)
+  const { configured } = useAIConfigured()
   return (
     <div>
       <div className="flex justify-end mb-3">
-        <Button size="sm" onClick={() => generate.mutate()} disabled={generate.isPending || !meeting.transcript}>
+        <Button
+          size="sm"
+          onClick={() => generate.mutate()}
+          disabled={generate.isPending || !meeting.transcript || !configured}
+          title={!configured ? "Configure a IA em Configurações → IA para gerar" : undefined}
+        >
           {generate.isPending ? <Spinner size={14} className="mr-1.5" /> : <Wand2 size={14} className="mr-1" />}
           {generate.isPending ? "Gerando..." : "Gerar tarefas"}
         </Button>
       </div>
+      {generate.isError && <p className="text-xs text-destructive mb-2">{(generate.error as Error).message}</p>}
       {meeting.tasks.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nenhuma tarefa ainda.</p>
       ) : (

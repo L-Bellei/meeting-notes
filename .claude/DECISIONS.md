@@ -4,6 +4,36 @@ Registro de decisões transversais ao projeto. Decisões específicas de cada fe
 
 ---
 
+## [2026-06-05] IA não-configurada degrada graciosamente em vez de falhar o pipeline
+
+**Contexto:** Com `auto_generate=true` e sem IA configurada, o pipeline marcava a reunião inteira como `FAILED`, apesar de a transcrição ter sido concluída com sucesso.
+
+**Escolha:** O orchestrator (`maybeGenerate`) faz um pré-check barato e sem rede (`ai.Configured(settings)`) antes de gerar. Sem provider/chave, pula a geração e completa a reunião com a transcrição preservada (log `warn`). O caminho de IA explícito (`RunAIPipeline`/Reprocessar) continua falhando, pois sua única função é gerar.
+
+**Justificativa:** A transcrição é o ativo primário; perdê-la por falta de configuração de IA é regressão. Geração é complementar.
+
+---
+
+## [2026-06-05] Sentinels de erro de IA para mapeamento de status HTTP
+
+**Contexto:** `DynamicAIClient.resolve()` retornava `fmt.Errorf` genérico, então o ramo 503 "AI não configurada" nos handlers era código morto (o `errors.Is` nunca casava) e tudo caía no 502 genérico.
+
+**Escolha:** `ai.ErrNotConfigured` (wrapped em `resolve()`) + `ai.IsAuthError()` (detecta 401/403 do SDK, com fallback por substring). Os services normalizam via `mapAIError` para `services.ErrAINotConfigured` (→ 503) e `services.ErrAIAuthFailed` (→ 502 com mensagem clara). `ai.Configured(map)` é a checagem pura reutilizada por `Ping`, services e orchestrator.
+
+**Justificativa:** Mensagens de erro distintas e acionáveis ("configure a IA" vs "chave inválida") sem acoplar handlers ao pacote `ai`.
+
+---
+
+## [2026-06-05] Monitor de saúde do audio-service é desktop-only (eventos Wails)
+
+**Contexto:** Antes, o estado do audio-service só era checado no startup (loading screen); quedas mid-session não eram sinalizadas.
+
+**Escolha:** `monitorAudioHealth` (goroutine com ticker de 10s em `cmd/desktop/app.go`) emite eventos Wails `audio:down`/`audio:ready` em cada transição; o frontend (`useAudioStatus`) reage desabilitando "Gravar" e exibindo uma barra de aviso. Por usar o canal de eventos Wails, é inerentemente desktop-only — `cmd/api` não recebe; apenas o endpoint `/health` permanece em sincronia entre os dois entry points.
+
+**Justificativa:** `cmd/api` não tem canal de eventos para o frontend; replicar o monitor lá não agregaria valor.
+
+---
+
 ## [2026-04-29] Posicionamento de cards com float + rebalanceamento automático
 
 **Contexto:** Ordem manual de cards dentro de colunas do kanban precisa ser persistida no SQLite sem renumeração constante.

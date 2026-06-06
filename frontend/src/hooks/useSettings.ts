@@ -27,6 +27,9 @@ export function useUpdateSettings() {
   return useMutation({
     mutationFn: (data: Partial<Settings>) =>
       api<Settings>("/api/settings", { method: "PUT", body: JSON.stringify(data) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["settings"] })
+      qc.invalidateQueries({ queryKey: ["ai-health"] })
+    },
   })
 }

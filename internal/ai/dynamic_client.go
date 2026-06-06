@@ -28,7 +28,7 @@ func (d *DynamicAIClient) resolve(ctx context.Context) (AIClient, error) {
 	case "anthropic":
 		key := m["anthropic_api_key"]
 		if key == "" {
-			return nil, fmt.Errorf("Anthropic API key not configured — open Settings to add it")
+			return nil, fmt.Errorf("%w (anthropic)", ErrNotConfigured)
 		}
 		model := m["anthropic_model"]
 		if model == "" {
@@ -38,7 +38,7 @@ func (d *DynamicAIClient) resolve(ctx context.Context) (AIClient, error) {
 	case "openai":
 		key := m["openai_api_key"]
 		if key == "" {
-			return nil, fmt.Errorf("OpenAI API key not configured — open Settings to add it")
+			return nil, fmt.Errorf("%w (openai)", ErrNotConfigured)
 		}
 		model := m["openai_model"]
 		if model == "" {
@@ -46,7 +46,7 @@ func (d *DynamicAIClient) resolve(ctx context.Context) (AIClient, error) {
 		}
 		return NewOpenAIClient(key, model), nil
 	default:
-		return nil, fmt.Errorf("unknown AI provider %q", provider)
+		return nil, fmt.Errorf("%w (provider %q)", ErrNotConfigured, provider)
 	}
 }
 
