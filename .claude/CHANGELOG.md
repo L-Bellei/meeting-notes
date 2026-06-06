@@ -2,6 +2,25 @@
 
 ---
 
+## [2026-06-06] Release v2.4.0
+
+**Sem plano Superpowers** — sessão de empacotamento/release.
+
+**Fase do workflow Superpowers:** N/A.
+
+**Entregue:**
+- Bump `productVersion` 2.3.0 → 2.4.0 (PR #33; `master` protegido exige PR).
+- Instalador via `build.ps1`: `dist/meeting-notes-2.4.0-windows-amd64-installer.exe` (125.7 MB, audio-service embutido).
+- Tag `v2.4.0` + GitHub Release publicada com o instalador.
+
+**Conteúdo da release:** guard de IA não-configurada, avisos/contramedidas, degradação graciosa do pipeline, resiliência do audio-service e fix do audio-service em dev (entregues na sessão de 2026-06-05, PR #32).
+
+**Correção de doc:** `CLAUDE.md` atualizado — o build canônico é `build.ps1` (não `wails build -nsis` direto, que omite o bundle do audio-service).
+
+**Bloqueios:** push direto a `master` rejeitado por branch protection → bump teve de ir via PR.
+
+---
+
 ## [2026-06-05] Fix audio-service em dev + guard de IA não-configurada e resiliência
 
 **Sem plano Superpowers** — conduzido via plan-mode ad-hoc. PR #32 (branch `feat/ai-config-guard-and-resilience`).
