@@ -6,7 +6,7 @@ Itens fora do escopo das features já implementadas. Para features com plano ati
 
 ## Features com plano pronto (não iniciadas)
 
-- _(nenhuma no momento — loading screen concluída em 2026-06-05; guard de IA em review na PR #32)_
+- _(nenhuma no momento — loading screen e guard de IA entregues; guard de IA lançado na v2.4.0)_
 
 ---
 

@@ -44,9 +44,13 @@ Specs em: `docs/superpowers/specs/`
 Planos em: `docs/superpowers/plans/`
 
 ## Build do installer (Windows)
-```bash
-cd cmd/desktop
-PATH="$PATH:/c/Program Files (x86)/NSIS" wails build -nsis
-cp "build/bin/Meeting Notes-amd64-installer.exe" "../../dist/meeting-notes-X.Y.Z-windows-amd64-installer.exe"
+Use **sempre** o `build.ps1` na raiz — ele é o caminho canônico. Não rode `wails build -nsis` direto: o `-nsis` empacota o conteúdo de `build/bin`, e sem a etapa de cópia do bundle PyInstaller o instalador sai **sem o audio-service**. O `build.ps1` faz `wails build -clean`, copia `audio-service/build/dist/audio-service` para `build/bin`, roda o NSIS e coleta o artefato em `dist/`.
+
+```powershell
+# (NSIS precisa estar no PATH; o script roda os testes Go antes)
+.\build.ps1                 # usa productVersion do wails.json
+.\build.ps1 -Version 2.4.0  # também persiste a versão no wails.json
 ```
-Atualizar `productVersion` em `cmd/desktop/wails.json` antes de cada release.
+Pré-requisitos: bundle do audio-service em `audio-service/build/dist/audio-service` (gerar com PyInstaller se ausente — o script avisa). Atualizar `productVersion` em `cmd/desktop/wails.json` (ou passar `-Version`) antes de cada release.
+
+Release completa: bump de versão (via PR — `master` é protegido) → `build.ps1` → tag `vX.Y.Z` → GitHub Release com o `.exe` de `dist/`.
