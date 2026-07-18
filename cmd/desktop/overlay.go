@@ -234,17 +234,37 @@ func (o *OverlayWindow) Show(ctx context.Context, port int, meetingID string) {
 	go o.timerLoop(stopCh)
 }
 
-func (o *OverlayWindow) Hide() {
-	if o.hwnd == 0 {
-		return
-	}
+// stopTimer halts the active timer goroutine. Pure (no Win32), so it is safe
+// even before the window exists.
+func (o *OverlayWindow) stopTimer() {
 	o.mu.Lock()
 	if o.stopCh != nil {
 		close(o.stopCh)
 		o.stopCh = nil
 	}
 	o.mu.Unlock()
+}
+
+func (o *OverlayWindow) Hide() {
+	o.stopTimer()
+	if o.hwnd == 0 {
+		return
+	}
 	procShowWindow.Call(o.hwnd, swHide)
+}
+
+// HideIfMeeting hides the overlay only when meetingID matches the recording it is
+// currently showing. A pipeline of a previous meeting can emit a terminal status
+// (transcribing/processing/completed/failed) after a newer recording has already
+// taken over the overlay; without this guard that stale event would hide the new
+// recording's overlay.
+func (o *OverlayWindow) HideIfMeeting(meetingID string) {
+	o.mu.Lock()
+	match := o.meetingID == meetingID
+	o.mu.Unlock()
+	if match {
+		o.Hide()
+	}
 }
 
 func (o *OverlayWindow) Destroy() {
