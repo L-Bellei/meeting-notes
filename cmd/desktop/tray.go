@@ -34,6 +34,7 @@ const (
 	wmDestroy   = 0x0002
 	wmLbuttonup = 0x0202
 	wmRbuttonup = 0x0205
+	wmNull      = 0x0000 // posted after TrackPopupMenu so the menu dismisses correctly
 
 	hotkeyID = 1
 	modCtrl  = 0x0002
@@ -125,6 +126,7 @@ var (
 	procTranslateMessage    = user32.NewProc("TranslateMessage")
 	procDispatchMessageW    = user32.NewProc("DispatchMessageW")
 	procPostQuitMessage     = user32.NewProc("PostQuitMessage")
+	procPostMessageW        = user32.NewProc("PostMessageW")
 	procRegisterHotKey      = user32.NewProc("RegisterHotKey")
 	procUnregisterHotKey    = user32.NewProc("UnregisterHotKey")
 	procLoadIconW           = user32.NewProc("LoadIconW")
@@ -251,11 +253,25 @@ func NewTrayManager(
 	}
 }
 
-// Start registers the hotkey, adds the tray icon, and launches the message loop goroutine.
+// Start creates the hidden tray window, registers the hotkey, adds the tray icon
+// and runs the Win32 message loop — all on a single locked OS thread. Win32 has
+// thread affinity: messages for a window (and WM_HOTKEY) are delivered to the
+// queue of the thread that created the window / registered the hotkey, so the
+// pump MUST run on that same thread or the tray icon clicks and hotkey never
+// reach the window procedure. (Mirrors the overlay window in overlay.go.)
 func (t *TrayManager) Start(ctx context.Context) error {
 	t.ctx = ctx
 	t.overlay = NewOverlayWindow()
 	globalTray = t
+
+	ready := make(chan error, 1)
+	go t.run(ctx, ready)
+	return <-ready
+}
+
+func (t *TrayManager) run(ctx context.Context, ready chan<- error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 
 	hInstance, _, _ := procGetModuleHandleW.Call(0)
 	t.hIcon = loadEmbeddedIcon()
@@ -269,7 +285,8 @@ func (t *TrayManager) Start(ctx context.Context) error {
 	}
 	ret, _, err := procRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
 	if ret == 0 {
-		return fmt.Errorf("RegisterClassEx: %w", err)
+		ready <- fmt.Errorf("RegisterClassEx: %w", err)
+		return
 	}
 
 	windowName, _ := syscall.UTF16PtrFromString("MeetingNotesTray")
@@ -278,7 +295,8 @@ func (t *TrayManager) Start(ctx context.Context) error {
 		0, 0, 0, 0, 0, 0, 0, hInstance, 0,
 	)
 	if hwnd == 0 {
-		return fmt.Errorf("CreateWindowEx: %w", err)
+		ready <- fmt.Errorf("CreateWindowEx: %w", err)
+		return
 	}
 	t.hwnd = hwnd
 
@@ -309,11 +327,14 @@ func (t *TrayManager) Start(ctx context.Context) error {
 	}
 
 	t.running.Store(true)
-	go t.messageLoop()
-	return nil
+	ready <- nil
+
+	t.messageLoop()
 }
 
-// Stop unregisters the hotkey, removes the tray icon, and destroys the window.
+// Stop tears down the tray. UnregisterHotKey/Shell_NotifyIcon/DestroyWindow are
+// thread-affine and must run on the message-loop thread that created the window,
+// so we post WM_CLOSE and let the window procedure perform teardown there.
 func (t *TrayManager) Stop() {
 	if !t.running.Swap(false) {
 		return
@@ -321,9 +342,7 @@ func (t *TrayManager) Stop() {
 	if t.overlay != nil {
 		t.overlay.Destroy()
 	}
-	procUnregisterHotKey.Call(t.hwnd, hotkeyID)
-	t.removeTrayIcon()
-	procDestroyWindow.Call(t.hwnd)
+	procPostMessageW.Call(t.hwnd, wmClose, 0, 0)
 }
 
 func (t *TrayManager) IsRunning() bool { return t.running.Load() }
@@ -364,10 +383,9 @@ func (t *TrayManager) ApplySettings(settings map[string]string) {
 // Message loop — locked to one OS thread for Win32 correctness
 // ---------------------------------------------------------------------------
 
+// messageLoop runs on the OS thread locked by run(). It must not lock/unlock the
+// thread itself.
 func (t *TrayManager) messageLoop() {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
 	var msg winMsg
 	for {
 		ret, _, _ := procGetMessageW.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
@@ -421,6 +439,13 @@ func trayWndProcImpl(hwnd, msg, wparam, lparam uintptr) uintptr {
 		case wmRbuttonup:
 			t.showContextMenu()
 		}
+
+	case wmClose:
+		// Teardown requested via Stop(); runs on the message-loop thread.
+		procUnregisterHotKey.Call(hwnd, hotkeyID)
+		t.removeTrayIcon()
+		procDestroyWindow.Call(hwnd)
+		return 0
 
 	case wmDestroy:
 		procPostQuitMessage.Call(0)
@@ -559,6 +584,9 @@ func (t *TrayManager) showContextMenu() {
 		hMenu, tpmRightButton|tpmReturnCmd,
 		uintptr(pt.x), uintptr(pt.y), t.hwnd, 0,
 	)
+	// Canonical tray-menu workaround: post a benign message so the menu dismisses
+	// correctly when the user clicks elsewhere (KB135788).
+	procPostMessageW.Call(t.hwnd, wmNull, 0, 0)
 
 	switch cmdID {
 	case menuShow:

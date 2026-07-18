@@ -110,7 +110,7 @@ func (a *App) OnStartup(ctx context.Context) {
 		case "transcribing", "processing", "completed", "failed":
 			if a.tray != nil {
 				if a.tray.overlay != nil {
-					a.tray.overlay.Hide()
+					a.tray.overlay.HideIfMeeting(meetingID)
 				}
 				a.tray.UpdateState(false)
 			}
