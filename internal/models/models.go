@@ -2,6 +2,13 @@ package models
 
 import "time"
 
+type ThemePrompts struct {
+	General   string
+	Summary   string
+	KeyPoints string
+	Tasks     string
+}
+
 type Theme struct {
 	ID                    string    `json:"id"`
 	ParentID              *string   `json:"parent_id"`

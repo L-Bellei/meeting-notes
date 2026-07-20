@@ -21,21 +21,27 @@ func NewThemeHandler(svc *services.ThemeService) *ThemeHandler {
 }
 
 type createThemeRequest struct {
-	Name           string  `json:"name"`
-	Description    string  `json:"description"`
-	Color          string  `json:"color"`
-	ParentID       *string `json:"parent_id"`
-	CustomPrompt   string  `json:"custom_prompt"`
-	AutoAddToBoard bool    `json:"auto_add_to_board"`
+	Name                  string  `json:"name"`
+	Description           string  `json:"description"`
+	Color                 string  `json:"color"`
+	ParentID              *string `json:"parent_id"`
+	CustomPrompt          string  `json:"custom_prompt"`
+	CustomSummaryPrompt   string  `json:"custom_summary_prompt"`
+	CustomKeyPointsPrompt string  `json:"custom_key_points_prompt"`
+	CustomTasksPrompt     string  `json:"custom_tasks_prompt"`
+	AutoAddToBoard        bool    `json:"auto_add_to_board"`
 }
 
 type updateThemeRequest struct {
-	Name           string  `json:"name"`
-	Description    string  `json:"description"`
-	Color          string  `json:"color"`
-	ParentID       *string `json:"parent_id"`
-	CustomPrompt   string  `json:"custom_prompt"`
-	AutoAddToBoard bool    `json:"auto_add_to_board"`
+	Name                  string  `json:"name"`
+	Description           string  `json:"description"`
+	Color                 string  `json:"color"`
+	ParentID              *string `json:"parent_id"`
+	CustomPrompt          string  `json:"custom_prompt"`
+	CustomSummaryPrompt   string  `json:"custom_summary_prompt"`
+	CustomKeyPointsPrompt string  `json:"custom_key_points_prompt"`
+	CustomTasksPrompt     string  `json:"custom_tasks_prompt"`
+	AutoAddToBoard        bool    `json:"auto_add_to_board"`
 }
 
 func (h *ThemeHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +62,13 @@ func (h *ThemeHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	theme, err := h.svc.Create(r.Context(), req.Name, req.Description, req.Color, req.ParentID, req.CustomPrompt, req.AutoAddToBoard)
+	prompts := models.ThemePrompts{
+		General:   req.CustomPrompt,
+		Summary:   req.CustomSummaryPrompt,
+		KeyPoints: req.CustomKeyPointsPrompt,
+		Tasks:     req.CustomTasksPrompt,
+	}
+	theme, err := h.svc.Create(r.Context(), req.Name, req.Description, req.Color, req.ParentID, prompts, req.AutoAddToBoard)
 	if err != nil {
 		var ve *services.ValidationError
 		if errors.As(err, &ve) {
@@ -94,7 +106,13 @@ func (h *ThemeHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	theme, err := h.svc.Update(r.Context(), id, req.Name, req.Description, req.Color, req.ParentID, req.CustomPrompt, req.AutoAddToBoard)
+	prompts := models.ThemePrompts{
+		General:   req.CustomPrompt,
+		Summary:   req.CustomSummaryPrompt,
+		KeyPoints: req.CustomKeyPointsPrompt,
+		Tasks:     req.CustomTasksPrompt,
+	}
+	theme, err := h.svc.Update(r.Context(), id, req.Name, req.Description, req.Color, req.ParentID, prompts, req.AutoAddToBoard)
 	if err != nil {
 		var ve *services.ValidationError
 		if errors.As(err, &ve) {
