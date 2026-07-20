@@ -299,21 +299,25 @@ func (o *Orchestrator) RunAIPipeline(ctx context.Context, meetingID string) erro
 }
 
 func (o *Orchestrator) runAIGeneration(ctx context.Context, m *models.Meeting) error {
-	customPrompt := ""
 	var theme *models.Theme
 	if m.ThemeID != nil {
 		if t, err := o.themeRepo.GetByID(ctx, *m.ThemeID); err == nil {
 			theme = t
-			customPrompt = t.CustomPrompt
 		}
 	}
-	if _, err := o.summarySvc.Generate(ctx, m, customPrompt); err != nil {
+	promptFor := func(kind models.PromptKind) string {
+		if theme == nil {
+			return ""
+		}
+		return theme.PromptFor(kind)
+	}
+	if _, err := o.summarySvc.Generate(ctx, m, promptFor(models.PromptSummary)); err != nil {
 		return fmt.Errorf("summary: %w", err)
 	}
-	if _, err := o.keyPointSvc.Generate(ctx, m, customPrompt); err != nil {
+	if _, err := o.keyPointSvc.Generate(ctx, m, promptFor(models.PromptKeyPoints)); err != nil {
 		return fmt.Errorf("key_points: %w", err)
 	}
-	if _, err := o.taskSvc.Generate(ctx, m, customPrompt); err != nil {
+	if _, err := o.taskSvc.Generate(ctx, m, promptFor(models.PromptTasks)); err != nil {
 		return fmt.Errorf("tasks: %w", err)
 	}
 	if theme != nil && o.boardCardSvc != nil && theme.AutoAddToBoard {
