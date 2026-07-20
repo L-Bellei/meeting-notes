@@ -12,6 +12,7 @@ export interface Meeting {
   notes: string | null
   audio_path: string | null
   error_message: string | null
+  language: string | null
   keep_audio: boolean
   created_at: string
 }
