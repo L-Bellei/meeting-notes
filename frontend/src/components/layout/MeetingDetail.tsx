@@ -17,6 +17,7 @@ import { Button } from "../ui/button"
 import { Spinner } from "../ui/spinner"
 import { cn } from "../../lib/utils"
 import { highlightText } from "../../lib/highlight"
+import { languageLabel } from "../../lib/language"
 
 interface Props { meetingId: string | null; onDeleted?: () => void; highlightQuery?: string; onOpenSettings?: () => void }
 
@@ -197,6 +198,9 @@ function MeetingHeader({ meeting, onDeleted, highlightQuery, playerOpen, setPlay
         <h2 className="text-base font-semibold truncate" dangerouslySetInnerHTML={{ __html: highlightText(meeting.title, highlightQuery) }} />
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <Badge variant={statusVariant(meeting.status)}>{meeting.status}</Badge>
+          {meeting.language && (
+            <Badge variant="secondary">{languageLabel(meeting.language)}</Badge>
+          )}
           {meeting.audio_path && (
             <button
               className={cn("inline-flex items-center justify-center rounded-md h-8 w-8 hover:bg-muted transition-colors", playerOpen && "text-primary")}

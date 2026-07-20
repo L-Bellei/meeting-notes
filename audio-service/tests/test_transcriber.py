@@ -17,7 +17,6 @@ def _make_transcriber(tmp_path, device="cuda", compute_type="int8_float16"):
             model_name="medium",
             device=device,
             compute_type=compute_type,
-            default_language="pt",
             recordings_dir=tmp_path,
         )
     t._fake_model = fake_model
@@ -34,13 +33,12 @@ def test_init_loads_model_and_sets_attributes(tmp_path):
     with patch("transcriber.WhisperModel", return_value=fake_model) as mock_cls, \
          patch.object(Transcriber, "_setup_dll_paths") as mock_setup, \
          patch.object(Transcriber, "_resolve_device_compute", return_value=("cuda", "int8_float16")):
-        t = Transcriber("medium", "cuda", "int8_float16", "pt", tmp_path)
+        t = Transcriber("medium", "cuda", "int8_float16", tmp_path)
     mock_cls.assert_called_once_with("medium", device="cuda", compute_type="int8_float16")
     mock_setup.assert_called_once()
     assert t.model_loaded is True
     assert t.model_name == "medium"
     assert t.device == "cuda"
-    assert t.default_language == "pt"
 
 
 def test_transcribe_path_outside_recordings_dir_raises(transcriber, tmp_path):
@@ -76,7 +74,36 @@ def test_transcribe_concatenates_segments(transcriber, tmp_path):
     assert result.model == "medium"
 
 
-def test_transcribe_uses_default_language_when_none_provided(transcriber, tmp_path):
+def test_transcribe_auto_passes_none_language(transcriber, tmp_path):
+    wav = tmp_path / "rec.wav"
+    wav.write_bytes(b"fake")
+    info = MagicMock()
+    info.language = "en"
+    info.duration = 5.0
+    transcriber._fake_model.transcribe.return_value = (iter([]), info)
+
+    result = transcriber.transcribe(wav, language="auto")
+
+    args, kwargs = transcriber._fake_model.transcribe.call_args
+    assert kwargs["language"] is None
+    assert result.language == "en"
+
+
+def test_transcribe_empty_string_passes_none_language(transcriber, tmp_path):
+    wav = tmp_path / "rec.wav"
+    wav.write_bytes(b"fake")
+    info = MagicMock()
+    info.language = "es"
+    info.duration = 5.0
+    transcriber._fake_model.transcribe.return_value = (iter([]), info)
+
+    transcriber.transcribe(wav, language="")
+
+    args, kwargs = transcriber._fake_model.transcribe.call_args
+    assert kwargs["language"] is None
+
+
+def test_transcribe_none_passes_none_language(transcriber, tmp_path):
     wav = tmp_path / "rec.wav"
     wav.write_bytes(b"fake")
     info = MagicMock()
@@ -86,9 +113,8 @@ def test_transcribe_uses_default_language_when_none_provided(transcriber, tmp_pa
 
     transcriber.transcribe(wav)
 
-    transcriber._fake_model.transcribe.assert_called_once()
     args, kwargs = transcriber._fake_model.transcribe.call_args
-    assert kwargs["language"] == "pt"
+    assert kwargs["language"] is None
 
 
 def test_transcribe_uses_provided_language(transcriber, tmp_path):
@@ -130,7 +156,7 @@ def test_transcribe_cuda_dll_error_falls_back_to_cpu(tmp_path):
     with patch("transcriber.WhisperModel", side_effect=[gpu_model, cpu_model]) as mock_cls, \
          patch.object(Transcriber, "_setup_dll_paths"), \
          patch.object(Transcriber, "_resolve_device_compute", return_value=("cuda", "int8_float16")):
-        t = Transcriber("medium", "cuda", "int8_float16", "pt", tmp_path)
+        t = Transcriber("medium", "cuda", "int8_float16", tmp_path)
         t._model = gpu_model
 
         result = t.transcribe(wav)
@@ -152,7 +178,7 @@ def test_transcribe_non_dll_error_propagates(tmp_path):
     with patch("transcriber.WhisperModel", return_value=gpu_model), \
          patch.object(Transcriber, "_setup_dll_paths"), \
          patch.object(Transcriber, "_resolve_device_compute", return_value=("cuda", "int8_float16")):
-        t = Transcriber("medium", "cuda", "int8_float16", "pt", tmp_path)
+        t = Transcriber("medium", "cuda", "int8_float16", tmp_path)
         t._model = gpu_model
 
         with pytest.raises(ValueError, match="invalid audio format"):
@@ -171,7 +197,7 @@ def test_setup_dll_paths_noop_on_non_windows(tmp_path, monkeypatch):
         monkeypatch.setattr("os.add_dll_directory", fake_add_dll)
 
     with patch("transcriber.WhisperModel", return_value=fake_model):
-        t = Transcriber("medium", "cuda", "int8_float16", "pt", tmp_path)
+        t = Transcriber("medium", "cuda", "int8_float16", tmp_path)
 
     assert t.model_loaded is True
     fake_add_dll.assert_not_called()

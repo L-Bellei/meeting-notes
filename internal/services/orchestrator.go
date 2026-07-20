@@ -203,9 +203,7 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 
 	whisperLang := ""
 	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
-		if v := s["whisper_language"]; v != "" && v != "auto" {
-			whisperLang = v
-		}
+		whisperLang = s["whisper_language"]
 	}
 	trResp, err := o.audio.Transcribe(ctx, stopResp.Path, whisperLang)
 	if err != nil {
@@ -214,6 +212,7 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 	}
 
 	m.Transcript = &trResp.Transcript
+	m.Language = &trResp.Language
 	dur := int(stopResp.DurationSeconds)
 	m.DurationSeconds = &dur
 	m.Status = models.StatusProcessing
@@ -407,9 +406,7 @@ func (o *Orchestrator) RunRetranscribePipeline(ctx context.Context, meetingID st
 
 	whisperLang := ""
 	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
-		if v := s["whisper_language"]; v != "" && v != "auto" {
-			whisperLang = v
-		}
+		whisperLang = s["whisper_language"]
 	}
 	trResp, err := o.audio.Transcribe(ctx, audioPath, whisperLang)
 	if err != nil {
@@ -418,6 +415,7 @@ func (o *Orchestrator) RunRetranscribePipeline(ctx context.Context, meetingID st
 	}
 
 	m.Transcript = &trResp.Transcript
+	m.Language = &trResp.Language
 	if trResp.DurationSeconds > 0 {
 		dur := int(trResp.DurationSeconds)
 		m.DurationSeconds = &dur

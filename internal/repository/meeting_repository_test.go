@@ -165,14 +165,20 @@ func TestMeetingRepository_Update(t *testing.T) {
 	now := time.Now().UTC()
 	repo.Create(ctx, &models.Meeting{ID: "id-001", Title: "Original", StartedAt: &now, Status: models.StatusPending})
 
-	got, _ := repo.GetByID(ctx, "id-001")
+	got, err := repo.GetByID(ctx, "id-001")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
 	got.Title = "Atualizado"
 	got.Status = models.StatusCompleted
 	if err := repo.Update(ctx, got); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
 
-	updated, _ := repo.GetByID(ctx, "id-001")
+	updated, err := repo.GetByID(ctx, "id-001")
+	if err != nil {
+		t.Fatalf("get updated: %v", err)
+	}
 	if updated.Title != "Atualizado" {
 		t.Errorf("Title = %q", updated.Title)
 	}
@@ -260,5 +266,38 @@ func TestMeetingRepository_GetRecording(t *testing.T) {
 	}
 	if got.ID != rec.ID {
 		t.Fatalf("expected ID %q, got %q", rec.ID, got.ID)
+	}
+}
+
+func TestMeetingRepository_Language_RoundTrip(t *testing.T) {
+	repo := openMeetingTestDB(t)
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+	m := &models.Meeting{ID: "m-lang", Title: "R", StartedAt: &now, Status: models.StatusPending}
+	if err := repo.Create(ctx, m); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	got, err := repo.GetByID(ctx, "m-lang")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.Language != nil {
+		t.Errorf("new meeting language = %v, want nil", got.Language)
+	}
+
+	lang := "en"
+	got.Language = &lang
+	if err := repo.Update(ctx, got); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	reloaded, err := repo.GetByID(ctx, "m-lang")
+	if err != nil {
+		t.Fatalf("get reloaded: %v", err)
+	}
+	if reloaded.Language == nil || *reloaded.Language != "en" {
+		t.Errorf("language = %v, want \"en\"", reloaded.Language)
 	}
 }

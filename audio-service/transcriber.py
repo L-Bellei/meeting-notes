@@ -21,12 +21,10 @@ class Transcriber:
         model_name: str,
         device: str,
         compute_type: str,
-        default_language: str,
         recordings_dir: Path,
     ):
         self.model_name = model_name
         self.device = device
-        self.default_language = default_language
         self.recordings_dir = Path(recordings_dir).resolve()
         self._setup_dll_paths()
         effective_device, effective_compute = self._resolve_device_compute(device, compute_type)
@@ -104,7 +102,9 @@ class Transcriber:
         if not resolved.exists():
             raise ValueError(f"path does not exist: {path}")
 
-        lang = language or self.default_language
+        # "", "auto" and None all mean "detect": faster-whisper auto-detects
+        # when language is None and returns the result in info.language.
+        lang = None if language in (None, "", "auto") else language
         transcribe_kwargs = dict(
             language=lang,
             # Prevents hallucination feedback loops: each 30s chunk is decoded

@@ -39,6 +39,7 @@ type fakeAudioClient struct {
 	transcribeErr  error
 
 	startCalls, stopCalls, transcribeCalls int
+	lastLanguage                           string
 }
 
 func (f *fakeAudioClient) Health(ctx context.Context) (*audio.HealthResponse, error) {
@@ -60,6 +61,7 @@ func (f *fakeAudioClient) StopRecording(ctx context.Context) (*audio.StopRespons
 }
 func (f *fakeAudioClient) Transcribe(ctx context.Context, path, language string) (*audio.TranscribeResponse, error) {
 	f.transcribeCalls++
+	f.lastLanguage = language
 	return f.transcribeResp, f.transcribeErr
 }
 
@@ -276,6 +278,37 @@ func TestOrchestrator_RunCapturePipeline_SkipsAIWhenNotConfigured(t *testing.T) 
 	}
 	if got.Transcript == nil || *got.Transcript != "olá mundo" {
 		t.Errorf("transcript should be preserved, got %v", got.Transcript)
+	}
+}
+
+func TestOrchestrator_RunCapturePipeline_AutoLanguageForwardedAndPersisted(t *testing.T) {
+	wavPath := t.TempDir() + "/rec-1.wav"
+	if err := os.WriteFile(wavPath, fakeWAVBytes(), 0o644); err != nil {
+		t.Fatalf("write wav: %v", err)
+	}
+
+	fa := &fakeAudioClient{
+		stopResp:       &audio.StopResponse{RecordingID: "r-1", Path: wavPath, DurationSeconds: 8.0},
+		transcribeResp: &audio.TranscribeResponse{Transcript: "hello world", Language: "en", DurationSeconds: 8.0, Model: "medium"},
+	}
+	fai := &fakeAI{summaryText: "s", keyPoints: []string{"k"}, tasks: []ai.TaskSuggestion{{Description: "d", Priority: "medium"}}}
+	settings := map[string]string{"ai_provider": "anthropic", "anthropic_api_key": "sk-test", "whisper_language": "auto"}
+	orch, mr, id := newOrchTestSettings(t, fa, fai, settings)
+
+	m, _ := mr.GetByID(context.Background(), id)
+	m.Status = models.StatusRecording
+	mr.Update(context.Background(), m)
+
+	if err := orch.RunCapturePipeline(context.Background(), id); err != nil {
+		t.Fatalf("RunCapturePipeline: %v", err)
+	}
+
+	if fa.lastLanguage != "auto" {
+		t.Errorf("forwarded language = %q, want \"auto\"", fa.lastLanguage)
+	}
+	got, _ := mr.GetByID(context.Background(), id)
+	if got.Language == nil || *got.Language != "en" {
+		t.Errorf("persisted language = %v, want \"en\"", got.Language)
 	}
 }
 
