@@ -2,6 +2,28 @@
 
 ---
 
+## [2026-07-20] Whisper "auto" — detecção real de idioma + exibição — Release v2.4.2
+
+**Plano Superpowers:** `docs/superpowers/plans/2026-07-20-whisper-auto-language.md`
+**Spec:** `docs/superpowers/specs/2026-07-20-whisper-auto-language-detection-design.md`
+**Fase do workflow Superpowers:** finishing concluído (PR #37 mergeada) + release.
+
+**Entregue (4 tasks via Subagent-Driven Development):**
+- **Python** (`audio-service/transcriber.py`): `"auto"`/`""`/`None` → `language=None` no faster-whisper (detecção real); removido o fallback silencioso `or self.default_language` e, no cleanup do review final, o próprio estado morto `default_language`/`WHISPER_LANGUAGE`.
+- **Migration 014** + `Meeting.Language *string` + repository (SELECT/UPDATE/scan; round-trip testado, inclusive NULL).
+- **Orchestrator**: encaminha `whisper_language` cru (inclui `"auto"`) e persiste `trResp.Language` nos **dois** caminhos (captura e retranscribe).
+- **Frontend**: tipo `Meeting.language`, helper `languageLabel` (nomes PT + fallback pro código), badge no MeetingDetail (só quando há idioma). IA já é agnóstica de idioma → sem mudança de IA.
+
+**Processo/Qualidade:** brainstorm → spec → plano → execução TDD (implementer haiku + task-reviewer sonnet por task) → review final whole-branch (opus): *Ready to merge: Yes*, 0 Critical/Important. 3 Minors triados: 2 corrigidos (dead `default_language`, hardening de teste), 1 deferido (teste dedicado do retranscribe — bloco byte-idêntico ao caminho de captura já coberto).
+
+**Verificação:** `go vet`/`go test ./...` verde; Python `pytest` (transcriber) verde; `tsc`/`build` ok. Validado ao vivo via `wails dev` (migration 014 aplica, boot limpo, audio-service CUDA saudável, badge de idioma).
+
+**Release:** bump 2.4.1 → 2.4.2 (PR #38), instalador via `build.ps1` (`dist/meeting-notes-2.4.2-windows-amd64-installer.exe`, 125.7 MB), tag `v2.4.2` + GitHub Release.
+
+**Bloqueios:** merges de PR (#37, #38) exigiram aprovação explícita do usuário (classificador de auto-mode do Claude Code).
+
+---
+
 ## [2026-07-18] Fix tray clicks/hotkey + overlay meeting guard — Release v2.4.1
 
 **Sem plano Superpowers** — bugfix ad-hoc + release (mesmo padrão de #32/#33-34).
