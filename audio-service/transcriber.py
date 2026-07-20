@@ -104,7 +104,9 @@ class Transcriber:
         if not resolved.exists():
             raise ValueError(f"path does not exist: {path}")
 
-        lang = language or self.default_language
+        # "", "auto" and None all mean "detect": faster-whisper auto-detects
+        # when language is None and returns the result in info.language.
+        lang = None if language in (None, "", "auto") else language
         transcribe_kwargs = dict(
             language=lang,
             # Prevents hallucination feedback loops: each 30s chunk is decoded

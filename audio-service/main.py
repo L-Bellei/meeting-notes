@@ -13,7 +13,7 @@ RECORDINGS_DIR = Path(os.getenv("RECORDINGS_DIR", "./tmp")).resolve()
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "medium")
 WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "auto")
 WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "auto")
-WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "pt")
+WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "auto")
 
 recorder: Optional[Recorder] = None
 transcriber: Optional[Transcriber] = None

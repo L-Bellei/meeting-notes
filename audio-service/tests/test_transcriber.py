@@ -76,7 +76,36 @@ def test_transcribe_concatenates_segments(transcriber, tmp_path):
     assert result.model == "medium"
 
 
-def test_transcribe_uses_default_language_when_none_provided(transcriber, tmp_path):
+def test_transcribe_auto_passes_none_language(transcriber, tmp_path):
+    wav = tmp_path / "rec.wav"
+    wav.write_bytes(b"fake")
+    info = MagicMock()
+    info.language = "en"
+    info.duration = 5.0
+    transcriber._fake_model.transcribe.return_value = (iter([]), info)
+
+    result = transcriber.transcribe(wav, language="auto")
+
+    args, kwargs = transcriber._fake_model.transcribe.call_args
+    assert kwargs["language"] is None
+    assert result.language == "en"
+
+
+def test_transcribe_empty_string_passes_none_language(transcriber, tmp_path):
+    wav = tmp_path / "rec.wav"
+    wav.write_bytes(b"fake")
+    info = MagicMock()
+    info.language = "es"
+    info.duration = 5.0
+    transcriber._fake_model.transcribe.return_value = (iter([]), info)
+
+    transcriber.transcribe(wav, language="")
+
+    args, kwargs = transcriber._fake_model.transcribe.call_args
+    assert kwargs["language"] is None
+
+
+def test_transcribe_none_passes_none_language(transcriber, tmp_path):
     wav = tmp_path / "rec.wav"
     wav.write_bytes(b"fake")
     info = MagicMock()
@@ -86,9 +115,8 @@ def test_transcribe_uses_default_language_when_none_provided(transcriber, tmp_pa
 
     transcriber.transcribe(wav)
 
-    transcriber._fake_model.transcribe.assert_called_once()
     args, kwargs = transcriber._fake_model.transcribe.call_args
-    assert kwargs["language"] == "pt"
+    assert kwargs["language"] is None
 
 
 def test_transcribe_uses_provided_language(transcriber, tmp_path):
