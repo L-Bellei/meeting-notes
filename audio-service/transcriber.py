@@ -21,12 +21,10 @@ class Transcriber:
         model_name: str,
         device: str,
         compute_type: str,
-        default_language: str,
         recordings_dir: Path,
     ):
         self.model_name = model_name
         self.device = device
-        self.default_language = default_language
         self.recordings_dir = Path(recordings_dir).resolve()
         self._setup_dll_paths()
         effective_device, effective_compute = self._resolve_device_compute(device, compute_type)
