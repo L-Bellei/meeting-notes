@@ -262,3 +262,30 @@ func TestMeetingRepository_GetRecording(t *testing.T) {
 		t.Fatalf("expected ID %q, got %q", rec.ID, got.ID)
 	}
 }
+
+func TestMeetingRepository_Language_RoundTrip(t *testing.T) {
+	repo := openMeetingTestDB(t)
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+	m := &models.Meeting{ID: "m-lang", Title: "R", StartedAt: &now, Status: models.StatusPending}
+	if err := repo.Create(ctx, m); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	got, _ := repo.GetByID(ctx, "m-lang")
+	if got.Language != nil {
+		t.Errorf("new meeting language = %v, want nil", got.Language)
+	}
+
+	lang := "en"
+	got.Language = &lang
+	if err := repo.Update(ctx, got); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	reloaded, _ := repo.GetByID(ctx, "m-lang")
+	if reloaded.Language == nil || *reloaded.Language != "en" {
+		t.Errorf("language = %v, want \"en\"", reloaded.Language)
+	}
+}
