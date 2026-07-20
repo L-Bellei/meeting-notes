@@ -4,6 +4,18 @@ Registro de decisões transversais ao projeto. Decisões específicas de cada fe
 
 ---
 
+## [2026-07-18] Toda janela Win32 em Go: criação + registro de hotkey + message loop na mesma OS thread travada
+
+**Contexto:** Generaliza a decisão de 2026-05-01 (overlay). O tray (`cmd/desktop/tray.go`) criava a janela e registrava o hotkey na goroutine do `Start()`, mas rodava o `GetMessage` loop em **outra** goroutine. Por thread affinity do Win32, mensagens de janela (`WM_LBUTTONUP`/`WM_RBUTTONUP`) e `WM_HOTKEY` são entregues apenas à fila da thread que criou a janela / registrou o hotkey — então cliques no ícone e o hotkey global eram perdidos de forma intermitente.
+
+**Escolha:** Qualquer janela Win32 criada em Go deve fazer **criação da janela, registro de recursos thread-affine (hotkey) e o message loop na mesma goroutine fixada** via `runtime.LockOSThread()`. `Start()` dispara `go run()` e sincroniza a prontidão/erro por um canal `ready chan error`. Corolários:
+- **Teardown thread-affine** (`UnregisterHotKey`/`Shell_NotifyIcon(NIM_DELETE)`/`DestroyWindow`) roda na thread do loop: `Stop()` posta `WM_CLOSE` e a window proc executa a limpeza.
+- **Dismiss de menu de contexto:** postar `WM_NULL` após `TrackPopupMenu` (KB135788) para o menu fechar corretamente ao clicar fora.
+
+**Justificativa:** Correto por especificação Win32, sem overhead. Elimina toda uma classe de bugs "às vezes o clique/hotkey não funciona". Overlay e tray agora seguem o mesmo padrão.
+
+---
+
 ## [2026-06-05] IA não-configurada degrada graciosamente em vez de falhar o pipeline
 
 **Contexto:** Com `auto_generate=true` e sem IA configurada, o pipeline marcava a reunião inteira como `FAILED`, apesar de a transcrição ter sido concluída com sucesso.

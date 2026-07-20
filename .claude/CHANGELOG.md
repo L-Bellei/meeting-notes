@@ -2,6 +2,28 @@
 
 ---
 
+## [2026-07-18] Fix tray clicks/hotkey + overlay meeting guard — Release v2.4.1
+
+**Sem plano Superpowers** — bugfix ad-hoc + release (mesmo padrão de #32/#33-34).
+
+**Fase do workflow Superpowers:** N/A (implement → review inline → finishing).
+
+**Entregue:**
+- **Tray clicks + hotkey global** (`45c9e6a`, PR #35): criação da janela, registro do hotkey e message loop movidos para uma única OS thread travada (`run()` com `LockOSThread`), corrigindo thread affinity do Win32 que fazia cliques do ícone e o hotkey serem perdidos. Teardown via `WM_CLOSE` na thread do loop; `WM_NULL` pós-`TrackPopupMenu` (KB135788) para o menu dispensar corretamente.
+- **Overlay meeting guard** (mesmo PR): `HideIfMeeting(meetingID)` impede que um status terminal (transcribing/processing/completed/failed) de uma reunião anterior esconda o overlay de uma gravação mais nova. Coberto por `cmd/desktop/overlay_test.go` (2 casos).
+- Bump `productVersion` 2.4.0 → 2.4.1 (PR #36; `master` protegido).
+- Instalador via `build.ps1`: `dist/meeting-notes-2.4.1-windows-amd64-installer.exe` (125.7 MB, audio-service embutido).
+- Tag `v2.4.1` + GitHub Release publicada com o instalador.
+
+**Verificação:** `go vet ./...` limpo, `go test ./...` verde (inclui os testes do guard), ambos entry points compilam; app validado via `wails dev` (audio-service saudável em CUDA, monitor de saúde recuperando após o load do modelo `medium`).
+
+**Decisão transversal registrada em DECISIONS.md:**
+- Toda janela Win32 em Go: criação + registro de hotkey + message loop na mesma OS thread travada (generaliza a decisão de 2026-05-01 do overlay para o tray).
+
+**Bloqueios:** merges de PR (`#35`, `#36`) bloqueados pelo classificador de auto-mode do Claude Code → exigiram aprovação explícita do usuário.
+
+---
+
 ## [2026-06-06] Release v2.4.0
 
 **Sem plano Superpowers** — sessão de empacotamento/release.
