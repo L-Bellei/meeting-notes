@@ -2,33 +2,32 @@
 
 ## Sessão
 - **Data:** 2026-07-20
-- **Branch atual:** `feat/whisper-auto-language` (a partir de `master` em `3c002fb`)
+- **Branch atual:** `master` (sincronizado com origin, em `d0032d1`)
 - **Worktree:** nenhum ativo
 
 ## Trabalho desta sessão
 
-**1. Release v2.4.1 publicada** (correções de desktop Win32 + empacotamento):
-- Fix de entrega de cliques do tray e do hotkey global (thread affinity Win32) + overlay meeting guard — PR #35, commit `45c9e6a`.
-- Bump `productVersion` 2.4.0 → 2.4.1 (PR #36 — `master` protegido exige PR).
-- Instalador via `build.ps1`: `dist/meeting-notes-2.4.1-windows-amd64-installer.exe` (125.7 MB).
-- Tag `v2.4.1` + GitHub Release publicada.
+**1. Release v2.4.1** — fix de cliques do tray/hotkey (thread affinity Win32) + overlay meeting guard (PRs #35/#36).
 
-**2. Feature em andamento: Whisper "auto" — detecção real de idioma + exibição.**
-- Brainstorm + spec + plano concluídos via Superpowers.
+**2. Feature "Whisper auto" — detecção real de idioma + exibição (entregue, PR #37).**
+- `"auto"`/`""`/`None` → detecção real no faster-whisper; idioma detectado persistido (`Meeting.Language`, migration 014) e exibido como badge no MeetingDetail.
+- Conduzida via Superpowers: brainstorm → spec → plano → execução TDD (4 tasks, subagent-driven) → review final (Ready to merge: Yes) → PR.
 - Spec: `docs/superpowers/specs/2026-07-20-whisper-auto-language-detection-design.md`
 - Plano: `docs/superpowers/plans/2026-07-20-whisper-auto-language.md`
+- Validada ao vivo (migration 014 aplica, app sobe, badge de idioma correto).
+
+**3. Release v2.4.2** — empacotamento da feature acima:
+- Bump `productVersion` 2.4.1 → 2.4.2 (PR #38 — `master` protegido).
+- Instalador via `build.ps1`: `dist/meeting-notes-2.4.2-windows-amd64-installer.exe` (125.7 MB).
+- Tag `v2.4.2` + GitHub Release publicada.
 
 ## Fase Superpowers
 
-**Executing** — plano escrito e aprovado; iniciando a execução das 4 tasks (TDD).
+**N/A** — feature whisper-auto finalizada (finishing concluído) e lançada. Nenhum trabalho em andamento.
 
 ## Próximo passo imediato
 
-Executar o plano `2026-07-20-whisper-auto-language.md`, task por task:
-1. Python — normalizar `auto`/`""`/`None` → detecção real.
-2. Migration 014 + `Meeting.Language` + repository.
-3. Orchestrator — encaminhar `whisper_language` cru + persistir idioma detectado.
-4. Frontend — tipo + `languageLabel` + badge no MeetingDetail.
+Nenhum. Backlog em `.claude/BACKLOG.md` para a próxima feature (brainstorm → plan via Superpowers).
 
 ## Worktrees paralelos
 
@@ -36,6 +35,6 @@ Nenhum.
 
 ## Estado de release
 
-- **v2.4.1** publicada: https://github.com/L-Bellei/meeting-notes/releases/tag/v2.4.1
-- Installer: `dist/meeting-notes-2.4.1-windows-amd64-installer.exe`
-- Build canônico documentado em `CLAUDE.md` → usar `build.ps1`, não `wails build -nsis` direto.
+- **v2.4.2** publicada: https://github.com/L-Bellei/meeting-notes/releases/tag/v2.4.2
+- Installer: `dist/meeting-notes-2.4.2-windows-amd64-installer.exe`
+- Build canônico: `build.ps1` (não `wails build -nsis` direto).
