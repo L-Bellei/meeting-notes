@@ -211,3 +211,46 @@ func TestThemeRepository_List_IncludesCustomPrompt(t *testing.T) {
 		t.Error("List did not return custom_prompt for theme cp-a")
 	}
 }
+
+func TestThemeRepository_TypePrompts_RoundTrip(t *testing.T) {
+	repo := openTestDB(t)
+	ctx := context.Background()
+
+	theme := &models.Theme{
+		ID:                  "th-prompts",
+		Name:                "Prompts",
+		Color:               "#123456",
+		CustomPrompt:        "geral",
+		CustomSummaryPrompt: "resumo custom",
+		CustomTasksPrompt:   "tarefas custom",
+	}
+	if err := repo.Create(ctx, theme); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	got, err := repo.GetByID(ctx, "th-prompts")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.CustomSummaryPrompt != "resumo custom" {
+		t.Errorf("summary prompt = %q", got.CustomSummaryPrompt)
+	}
+	if got.CustomKeyPointsPrompt != "" {
+		t.Errorf("key points prompt = %q, want empty (default)", got.CustomKeyPointsPrompt)
+	}
+	if got.CustomTasksPrompt != "tarefas custom" {
+		t.Errorf("tasks prompt = %q", got.CustomTasksPrompt)
+	}
+
+	got.CustomKeyPointsPrompt = "pontos custom"
+	if err := repo.Update(ctx, got); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	reloaded, err := repo.GetByID(ctx, "th-prompts")
+	if err != nil {
+		t.Fatalf("get reloaded: %v", err)
+	}
+	if reloaded.CustomKeyPointsPrompt != "pontos custom" {
+		t.Errorf("updated key points prompt = %q", reloaded.CustomKeyPointsPrompt)
+	}
+}

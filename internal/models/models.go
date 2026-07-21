@@ -2,15 +2,49 @@ package models
 
 import "time"
 
+type ThemePrompts struct {
+	General   string
+	Summary   string
+	KeyPoints string
+	Tasks     string
+}
+
 type Theme struct {
-	ID             string    `json:"id"`
-	ParentID       *string   `json:"parent_id"`
-	Name           string    `json:"name"`
-	Description    string    `json:"description"`
-	Color          string    `json:"color"`
-	CustomPrompt   string    `json:"custom_prompt"`
-	AutoAddToBoard bool      `json:"auto_add_to_board"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID                    string    `json:"id"`
+	ParentID              *string   `json:"parent_id"`
+	Name                  string    `json:"name"`
+	Description           string    `json:"description"`
+	Color                 string    `json:"color"`
+	CustomPrompt          string    `json:"custom_prompt"`
+	CustomSummaryPrompt   string    `json:"custom_summary_prompt"`
+	CustomKeyPointsPrompt string    `json:"custom_key_points_prompt"`
+	CustomTasksPrompt     string    `json:"custom_tasks_prompt"`
+	AutoAddToBoard        bool      `json:"auto_add_to_board"`
+	CreatedAt             time.Time `json:"created_at"`
+}
+
+type PromptKind int
+
+const (
+	PromptSummary PromptKind = iota
+	PromptKeyPoints
+	PromptTasks
+)
+
+func (t *Theme) PromptFor(kind PromptKind) string {
+	var specific string
+	switch kind {
+	case PromptSummary:
+		specific = t.CustomSummaryPrompt
+	case PromptKeyPoints:
+		specific = t.CustomKeyPointsPrompt
+	case PromptTasks:
+		specific = t.CustomTasksPrompt
+	}
+	if specific != "" {
+		return specific
+	}
+	return t.CustomPrompt
 }
 
 type MeetingStatus string

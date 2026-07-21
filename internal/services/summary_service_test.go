@@ -19,9 +19,13 @@ type fakeAI struct {
 	tasks            []ai.TaskSuggestion
 	err              error
 	lastCustomPrompt string
+	lastSummaryPrompt string
+	lastKeyPointsPrompt string
+	lastTasksPrompt string
 }
 
 func (f *fakeAI) GenerateSummary(ctx context.Context, transcript, notes, customPrompt string) (string, int, int, error) {
+	f.lastSummaryPrompt = customPrompt
 	f.lastCustomPrompt = customPrompt
 	if f.err != nil {
 		return "", 0, 0, f.err
@@ -29,12 +33,14 @@ func (f *fakeAI) GenerateSummary(ctx context.Context, transcript, notes, customP
 	return f.summaryText, 100, 50, nil
 }
 func (f *fakeAI) GenerateKeyPoints(ctx context.Context, transcript, notes, customPrompt string) ([]string, int, int, error) {
+	f.lastKeyPointsPrompt = customPrompt
 	if f.err != nil {
 		return nil, 0, 0, f.err
 	}
 	return f.keyPoints, 100, 50, nil
 }
 func (f *fakeAI) GenerateTasks(ctx context.Context, transcript, notes, customPrompt string) ([]ai.TaskSuggestion, int, int, error) {
+	f.lastTasksPrompt = customPrompt
 	if f.err != nil {
 		return nil, 0, 0, f.err
 	}

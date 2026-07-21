@@ -565,3 +565,58 @@ func TestOrchestrator_RunAIPipeline_SyncsSearch(t *testing.T) {
 		t.Error("expected FTS result after pipeline, got none")
 	}
 }
+
+func TestOrchestrator_AIGeneration_PerTypePrompts(t *testing.T) {
+	db, err := database.Open(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	mr := repository.NewMeetingRepository(db)
+	thr := repository.NewThemeRepository(db)
+	sr := repository.NewSummaryRepository(db)
+	kpr := repository.NewKeyPointRepository(db)
+	tr := repository.NewTaskRepository(db)
+
+	fai := &fakeAI{summaryText: "s", keyPoints: []string{"k"}, tasks: []ai.TaskSuggestion{{Description: "d", Priority: "medium"}}}
+	summarySvc := services.NewSummaryService(sr, fai)
+	keyPointSvc := services.NewKeyPointService(kpr, fai)
+	taskSvc := services.NewTaskService(tr, fai)
+
+	wavPath := t.TempDir() + "/rec.wav"
+	if err := os.WriteFile(wavPath, fakeWAVBytes(), 0o644); err != nil {
+		t.Fatalf("write wav: %v", err)
+	}
+	fa := &fakeAudioClient{
+		stopResp:       &audio.StopResponse{Path: wavPath, DurationSeconds: 5.0},
+		transcribeResp: &audio.TranscribeResponse{Transcript: "x", Language: "pt", DurationSeconds: 5.0},
+	}
+	settings := map[string]string{"ai_provider": "anthropic", "anthropic_api_key": "sk-test"}
+	orch := services.NewOrchestrator(mr, thr, summarySvc, keyPointSvc, taskSvc, fa, &fakeSettings{data: settings}, nil)
+
+	theme := &models.Theme{ID: "th-1", Name: "T", Color: "#111111", CustomPrompt: "GERAL", CustomSummaryPrompt: "RESUMO"}
+	if err := thr.Create(context.Background(), theme); err != nil {
+		t.Fatalf("seed theme: %v", err)
+	}
+	tid := "th-1"
+	now := time.Now().UTC()
+	m := &models.Meeting{ID: "m-1", Title: "R", ThemeID: &tid, StartedAt: &now, Status: models.StatusRecording}
+	if err := mr.Create(context.Background(), m); err != nil {
+		t.Fatalf("seed meeting: %v", err)
+	}
+
+	if err := orch.RunCapturePipeline(context.Background(), "m-1"); err != nil {
+		t.Fatalf("RunCapturePipeline: %v", err)
+	}
+
+	if fai.lastSummaryPrompt != "RESUMO" {
+		t.Errorf("summary prompt = %q, want specific 'RESUMO'", fai.lastSummaryPrompt)
+	}
+	if fai.lastKeyPointsPrompt != "GERAL" {
+		t.Errorf("key points prompt = %q, want general fallback 'GERAL'", fai.lastKeyPointsPrompt)
+	}
+	if fai.lastTasksPrompt != "GERAL" {
+		t.Errorf("tasks prompt = %q, want general fallback 'GERAL'", fai.lastTasksPrompt)
+	}
+}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"meeting-notes/internal/models"
 	"meeting-notes/internal/repository"
 	"meeting-notes/internal/services"
 )
@@ -107,7 +108,7 @@ func (h *SummaryHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	customPrompt := ""
 	if meeting.ThemeID != nil {
 		if theme, err := h.themeRepo.GetByID(r.Context(), *meeting.ThemeID); err == nil {
-			customPrompt = theme.CustomPrompt
+			customPrompt = theme.PromptFor(models.PromptSummary)
 		}
 	}
 	s, err := h.svc.Generate(r.Context(), meeting, customPrompt)
