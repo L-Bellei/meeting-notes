@@ -2,6 +2,28 @@
 
 ---
 
+## [2026-07-21] Prompts personalizados por tipo de geração — Release v2.5.0
+
+**Plano Superpowers:** `docs/superpowers/plans/2026-07-20-theme-type-prompts.md`
+**Spec:** `docs/superpowers/specs/2026-07-20-theme-type-prompts-design.md`
+**Fase do workflow Superpowers:** finishing concluído (PR #40 mergeada) + release.
+
+**Entregue (4 tasks via Subagent-Driven Development):**
+- **Migration 015** + `Theme.CustomSummaryPrompt/CustomKeyPointsPrompt/CustomTasksPrompt` + `Theme.PromptFor(kind)` (precedência específico → geral → `""`) + repository.
+- **`models.ThemePrompts`** (General/Summary/KeyPoints/Tasks) threadado por `ThemeService.Create/Update` + request structs do handler (evita 4 strings posicionais).
+- Geração (3 handlers + orchestrator `runAIGeneration`) resolve por tipo via `PromptFor`. **Assinaturas de AI client e generation services inalteradas** (o degrau `"" → default` já é feito por `buildInstruction`).
+- **Frontend**: `ThemeEditModal` com "Prompt geral" + 3 textareas (resumo/pontos/tarefas) + hint de precedência; tipo `Theme` + payload de update.
+
+**Estrutura escolhida:** geral + 3 overrides (revisita a decisão de 2026-04-29 "customPrompt campo único", que era YAGNI deliberado). Zero perda de dados: temas existentes caem no geral via fallback.
+
+**Processo/Qualidade:** brainstorm → spec → plano → execução TDD (implementer haiku + task-reviewer sonnet por task) → review final whole-branch (opus): *Ready to merge: Yes*, 0 Critical/Important. 3 Minors deferidos (dedup cosmético no handler; gofmt align — moot por CRLF do repo; create sem prompts — escopo planejado). Validado ao vivo (migration 015 aplica; resumo segue prompt específico, pontos/tarefas caem no geral).
+
+**Release:** bump 2.4.2 → 2.5.0 (PR #41, minor), instalador via `build.ps1` (`dist/meeting-notes-2.5.0-windows-amd64-installer.exe`, 125.7 MB), tag `v2.5.0` + GitHub Release.
+
+**Bloqueios:** merges de PR (#40, #41) exigiram aprovação explícita do usuário (classificador de auto-mode).
+
+---
+
 ## [2026-07-20] Whisper "auto" — detecção real de idioma + exibição — Release v2.4.2
 
 **Plano Superpowers:** `docs/superpowers/plans/2026-07-20-whisper-auto-language.md`
