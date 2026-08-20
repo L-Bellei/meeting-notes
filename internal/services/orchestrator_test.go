@@ -566,7 +566,7 @@ func TestOrchestrator_RunAIPipeline_SyncsSearch(t *testing.T) {
 	}
 }
 
-func TestOrchestrator_AIGeneration_PerTypePrompts(t *testing.T) {
+func TestOrchestrator_UsesThemeCustomPrompt(t *testing.T) {
 	db, err := database.Open(t.TempDir() + "/test.db")
 	if err != nil {
 		t.Fatalf("open db: %v", err)
@@ -595,7 +595,7 @@ func TestOrchestrator_AIGeneration_PerTypePrompts(t *testing.T) {
 	settings := map[string]string{"ai_provider": "anthropic", "anthropic_api_key": "sk-test"}
 	orch := services.NewOrchestrator(mr, thr, summarySvc, keyPointSvc, taskSvc, fa, &fakeSettings{data: settings}, nil)
 
-	theme := &models.Theme{ID: "th-1", Name: "T", Color: "#111111", CustomPrompt: "GERAL", CustomSummaryPrompt: "RESUMO"}
+	theme := &models.Theme{ID: "th-1", Name: "T", Color: "#111111", CustomPrompt: "GERAL"}
 	if err := thr.Create(context.Background(), theme); err != nil {
 		t.Fatalf("seed theme: %v", err)
 	}
@@ -610,13 +610,13 @@ func TestOrchestrator_AIGeneration_PerTypePrompts(t *testing.T) {
 		t.Fatalf("RunCapturePipeline: %v", err)
 	}
 
-	if fai.lastSummaryPrompt != "RESUMO" {
-		t.Errorf("summary prompt = %q, want specific 'RESUMO'", fai.lastSummaryPrompt)
+	if fai.lastSummaryPrompt != "GERAL" {
+		t.Errorf("summary prompt = %q, want %q", fai.lastSummaryPrompt, "GERAL")
 	}
 	if fai.lastKeyPointsPrompt != "GERAL" {
-		t.Errorf("key points prompt = %q, want general fallback 'GERAL'", fai.lastKeyPointsPrompt)
+		t.Errorf("key points prompt = %q, want %q", fai.lastKeyPointsPrompt, "GERAL")
 	}
 	if fai.lastTasksPrompt != "GERAL" {
-		t.Errorf("tasks prompt = %q, want general fallback 'GERAL'", fai.lastTasksPrompt)
+		t.Errorf("tasks prompt = %q, want %q", fai.lastTasksPrompt, "GERAL")
 	}
 }

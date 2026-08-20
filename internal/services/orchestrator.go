@@ -305,19 +305,17 @@ func (o *Orchestrator) runAIGeneration(ctx context.Context, m *models.Meeting) e
 			theme = t
 		}
 	}
-	promptFor := func(kind models.PromptKind) string {
-		if theme == nil {
-			return ""
-		}
-		return theme.PromptFor(kind)
+	customPrompt := ""
+	if theme != nil {
+		customPrompt = theme.CustomPrompt
 	}
-	if _, err := o.summarySvc.Generate(ctx, m, promptFor(models.PromptSummary)); err != nil {
+	if _, err := o.summarySvc.Generate(ctx, m, customPrompt); err != nil {
 		return fmt.Errorf("summary: %w", err)
 	}
-	if _, err := o.keyPointSvc.Generate(ctx, m, promptFor(models.PromptKeyPoints)); err != nil {
+	if _, err := o.keyPointSvc.Generate(ctx, m, customPrompt); err != nil {
 		return fmt.Errorf("key_points: %w", err)
 	}
-	if _, err := o.taskSvc.Generate(ctx, m, promptFor(models.PromptTasks)); err != nil {
+	if _, err := o.taskSvc.Generate(ctx, m, customPrompt); err != nil {
 		return fmt.Errorf("tasks: %w", err)
 	}
 	if theme != nil && o.boardCardSvc != nil && theme.AutoAddToBoard {
