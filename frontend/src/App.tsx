@@ -4,7 +4,7 @@ import { GetPort } from "./wailsjs/go/main/App"
 import { EventsOn } from "./wailsjs/runtime/runtime"
 import { initApi } from "./hooks/useApi"
 import { usePipeline } from "./hooks/usePipeline"
-import { Sidebar } from "./components/layout/Sidebar"
+import { Sidebar } from "./components/sidebar/Sidebar"
 import { MeetingList } from "./components/layout/MeetingList"
 import { MeetingDetail } from "./components/layout/MeetingDetail"
 import { Toolbar } from "./components/layout/Toolbar"
@@ -129,6 +129,10 @@ function AppInner() {
         e.preventDefault()
         setSearchOpen(true)
       }
+      if (e.key === "b" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        setSidebarOpen(o => !o)
+      }
     }
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
@@ -191,23 +195,24 @@ function AppInner() {
             activeView={activeView}
             onChangeView={setActiveView}
           />
-          <Sidebar
-            open={sidebarOpen}
-            onClose={() => setSidebarOpen(false)}
-            selectedThemeId={selectedThemeId}
-            onSelectTheme={setSelectedThemeId}
-          />
           <div className="flex flex-1 overflow-hidden">
             {activeView === "board" ? (
               <BoardView />
             ) : (
               <>
+                <Sidebar
+                  open={sidebarOpen}
+                  onClose={() => setSidebarOpen(false)}
+                  selectedThemeId={selectedThemeId}
+                  onSelectTheme={setSelectedThemeId}
+                />
                 <MeetingList
                   themeId={selectedThemeId}
                   selectedMeetingId={selectedMeetingId}
                   onSelectMeeting={id => { setSelectedMeetingId(id); setHighlightQuery(undefined) }}
                   onMeetingDeleted={id => { if (selectedMeetingId === id) setSelectedMeetingId(null) }}
                   onOpenSearch={() => setSearchOpen(true)}
+                  onClearTheme={() => setSelectedThemeId(null)}
                 />
                 <MeetingDetail
                   meetingId={selectedMeetingId}

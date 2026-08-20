@@ -1,8 +1,9 @@
-import { useState } from "react"
-import { Plus, Tag, X, Trash2, ChevronRight, Pencil } from "lucide-react"
-import { useThemes, useCreateTheme, useDeleteTheme, type Theme } from "../../hooks/useThemes"
+import { useEffect, useState } from "react"
+import { Plus, Tag, X, Trash2, ChevronRight, Pencil, Pin, PinOff } from "lucide-react"
+import { useThemes, useDeleteTheme, type Theme } from "../../hooks/useThemes"
 import { useMeetings } from "../../hooks/useMeetings"
-import { ThemeEditModal } from "../sidebar/ThemeEditModal"
+import { useSidebarPinned } from "../../hooks/useSidebarPinned"
+import { ThemeEditModal } from "./ThemeEditModal"
 import { Button } from "../ui/button"
 import { cn } from "../../lib/utils"
 
@@ -14,16 +15,22 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: SidebarProps) {
+  const { pinned, toggle: togglePinned } = useSidebarPinned()
   const { data: themes = [] } = useThemes()
   const { data: allMeetings = [] } = useMeetings()
-  const createTheme = useCreateTheme()
   const deleteTheme = useDeleteTheme()
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-  const [creating, setCreating] = useState<"root" | string | null>(null) // "root" or parent theme ID
-  const [newName, setNewName] = useState("")
+  const [creating, setCreating] = useState<{ parentId: string | null } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [editingTheme, setEditingTheme] = useState<Theme | null>(null)
+
+  useEffect(() => {
+    if (pinned || !open) return
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose() }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [pinned, open, onClose])
 
   const parents = themes.filter(t => !t.parent_id)
   const childrenOf = (id: string) => themes.filter(t => t.parent_id === id)
@@ -35,19 +42,6 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
     return direct + fromChildren
   }
 
-  async function handleCreate(parentID?: string) {
-    if (!newName.trim()) return
-    await createTheme.mutateAsync({
-      name: newName.trim(),
-      description: "",
-      color: "#7c3aed",
-      parent_id: parentID ?? null,
-    })
-    setNewName("")
-    setCreating(null)
-    if (parentID) setExpanded(e => ({ ...e, [parentID]: true }))
-  }
-
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation()
     if (confirmDelete === id) {
@@ -57,11 +51,6 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
     } else {
       setConfirmDelete(id)
     }
-  }
-
-  function selectAndClose(id: string | null) {
-    onSelectTheme(id)
-    onClose()
   }
 
   function toggleExpand(id: string, e: React.MouseEvent) {
@@ -84,7 +73,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
             isSelected && "bg-accent font-medium",
             depth > 0 && "ml-4"
           )}
-          onClick={() => selectAndClose(theme.id)}
+          onClick={() => onSelectTheme(theme.id)}
         >
           {/* expand arrow */}
           <button
@@ -103,7 +92,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
           <div className="hidden group-hover:flex items-center gap-1 flex-shrink-0">
             <button
               title="Nova subcategoria"
-              onClick={e => { e.stopPropagation(); setCreating(theme.id); setNewName("") }}
+              onClick={e => { e.stopPropagation(); setCreating({ parentId: theme.id }) }}
               className="p-0.5 rounded hover:bg-primary/20 text-muted-foreground hover:text-primary"
             >
               <Plus size={11} />
@@ -125,53 +114,59 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
           </div>
         </div>
 
-        {/* inline create input for sub-theme */}
-        {creating === theme.id && (
-          <div className={cn("flex gap-1 mt-0.5", depth > 0 ? "ml-8" : "ml-4")} onClick={e => e.stopPropagation()}>
-            <input
-              autoFocus
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Enter") handleCreate(theme.id)
-                if (e.key === "Escape") setCreating(null)
-              }}
-              placeholder="Nome da subcategoria"
-              className="flex-1 text-xs rounded-lg px-2 py-1.5"
-            />
-            <Button size="sm" onClick={() => handleCreate(theme.id)} disabled={createTheme.isPending}>+</Button>
-          </div>
-        )}
-
         {/* children */}
         {isExpanded && children.map(c => <ThemeRow key={c.id} theme={c} depth={depth + 1} />)}
       </div>
     )
   }
 
+  const modals = (
+    <>
+      {editingTheme && (
+        <ThemeEditModal mode="edit" theme={editingTheme} onClose={() => setEditingTheme(null)} />
+      )}
+      {creating && (
+        <ThemeEditModal mode="create" theme={null} parentId={creating.parentId} onClose={() => setCreating(null)} />
+      )}
+    </>
+  )
+
+  if (!open) return <>{modals}</>
+
   return (
     <>
-      {open && (
+      {!pinned && (
         <div className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       )}
       <div
         className={cn(
-          "fixed left-0 top-0 h-full z-40 w-64 flex flex-col",
-          "bg-[#161616] border-r border-border rounded-r-2xl",
-          "transform transition-transform duration-300 ease-in-out",
-          open ? "translate-x-0" : "-translate-x-full"
+          "w-64 flex flex-col bg-[#161616] border-r border-border",
+          pinned
+            ? "h-full flex-shrink-0"
+            : "fixed left-0 top-0 h-full z-40 rounded-r-2xl"
         )}
       >
         <div className="h-14 flex items-center justify-between px-4 border-b border-border flex-shrink-0">
-          <span className="font-semibold text-sm text-foreground">Meeting Notes</span>
-          <Button variant="ghost" size="icon" onClick={onClose}><X size={16} /></Button>
-        </div>
-        <div className="px-2 py-2 flex-shrink-0">
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2">Temas</span>
+          <span className="font-semibold text-sm text-foreground">Temas</span>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={togglePinned}
+              title={pinned ? "Desafixar painel" : "Fixar painel"}
+            >
+              {pinned ? <PinOff size={15} /> : <Pin size={15} />}
+            </Button>
+            {!pinned && (
+              <Button variant="ghost" size="icon" onClick={onClose} title="Fechar (Esc)">
+                <X size={16} />
+              </Button>
+            )}
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto px-2">
           <button
-            onClick={() => selectAndClose(null)}
+            onClick={() => onSelectTheme(null)}
             className={cn(
               "w-full text-left rounded-xl px-3 py-2.5 text-sm flex items-center justify-between hover:bg-accent transition-colors",
               selectedThemeId === null && "bg-accent text-foreground font-medium"
@@ -187,26 +182,12 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
         </div>
 
         <div className="p-3 border-t border-border">
-          {creating === "root" ? (
-            <div className="flex gap-1">
-              <input
-                autoFocus
-                value={newName}
-                onChange={e => setNewName(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") handleCreate(); if (e.key === "Escape") setCreating(null) }}
-                placeholder="Nome do tema"
-                className="flex-1 text-xs rounded-lg px-2 py-1.5"
-              />
-              <Button size="sm" onClick={() => handleCreate()} disabled={createTheme.isPending}>+</Button>
-            </div>
-          ) : (
-            <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => { setCreating("root"); setNewName("") }}>
-              <Plus size={14} className="mr-1" /> Novo tema
-            </Button>
-          )}
+          <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => setCreating({ parentId: null })}>
+            <Plus size={14} className="mr-1" /> Novo tema
+          </Button>
         </div>
       </div>
-      <ThemeEditModal mode="edit" theme={editingTheme} onClose={() => setEditingTheme(null)} />
+      {modals}
     </>
   )
 }
