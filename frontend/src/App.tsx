@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { GetPort } from "./wailsjs/go/main/App"
 import { EventsOn } from "./wailsjs/runtime/runtime"
@@ -44,6 +44,13 @@ function AppInner() {
 
   const { data: settings } = useSettings()
   const recordingHotkey = formatHotkey(settings?.recording_hotkey ?? "ctrl+shift+r")
+
+  const pinnedSyncedRef = useRef(false)
+  useEffect(() => {
+    if (pinnedSyncedRef.current || !settings) return
+    pinnedSyncedRef.current = true
+    if (settings.sidebar_pinned === "true") setSidebarOpen(true)
+  }, [settings])
 
   useEffect(() => {
     let cancelled = false
