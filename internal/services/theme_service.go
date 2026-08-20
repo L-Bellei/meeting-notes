@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,6 +36,9 @@ func (s *ThemeService) Create(ctx context.Context, name, description, color stri
 	if color == "" {
 		color = "#6366f1"
 	}
+	if err := s.validateParent(ctx, "", parentID); err != nil {
+		return nil, err
+	}
 	t := &models.Theme{
 		ID:             uuid.New().String(),
 		ParentID:       parentID,
@@ -63,6 +67,9 @@ func (s *ThemeService) Update(ctx context.Context, id, name, description, color 
 	if err != nil {
 		return nil, err
 	}
+	if err := s.validateParent(ctx, id, parentID); err != nil {
+		return nil, err
+	}
 	t.Name = name
 	t.Description = description
 	if color != "" {
@@ -79,4 +86,33 @@ func (s *ThemeService) Update(ctx context.Context, id, name, description, color 
 
 func (s *ThemeService) Delete(ctx context.Context, id string) error {
 	return s.repo.Delete(ctx, id)
+}
+
+func (s *ThemeService) validateParent(ctx context.Context, id string, parentID *string) error {
+	if parentID == nil {
+		return nil
+	}
+	if *parentID == id {
+		return &ValidationError{"theme cannot be its own parent"}
+	}
+	parent, err := s.repo.GetByID(ctx, *parentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return &ValidationError{"parent theme not found"}
+		}
+		return err
+	}
+	if parent.ParentID != nil {
+		return &ValidationError{"parent theme cannot be a subcategory"}
+	}
+	if id != "" {
+		children, err := s.repo.ChildIDs(ctx, id)
+		if err != nil {
+			return err
+		}
+		if len(children) > 0 {
+			return &ValidationError{"theme with subcategories cannot become a subcategory"}
+		}
+	}
+	return nil
 }

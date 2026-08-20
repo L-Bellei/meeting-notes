@@ -180,3 +180,79 @@ func TestThemeService_Create_PersistsCustomPrompt(t *testing.T) {
 		t.Errorf("updated custom prompt = %q, want %q", updated.CustomPrompt, "g2")
 	}
 }
+
+func TestThemeService_Update_RejectsSelfAsParent(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+
+	created, _ := svc.Create(ctx, "Solo", "", "", nil, "", false)
+	_, err := svc.Update(ctx, created.ID, "Solo", "", "", &created.ID, "", false)
+
+	var ve *services.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
+	}
+}
+
+func TestThemeService_Update_RejectsThreeLevels(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+
+	root, _ := svc.Create(ctx, "Raiz", "", "", nil, "", false)
+	child, _ := svc.Create(ctx, "Filho", "", "", &root.ID, "", false)
+	grand, _ := svc.Create(ctx, "Neto", "", "", nil, "", false)
+
+	_, err := svc.Update(ctx, grand.ID, "Neto", "", "", &child.ID, "", false)
+
+	var ve *services.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
+	}
+}
+
+func TestThemeService_Update_RejectsMovingParentWithChildren(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+
+	root, _ := svc.Create(ctx, "Raiz", "", "", nil, "", false)
+	_, _ = svc.Create(ctx, "Filho", "", "", &root.ID, "", false)
+	other, _ := svc.Create(ctx, "Outro", "", "", nil, "", false)
+
+	_, err := svc.Update(ctx, root.ID, "Raiz", "", "", &other.ID, "", false)
+
+	var ve *services.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
+	}
+}
+
+func TestThemeService_Update_AcceptsValidReparent(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+
+	root, _ := svc.Create(ctx, "Raiz", "", "", nil, "", false)
+	leaf, _ := svc.Create(ctx, "Folha", "", "", nil, "", false)
+
+	updated, err := svc.Update(ctx, leaf.ID, "Folha", "", "", &root.ID, "", false)
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if updated.ParentID == nil || *updated.ParentID != root.ID {
+		t.Errorf("parent = %v, want %q", updated.ParentID, root.ID)
+	}
+}
+
+func TestThemeService_Create_RejectsSubcategoryOfSubcategory(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+
+	root, _ := svc.Create(ctx, "Raiz", "", "", nil, "", false)
+	child, _ := svc.Create(ctx, "Filho", "", "", &root.ID, "", false)
+
+	_, err := svc.Create(ctx, "Neto", "", "", &child.ID, "", false)
+
+	var ve *services.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
+	}
+}
