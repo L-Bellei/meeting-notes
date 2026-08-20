@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react"
-import { Plus, Tag, X, Trash2, ChevronRight, Pencil, Pin, PinOff } from "lucide-react"
+import { Plus, Tag, X, Pin, PinOff } from "lucide-react"
 import { useThemes, useDeleteTheme, type Theme } from "../../hooks/useThemes"
 import { useMeetings } from "../../hooks/useMeetings"
 import { useSidebarPinned } from "../../hooks/useSidebarPinned"
 import { ThemeEditModal } from "./ThemeEditModal"
+import { ThemeRow } from "./ThemeRow"
 import { Button } from "../ui/button"
 import { cn } from "../../lib/utils"
 
@@ -22,7 +23,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [creating, setCreating] = useState<{ parentId: string | null } | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<Theme | null>(null)
   const [editingTheme, setEditingTheme] = useState<Theme | null>(null)
 
   useEffect(() => {
@@ -42,80 +43,28 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
     return direct + fromChildren
   }
 
-  async function handleDelete(id: string, e: React.MouseEvent) {
-    e.stopPropagation()
-    if (confirmDelete === id) {
-      await deleteTheme.mutateAsync(id)
-      setConfirmDelete(null)
-      if (selectedThemeId === id) onSelectTheme(null)
-    } else {
-      setConfirmDelete(id)
-    }
-  }
-
-  function toggleExpand(id: string, e: React.MouseEvent) {
-    e.stopPropagation()
+  function toggleExpand(id: string) {
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
-  function ThemeRow({ theme, depth = 0 }: { theme: Theme; depth?: number }) {
+  function renderRow(theme: Theme, depth = 0) {
     const children = childrenOf(theme.id)
-    const hasChildren = children.length > 0
-    const isExpanded = expanded[theme.id]
-    const isSelected = selectedThemeId === theme.id
-    const isConfirming = confirmDelete === theme.id
-
     return (
-      <div>
-        <div
-          className={cn(
-            "group w-full text-left rounded-xl px-2 py-2 text-sm flex items-center gap-1 hover:bg-accent transition-colors mt-0.5 cursor-pointer",
-            isSelected && "bg-accent font-medium",
-            depth > 0 && "ml-4"
-          )}
-          onClick={() => onSelectTheme(theme.id)}
-        >
-          {/* expand arrow */}
-          <button
-            onClick={e => toggleExpand(theme.id, e)}
-            className={cn("w-4 h-4 flex items-center justify-center flex-shrink-0 text-muted-foreground transition-transform", !hasChildren && "invisible")}
-          >
-            <ChevronRight size={12} className={cn("transition-transform", isExpanded && "rotate-90")} />
-          </button>
-
-          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: theme.color }} />
-          <span className="truncate flex-1 text-muted-foreground">{theme.name}</span>
-
-          <span className="text-xs text-muted-foreground mr-1">{countForTheme(theme.id)}</span>
-
-          {/* actions: add sub-theme + edit + delete */}
-          <div className="hidden group-hover:flex items-center gap-1 flex-shrink-0">
-            <button
-              title="Nova subcategoria"
-              onClick={e => { e.stopPropagation(); setCreating({ parentId: theme.id }) }}
-              className="p-0.5 rounded hover:bg-primary/20 text-muted-foreground hover:text-primary"
-            >
-              <Plus size={11} />
-            </button>
-            <button
-              title="Editar tema"
-              onClick={e => { e.stopPropagation(); setEditingTheme(theme) }}
-              className="p-0.5 rounded hover:bg-primary/20 text-muted-foreground hover:text-primary"
-            >
-              <Pencil size={11} />
-            </button>
-            <button
-              title={isConfirming ? "Clique novamente para confirmar" : "Excluir tema"}
-              onClick={e => handleDelete(theme.id, e)}
-              className={cn("p-0.5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive", isConfirming && "text-destructive bg-destructive/20")}
-            >
-              <Trash2 size={11} />
-            </button>
-          </div>
-        </div>
-
-        {/* children */}
-        {isExpanded && children.map(c => <ThemeRow key={c.id} theme={c} depth={depth + 1} />)}
+      <div key={theme.id}>
+        <ThemeRow
+          theme={theme}
+          depth={depth}
+          count={countForTheme(theme.id)}
+          selected={selectedThemeId === theme.id}
+          expanded={!!expanded[theme.id]}
+          hasChildren={children.length > 0}
+          onSelect={() => onSelectTheme(theme.id)}
+          onToggleExpand={() => toggleExpand(theme.id)}
+          onCreateChild={() => setCreating({ parentId: theme.id })}
+          onEdit={() => setEditingTheme(theme)}
+          onDelete={() => setConfirmDelete(theme)}
+        />
+        {expanded[theme.id] && children.map(c => renderRow(c, depth + 1))}
       </div>
     )
   }
@@ -178,8 +127,35 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
             <span className="text-xs text-muted-foreground">{allMeetings.length}</span>
           </button>
 
-          {parents.map(theme => <ThemeRow key={theme.id} theme={theme} />)}
+          {parents.map(theme => renderRow(theme))}
         </div>
+
+        {confirmDelete && (
+          <div className="mx-2 mb-2 p-3 rounded-xl bg-destructive/10 border border-destructive/30">
+            <p className="text-xs text-foreground">
+              Excluir <span className="font-medium">{confirmDelete.name}</span>?
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              As {countForTheme(confirmDelete.id)} reuniões continuam, sem tema.
+              {childrenOf(confirmDelete.id).length > 0 && " As subcategorias sobem para a raiz."}
+            </p>
+            <div className="flex justify-end gap-2 mt-2">
+              <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(null)}>Cancelar</Button>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  const id = confirmDelete.id
+                  await deleteTheme.mutateAsync(id)
+                  if (selectedThemeId === id) onSelectTheme(null)
+                  setConfirmDelete(null)
+                }}
+                disabled={deleteTheme.isPending}
+              >
+                Excluir
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="p-3 border-t border-border">
           <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => setCreating({ parentId: null })}>
