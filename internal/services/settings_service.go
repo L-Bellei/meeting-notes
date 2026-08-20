@@ -20,6 +20,7 @@ var validSettings = map[string]func(string) error{
 	"keep_audio":             validateEnum("true", "false"),
 	"recording_hotkey":       func(string) error { return nil },
 	"meeting_name_template":  func(string) error { return nil },
+	"sidebar_pinned":         validateEnum("true", "false"),
 }
 
 func validateEnum(allowed ...string) func(string) error {

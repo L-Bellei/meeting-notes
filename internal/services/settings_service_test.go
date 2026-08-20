@@ -69,3 +69,24 @@ func TestSettingsService_Update_UnknownKeyRejected(t *testing.T) {
 		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
 	}
 }
+
+func TestSettingsService_Update_SidebarPinned(t *testing.T) {
+	svc := newSettingsSvc(t)
+	err := svc.Update(context.Background(), map[string]string{"sidebar_pinned": "true"})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	m, _ := svc.GetAll(context.Background())
+	if m["sidebar_pinned"] != "true" {
+		t.Errorf("sidebar_pinned = %q, want true", m["sidebar_pinned"])
+	}
+}
+
+func TestSettingsService_Update_InvalidSidebarPinned(t *testing.T) {
+	svc := newSettingsSvc(t)
+	err := svc.Update(context.Background(), map[string]string{"sidebar_pinned": "yes"})
+	var ve *services.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
+	}
+}
