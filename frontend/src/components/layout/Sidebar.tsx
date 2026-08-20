@@ -2,7 +2,7 @@ import { useState } from "react"
 import { Plus, Tag, X, Trash2, ChevronRight, Pencil } from "lucide-react"
 import { useThemes, useCreateTheme, useDeleteTheme, type Theme } from "../../hooks/useThemes"
 import { useMeetings } from "../../hooks/useMeetings"
-import { ThemeEditModal } from "./ThemeEditModal"
+import { ThemeEditModal } from "../sidebar/ThemeEditModal"
 import { Button } from "../ui/button"
 import { cn } from "../../lib/utils"
 
@@ -206,7 +206,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
           )}
         </div>
       </div>
-      <ThemeEditModal theme={editingTheme} onClose={() => setEditingTheme(null)} />
+      <ThemeEditModal mode="edit" theme={editingTheme} onClose={() => setEditingTheme(null)} />
     </>
   )
 }

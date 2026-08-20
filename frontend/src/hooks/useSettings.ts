@@ -13,6 +13,7 @@ export interface Settings {
   whisper_model: string
   recording_hotkey: string
   meeting_name_template: string
+  sidebar_pinned: string
 }
 
 export function useSettings() {
