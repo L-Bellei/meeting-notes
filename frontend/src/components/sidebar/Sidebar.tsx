@@ -43,6 +43,12 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
     return direct + fromChildren
   }
 
+  function untaggedMeetingsCopy(count: number) {
+    if (count === 0) return "Nenhuma reunião fica sem tema."
+    if (count === 1) return "A 1 reunião continua, sem tema."
+    return `As ${count} reuniões continuam, sem tema.`
+  }
+
   function toggleExpand(id: string) {
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
   }
@@ -136,7 +142,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
               Excluir <span className="font-medium">{confirmDelete.name}</span>?
             </p>
             <p className="text-[11px] text-muted-foreground mt-1">
-              As {countForTheme(confirmDelete.id)} reuniões continuam, sem tema.
+              {untaggedMeetingsCopy(countForTheme(confirmDelete.id))}
               {childrenOf(confirmDelete.id).length > 0 && " As subcategorias sobem para a raiz."}
             </p>
             <div className="flex justify-end gap-2 mt-2">

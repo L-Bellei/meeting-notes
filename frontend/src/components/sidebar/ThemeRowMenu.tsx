@@ -16,6 +16,7 @@ export function ThemeRowMenu({ anchor, canAddChild, onAddChild, onEdit, onDelete
 
   useEffect(() => {
     function onDown(e: MouseEvent) {
+      if (anchor && anchor.contains(e.target as Node)) return
       if (ref.current && !ref.current.contains(e.target as Node)) onClose()
     }
     function onKey(e: KeyboardEvent) {
@@ -27,7 +28,7 @@ export function ThemeRowMenu({ anchor, canAddChild, onAddChild, onEdit, onDelete
       document.removeEventListener("mousedown", onDown)
       document.removeEventListener("keydown", onKey)
     }
-  }, [onClose])
+  }, [onClose, anchor])
 
   if (!anchor) return null
   const r = anchor.getBoundingClientRect()
@@ -39,14 +40,14 @@ export function ThemeRowMenu({ anchor, canAddChild, onAddChild, onEdit, onDelete
       className="fixed z-50 w-44 py-1 bg-[#1a1a1a] border border-border rounded-xl shadow-xl"
     >
       {canAddChild && (
-        <button onClick={onAddChild} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground">
+        <button type="button" onClick={onAddChild} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground">
           <Plus size={12} /> Nova subcategoria
         </button>
       )}
-      <button onClick={onEdit} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground">
+      <button type="button" onClick={onEdit} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground">
         <Pencil size={12} /> Editar tema
       </button>
-      <button onClick={onDelete} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10">
+      <button type="button" onClick={onDelete} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10">
         <Trash2 size={12} /> Excluir tema
       </button>
     </div>,
