@@ -1,8 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
-import importlib
 from pathlib import Path
 
-from PyInstaller.building.datastruct import Tree
 from PyInstaller.utils.hooks import (
     collect_all,
     collect_data_files,
@@ -40,8 +38,13 @@ hiddenimports += ["_portaudiowpatch"]
 # looks it up as a real sibling directory, so it falls outside collect_all("av").
 datas, binaries = collect_delvewheel_libs_directory("av", datas=datas, binaries=binaries)
 
-nvidia_root = Path(importlib.import_module("nvidia").__file__).parent
-datas += [(str(nvidia_root / "__init__.py"), "nvidia")]
+# The nvidia.cudnn / nvidia.cublas GPU DLLs (~1.6 GB) are deliberately NOT
+# collected here, to keep the installer small and match the size of prior
+# releases. transcriber.py._setup_dll_paths() still tries to import them at
+# startup; when that import fails (because they're absent from the bundle),
+# it skips silently, ctranslate2.get_cuda_device_count() reports 0, and the
+# service falls back to device="cpu" / compute_type="int8" - that fallback
+# is the intended production path for this release, not a bug.
 
 a = Analysis(
     [str(AUDIO_SERVICE_ROOT / "run.py")],
@@ -56,18 +59,6 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
-
-# transcriber.py._setup_dll_paths() dynamically imports nvidia.cudnn / nvidia.cublas
-# and requires their `bin` directories to exist as real folders on disk (it calls
-# os.add_dll_directory() and then globs *.dll in them). Neither the dynamic import
-# nor the directory check is visible to static analysis, and collecting the DLLs
-# as ordinary "binaries" would flatten them into the bundle root instead of
-# preserving the nvidia/<pkg>/bin layout the runtime code depends on - so they are
-# appended as a literal Tree of loose files after Analysis, since Tree() produces
-# 3-tuple TOC entries that Analysis(datas=...) itself cannot accept.
-for nvidia_pkg in ("nvidia.cudnn", "nvidia.cublas"):
-    pkg_root = Path(importlib.import_module(nvidia_pkg).__file__).parent
-    a.datas += Tree(str(pkg_root), prefix=nvidia_pkg.replace(".", "/"), excludes=["__pycache__", "*.pyc"])
 
 pyz = PYZ(a.pure)
 
