@@ -96,7 +96,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
           selected={selectedThemeId === theme.id}
           expanded={!!expanded[theme.id]}
           hasChildren={children.length > 0}
-          draggable={depth === 0 && children.length === 0}
+          draggable={children.length === 0}
           droppable={depth === 0 && theme.id !== activeId}
           onSelect={() => onSelectTheme(theme.id)}
           onToggleExpand={() => toggleExpand(theme.id)}
