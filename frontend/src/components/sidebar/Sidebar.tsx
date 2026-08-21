@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react"
+import { DndContext, PointerSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
 import { Plus, Tag, X, Pin, PinOff } from "lucide-react"
-import { useThemes, useDeleteTheme, type Theme } from "../../hooks/useThemes"
+import { useThemes, useDeleteTheme, useUpdateTheme, type Theme } from "../../hooks/useThemes"
 import { useMeetings } from "../../hooks/useMeetings"
 import { useSidebarPinned } from "../../hooks/useSidebarPinned"
+import { useThemeExpanded } from "../../hooks/useThemeExpanded"
 import { ThemeEditModal } from "./ThemeEditModal"
 import { ThemeRow } from "./ThemeRow"
 import { Button } from "../ui/button"
@@ -20,11 +22,45 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
   const { data: themes = [] } = useThemes()
   const { data: allMeetings = [] } = useMeetings()
   const deleteTheme = useDeleteTheme()
+  const updateTheme = useUpdateTheme()
 
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const { expanded, toggle: toggleExpand, expand } = useThemeExpanded(themes.map(t => t.id))
   const [creating, setCreating] = useState<{ parentId: string | null } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Theme | null>(null)
   const [editingTheme, setEditingTheme] = useState<Theme | null>(null)
+  const [dragError, setDragError] = useState("")
+  const [activeId, setActiveId] = useState<string | null>(null)
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const { setNodeRef: setRootRef, isOver: rootIsOver } = useDroppable({ id: "drop-root" })
+
+  async function handleDragEnd(e: DragEndEvent) {
+    const themeId = String(e.active.id)
+    const overId = e.over ? String(e.over.id) : ""
+    if (!overId) return
+
+    const moved = themes.find(t => t.id === themeId)
+    if (!moved) return
+
+    const parentId = overId === "drop-root" ? null : overId.replace("drop-", "")
+    if (parentId === themeId) return
+    if ((moved.parent_id ?? null) === parentId) return
+
+    setDragError("")
+    try {
+      await updateTheme.mutateAsync({
+        id: moved.id,
+        name: moved.name,
+        description: moved.description,
+        color: moved.color,
+        parent_id: parentId,
+        custom_prompt: moved.custom_prompt,
+        auto_add_to_board: moved.auto_add_to_board,
+      })
+    } catch (err) {
+      setDragError(err instanceof Error ? err.message : "Não foi possível mover o tema.")
+    }
+  }
 
   useEffect(() => {
     if (pinned || !open) return
@@ -49,10 +85,6 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
     return `As ${count} reuniões continuam, sem tema.`
   }
 
-  function toggleExpand(id: string) {
-    setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
-  }
-
   function renderRow(theme: Theme, depth = 0) {
     const children = childrenOf(theme.id)
     return (
@@ -64,6 +96,8 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
           selected={selectedThemeId === theme.id}
           expanded={!!expanded[theme.id]}
           hasChildren={children.length > 0}
+          draggable={depth === 0 && children.length === 0}
+          droppable={depth === 0 && theme.id !== activeId}
           onSelect={() => onSelectTheme(theme.id)}
           onToggleExpand={() => toggleExpand(theme.id)}
           onCreateChild={() => setCreating({ parentId: theme.id })}
@@ -81,7 +115,13 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
         <ThemeEditModal mode="edit" theme={editingTheme} onClose={() => setEditingTheme(null)} />
       )}
       {creating && (
-        <ThemeEditModal mode="create" theme={null} parentId={creating.parentId} onClose={() => setCreating(null)} />
+        <ThemeEditModal
+          mode="create"
+          theme={null}
+          parentId={creating.parentId}
+          onClose={() => setCreating(null)}
+          onCreated={t => { if (t.parent_id) expand(t.parent_id) }}
+        />
       )}
     </>
   )
@@ -119,22 +159,42 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
             )}
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto px-2">
-          <button
-            onClick={() => onSelectTheme(null)}
-            className={cn(
-              "w-full text-left rounded-xl px-3 py-2.5 text-sm flex items-center justify-between hover:bg-accent transition-colors",
-              selectedThemeId === null && "bg-accent text-foreground font-medium"
-            )}
-          >
-            <span className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
-              <Tag size={14} />Todos
-            </span>
-            <span className="text-xs text-muted-foreground">{allMeetings.length}</span>
-          </button>
+        <DndContext
+          sensors={sensors}
+          onDragStart={e => setActiveId(String(e.active.id))}
+          onDragEnd={e => { setActiveId(null); handleDragEnd(e) }}
+        >
+          <div className="flex-1 overflow-y-auto px-2">
+            <button
+              onClick={() => onSelectTheme(null)}
+              className={cn(
+                "w-full text-left rounded-xl px-3 py-2.5 text-sm flex items-center justify-between hover:bg-accent transition-colors",
+                selectedThemeId === null && "bg-accent text-foreground font-medium"
+              )}
+            >
+              <span className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
+                <Tag size={14} />Todos
+              </span>
+              <span className="text-xs text-muted-foreground">{allMeetings.length}</span>
+            </button>
 
-          {parents.map(theme => renderRow(theme))}
-        </div>
+            {activeId && (
+              <div
+                ref={setRootRef}
+                className={cn(
+                  "mx-2 mb-1 px-3 py-1.5 rounded-lg border border-dashed text-[11px] text-muted-foreground text-center transition-colors",
+                  rootIsOver ? "border-primary text-primary" : "border-border"
+                )}
+              >
+                Solte aqui para mover para a raiz
+              </div>
+            )}
+
+            {parents.map(theme => renderRow(theme))}
+          </div>
+
+          {dragError && <p className="mx-2 mb-2 text-[11px] text-destructive">{dragError}</p>}
+        </DndContext>
 
         {confirmDelete && (
           <div className="mx-2 mb-2 p-3 rounded-xl bg-destructive/10 border border-destructive/30">

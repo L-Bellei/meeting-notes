@@ -10,11 +10,12 @@ interface Props {
   theme: Theme | null
   parentId?: string | null
   onClose: () => void
+  onCreated?: (theme: Theme) => void
 }
 
 const DEFAULT_COLOR = "#7c3aed"
 
-export function ThemeEditModal({ mode, theme, parentId = null, onClose }: Props) {
+export function ThemeEditModal({ mode, theme, parentId = null, onClose, onCreated }: Props) {
   const createTheme = useCreateTheme()
   const updateTheme = useUpdateTheme()
   const { configured: aiConfigured } = useAIConfigured()
@@ -59,7 +60,7 @@ export function ThemeEditModal({ mode, theme, parentId = null, onClose }: Props)
           auto_add_to_board: autoAddToBoard,
         })
       } else {
-        await createTheme.mutateAsync({
+        const created = await createTheme.mutateAsync({
           name: name.trim(),
           description,
           color,
@@ -67,6 +68,7 @@ export function ThemeEditModal({ mode, theme, parentId = null, onClose }: Props)
           custom_prompt: customPrompt,
           auto_add_to_board: autoAddToBoard,
         })
+        onCreated?.(created)
       }
       onClose()
     } catch (e) {

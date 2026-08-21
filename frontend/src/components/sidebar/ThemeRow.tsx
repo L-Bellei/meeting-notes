@@ -1,4 +1,5 @@
 import { useRef, useState } from "react"
+import { useDraggable, useDroppable } from "@dnd-kit/core"
 import { ChevronRight, MoreHorizontal, Sparkles, LayoutGrid } from "lucide-react"
 import type { Theme } from "../../hooks/useThemes"
 import { ThemeRowMenu } from "./ThemeRowMenu"
@@ -11,6 +12,8 @@ interface Props {
   selected: boolean
   expanded: boolean
   hasChildren: boolean
+  draggable: boolean
+  droppable: boolean
   onSelect: () => void
   onToggleExpand: () => void
   onCreateChild: () => void
@@ -19,19 +22,27 @@ interface Props {
 }
 
 export function ThemeRow({
-  theme, depth, count, selected, expanded, hasChildren,
+  theme, depth, count, selected, expanded, hasChildren, draggable, droppable,
   onSelect, onToggleExpand, onCreateChild, onEdit, onDelete,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuBtn = useRef<HTMLButtonElement>(null)
   const hasPrompt = theme.custom_prompt.trim() !== ""
 
+  const drag = useDraggable({ id: theme.id, disabled: !draggable })
+  const drop = useDroppable({ id: `drop-${theme.id}`, disabled: !droppable })
+
   return (
     <div
+      ref={node => { drag.setNodeRef(node); drop.setNodeRef(node) }}
+      {...drag.attributes}
+      {...drag.listeners}
       className={cn(
         "group relative flex items-center gap-1 rounded-xl pr-1 mt-0.5 hover:bg-accent transition-colors",
         selected && "bg-accent",
-        depth > 0 && "ml-4"
+        depth > 0 && "ml-4",
+        drag.isDragging && "opacity-40",
+        drop.isOver && droppable && "ring-1 ring-primary"
       )}
     >
       <span
