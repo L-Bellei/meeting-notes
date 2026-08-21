@@ -31,7 +31,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: SidebarProps) {
-  const { pinned, toggle: togglePinned } = useSidebarPinned()
+  const { pinned, ready: pinnedReady, toggle: togglePinned } = useSidebarPinned()
   const { data: themes = [] } = useThemes()
   const { data: allMeetings = [] } = useMeetings()
   const deleteTheme = useDeleteTheme()
@@ -165,7 +165,8 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
               variant="ghost"
               size="icon"
               onClick={togglePinned}
-              title={pinned ? "Desafixar painel" : "Fixar painel"}
+              disabled={!pinnedReady}
+              title={pinnedReady ? (pinned ? "Desafixar painel" : "Fixar painel") : "Carregando preferências..."}
             >
               {pinned ? <PinOff size={15} /> : <Pin size={15} />}
             </Button>

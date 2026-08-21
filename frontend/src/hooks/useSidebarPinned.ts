@@ -17,10 +17,15 @@ function useSetSidebarPinned() {
 export function useSidebarPinned() {
   const { data: settings } = useSettings()
   const setPinned = useSetSidebarPinned()
+  const ready = settings !== undefined
   const pinned = settings?.sidebar_pinned === "true"
 
   return {
     pinned,
-    toggle: () => setPinned.mutate(!pinned),
+    ready,
+    toggle: () => {
+      if (!ready) return
+      setPinned.mutate(!pinned)
+    },
   }
 }

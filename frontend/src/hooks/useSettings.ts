@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { api } from "./useApi"
+import { api, useApiReady } from "./useApi"
 
 export interface Settings {
   user_name: string
@@ -17,9 +17,11 @@ export interface Settings {
 }
 
 export function useSettings() {
+  const apiReady = useApiReady()
   return useQuery({
     queryKey: ["settings"],
     queryFn: () => api<Settings>("/api/settings"),
+    enabled: apiReady,
   })
 }
 
