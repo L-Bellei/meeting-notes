@@ -4,6 +4,18 @@ Registro de decisões transversais ao projeto. Decisões específicas de cada fe
 
 ---
 
+## [2026-08-21] Instalador empacota o audio-service sem CUDA — produção transcreve em CPU
+
+**Contexto:** O `.spec` do PyInstaller vivia em `audio-service/build/pyinstaller/`, que é **gitignored** — nunca foi commitado e foi perdido junto com o diretório `build/`. Ao recriá-lo, um bundle com as DLLs da NVIDIA saiu com **1,9 GB** (`nvidia/cudnn` 993 MB + `nvidia/cublas` 548 MB; todo o resto ~300 MB). Isso expôs um fato que nenhum registro anterior mencionava: os instaladores publicados da v2.4.1, v2.4.2 e v2.5.0 têm **125,7 MB os três**, tamanho compatível apenas com o bundle **sem** as DLLs de CUDA.
+
+**Consequência (não era uma escolha consciente até agora):** no app instalado, `_setup_dll_paths` falha no `importlib.import_module("nvidia.cudnn")`, `ctranslate2.get_cuda_device_count()` retorna 0 e o `transcriber.py` cai para `device="cpu"`, `compute_type="int8"`. Em `wails dev` os pacotes `nvidia.*` estão no site-packages global, então **desenvolvimento roda em CUDA e produção roda em CPU** — a diferença nunca tinha sido notada porque o fallback é silencioso por design (ver decisão de 2026-05-01).
+
+**Escolha:** Manter CPU-only no instalador da 2.6.0, com o `.spec` excluindo os pacotes `nvidia.*` deliberadamente. Motivo: preserva o tamanho e o comportamento das releases anteriores; empacotar GPU levaria o instalador de ~125 MB para a casa de 700 MB–1 GB.
+
+**Justificativa e trade-off explícito:** transcrição com o modelo `medium` em CPU é bem mais lenta que em GPU. A alternativa (empacotar CUDA, possivelmente enxugando o `cudnn_engines_precompiled`) fica no backlog como opção consciente, não como bug. O `.spec` agora é **rastreado no git** (negação no `.gitignore`) para que a receita do bundle não se perca de novo.
+
+---
+
 ## [2026-08-20] Volta ao prompt único por tema (revert da estrutura por tipo)
 
 **Contexto:** A v2.5.0 dividiu o prompt do tema em geral + 3 overrides por tipo (resumo / pontos-chave / tarefas), revisitando a decisão de 2026-04-29 que era um YAGNI deliberado. Consulta ao banco de produção mostrou os 3 campos **vazios em todos os temas** — nenhum override foi usado na prática. O custo era um modal com 4 textareas onde 1 basta, mais `PromptFor`/`ThemePrompts` sustentando complexidade que ninguém exercitava.
