@@ -42,6 +42,63 @@ func TestOpen_IsIdempotent(t *testing.T) {
 	db2.Close()
 }
 
+func TestOpen_ThemesHasSingleCustomPrompt(t *testing.T) {
+	path := t.TempDir() + "/test.db"
+
+	db, err := database.Open(path)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+
+	rows, err := db.Query("PRAGMA table_info(themes)")
+	if err != nil {
+		t.Fatalf("table_info: %v", err)
+	}
+	defer rows.Close()
+
+	cols := map[string]bool{}
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull int
+		var dflt any
+		var pk int
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		cols[name] = true
+	}
+
+	if !cols["custom_prompt"] {
+		t.Error("custom_prompt column missing")
+	}
+	for _, gone := range []string{"custom_summary_prompt", "custom_key_points_prompt", "custom_tasks_prompt"} {
+		if cols[gone] {
+			t.Errorf("column %q should have been dropped by migration 016", gone)
+		}
+	}
+}
+
+func TestOpen_SeedsSidebarPinnedSetting(t *testing.T) {
+	path := t.TempDir() + "/test.db"
+
+	db, err := database.Open(path)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+
+	var value string
+	row := db.QueryRow("SELECT value FROM settings WHERE key = ?", "sidebar_pinned")
+	if err := row.Scan(&value); err != nil {
+		t.Fatalf("sidebar_pinned setting not found after migration: %v", err)
+	}
+	if value != "false" {
+		t.Errorf("sidebar_pinned = %q, want %q", value, "false")
+	}
+}
+
 func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }

@@ -4,6 +4,48 @@ Registro de decisões transversais ao projeto. Decisões específicas de cada fe
 
 ---
 
+## [2026-08-21] Instalador empacota o audio-service sem CUDA — produção transcreve em CPU
+
+**Contexto:** O `.spec` do PyInstaller vivia em `audio-service/build/pyinstaller/`, que é **gitignored** — nunca foi commitado e foi perdido junto com o diretório `build/`. Ao recriá-lo, um bundle com as DLLs da NVIDIA saiu com **1,9 GB** (`nvidia/cudnn` 993 MB + `nvidia/cublas` 548 MB; todo o resto ~300 MB). Isso expôs um fato que nenhum registro anterior mencionava: os instaladores publicados da v2.4.1, v2.4.2 e v2.5.0 têm **125,7 MB os três**, tamanho compatível apenas com o bundle **sem** as DLLs de CUDA.
+
+**Consequência (não era uma escolha consciente até agora):** no app instalado, `_setup_dll_paths` falha no `importlib.import_module("nvidia.cudnn")`, `ctranslate2.get_cuda_device_count()` retorna 0 e o `transcriber.py` cai para `device="cpu"`, `compute_type="int8"`. Em `wails dev` os pacotes `nvidia.*` estão no site-packages global, então **desenvolvimento roda em CUDA e produção roda em CPU** — a diferença nunca tinha sido notada porque o fallback é silencioso por design (ver decisão de 2026-05-01).
+
+**Escolha:** Manter CPU-only no instalador da 2.6.0, com o `.spec` excluindo os pacotes `nvidia.*` deliberadamente. Motivo: preserva o tamanho e o comportamento das releases anteriores; empacotar GPU levaria o instalador de ~125 MB para a casa de 700 MB–1 GB.
+
+**Justificativa e trade-off explícito:** transcrição com o modelo `medium` em CPU é bem mais lenta que em GPU. A alternativa (empacotar CUDA, possivelmente enxugando o `cudnn_engines_precompiled`) fica no backlog como opção consciente, não como bug. O `.spec` agora é **rastreado no git** (negação no `.gitignore`) para que a receita do bundle não se perca de novo.
+
+---
+
+## [2026-08-20] Volta ao prompt único por tema (revert da estrutura por tipo)
+
+**Contexto:** A v2.5.0 dividiu o prompt do tema em geral + 3 overrides por tipo (resumo / pontos-chave / tarefas), revisitando a decisão de 2026-04-29 que era um YAGNI deliberado. Consulta ao banco de produção mostrou os 3 campos **vazios em todos os temas** — nenhum override foi usado na prática. O custo era um modal com 4 textareas onde 1 basta, mais `PromptFor`/`ThemePrompts` sustentando complexidade que ninguém exercitava.
+
+**Escolha:** Voltar ao `custom_prompt` único. Migration `016` derruba as 3 colunas; `PromptKind`, `Theme.PromptFor` e `models.ThemePrompts` deixam de existir; `ThemeService.Create/Update` recebem `customPrompt string` (um parâmetro, não as 4 strings posicionais que o `ThemePrompts` existia para evitar). O degrau `"" → prompt padrão` continua em `buildInstruction`, então `internal/ai` não muda.
+
+**Justificativa:** A decisão de 2026-04-29 estava certa para este app — usuário único, uso pessoal. Reverter enquanto o custo é zero (campos vazios) é mais barato que manter a estrutura viva à espera de um uso que não veio. **Consequência a registrar:** `DROP COLUMN` é irreversível e migrations rodam ao abrir o banco, então um banco migrado não volta a funcionar numa v2.5.0 — downgrade deixa de ser possível.
+
+---
+
+## [2026-08-20] Estado de UI efêmero em localStorage; preferências de verdade no banco
+
+**Contexto:** O overhaul da aba de temas trouxe dois estados novos de UI: se o painel está fixado, e quais temas estão expandidos. O projeto até então não usava `localStorage` em lugar nenhum — tudo passava pela tabela `settings`.
+
+**Escolha:** Dividir por natureza do dado. **Preferência** (`sidebar_pinned`) vai para `settings`, na whitelist do `SettingsService` — é uma escolha do usuário, controlável também pelo modal de Configurações no futuro. **Estado efêmero de forma variável** (conjunto de temas expandidos) vai para `localStorage["theme_expanded"]`, com poda na leitura contra os temas existentes, para que IDs de temas excluídos não acumulem.
+
+**Justificativa:** Cada clique num chevron viraria um `PUT /api/settings` se a expansão morasse no banco, e um JSON de IDs órfãos acumularia lixo. Já o pin é uma preferência legítima e merece o mesmo tratamento das outras. Corolário: quem lê o pin de dentro de um componente usa uma mutation que invalida só `["settings"]` — `useUpdateSettings` também invalida `["ai-health"]`, o que dispararia um ping real no provider de IA a cada toque no pino.
+
+---
+
+## [2026-08-20] Hierarquia de temas com teto de 2 níveis, validada no service
+
+**Contexto:** `themes.parent_id` permite profundidade arbitrária, e `ThemeService.Update` atribuía o pai **sem validação nenhuma** — auto-referência e ciclos eram alcançáveis pela API. A UI nunca expôs reparent, então nunca importou; o drag-and-drop tornou alcançável.
+
+**Escolha:** Teto de **2 níveis** (tema raiz → subcategoria), validado em `ThemeService` no `Create` e no `Update`: nada é pai de si mesmo; o pai escolhido não pode ter pai; um tema que tem filhos não pode virar filho. Violação → `ValidationError` → HTTP 422. O frontend bloqueia o drop inválido, mas o backend é a autoridade.
+
+**Justificativa:** Ciclos ficam impossíveis por construção, sem precisar subir a cadeia de pais. E o teto torna **correto por construção** o `countForTheme` do frontend, que soma diretos + filhos diretos e ignora netos. Cuidado que o teto não cobre: a contagem exibida na confirmação de exclusão precisa ser a de reuniões **diretas**, porque excluir um tema só desassocia as reuniões dele — as subcategorias sobem para a raiz levando as suas.
+
+---
+
 ## [2026-07-18] Toda janela Win32 em Go: criação + registro de hotkey + message loop na mesma OS thread travada
 
 **Contexto:** Generaliza a decisão de 2026-05-01 (overlay). O tray (`cmd/desktop/tray.go`) criava a janela e registrava o hotkey na goroutine do `Start()`, mas rodava o `GetMessage` loop em **outra** goroutine. Por thread affinity do Win32, mensagens de janela (`WM_LBUTTONUP`/`WM_RBUTTONUP`) e `WM_HOTKEY` são entregues apenas à fila da thread que criou a janela / registrou o hotkey — então cliques no ícone e o hotkey global eram perdidos de forma intermitente.

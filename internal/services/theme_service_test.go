@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"meeting-notes/internal/database"
-	"meeting-notes/internal/models"
 	"meeting-notes/internal/repository"
 	"meeting-notes/internal/services"
 )
@@ -25,7 +24,7 @@ func TestThemeService_Create(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 
-	theme, err := svc.Create(ctx, "Produto", "Reuniões de produto", "#8b5cf6", nil, models.ThemePrompts{}, false)
+	theme, err := svc.Create(ctx, "Produto", "Reuniões de produto", "#8b5cf6", nil, "", false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -46,7 +45,7 @@ func TestThemeService_Create(t *testing.T) {
 func TestThemeService_Create_DefaultColor(t *testing.T) {
 	svc := newTestService(t)
 
-	theme, err := svc.Create(context.Background(), "Sem cor", "", "", nil, models.ThemePrompts{}, false)
+	theme, err := svc.Create(context.Background(), "Sem cor", "", "", nil, "", false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -58,7 +57,7 @@ func TestThemeService_Create_DefaultColor(t *testing.T) {
 func TestThemeService_Create_NameRequired(t *testing.T) {
 	svc := newTestService(t)
 
-	_, err := svc.Create(context.Background(), "", "", "", nil, models.ThemePrompts{}, false)
+	_, err := svc.Create(context.Background(), "", "", "", nil, "", false)
 	var ve *services.ValidationError
 	if !errors.As(err, &ve) {
 		t.Errorf("expected ValidationError, got %T: %v", err, err)
@@ -69,8 +68,8 @@ func TestThemeService_Create_DuplicateName(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 
-	svc.Create(ctx, "Dup", "", "", nil, models.ThemePrompts{}, false)
-	_, err := svc.Create(ctx, "Dup", "", "", nil, models.ThemePrompts{}, false)
+	svc.Create(ctx, "Dup", "", "", nil, "", false)
+	_, err := svc.Create(ctx, "Dup", "", "", nil, "", false)
 	if !errors.Is(err, repository.ErrDuplicate) {
 		t.Errorf("expected ErrDuplicate, got %v", err)
 	}
@@ -80,7 +79,7 @@ func TestThemeService_GetByID(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 
-	created, _ := svc.Create(ctx, "Eng", "", "", nil, models.ThemePrompts{}, false)
+	created, _ := svc.Create(ctx, "Eng", "", "", nil, "", false)
 	got, err := svc.GetByID(ctx, created.ID)
 	if err != nil {
 		t.Fatalf("GetByID: %v", err)
@@ -103,8 +102,8 @@ func TestThemeService_Update(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 
-	created, _ := svc.Create(ctx, "Original", "", "", nil, models.ThemePrompts{}, false)
-	updated, err := svc.Update(ctx, created.ID, "Novo Nome", "nova desc", "#ff0000", nil, models.ThemePrompts{}, false)
+	created, _ := svc.Create(ctx, "Original", "", "", nil, "", false)
+	updated, err := svc.Update(ctx, created.ID, "Novo Nome", "nova desc", "#ff0000", nil, "", false)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -120,8 +119,8 @@ func TestThemeService_Update_NameRequired(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 
-	created, _ := svc.Create(ctx, "Original", "", "", nil, models.ThemePrompts{}, false)
-	_, err := svc.Update(ctx, created.ID, "", "", "", nil, models.ThemePrompts{}, false)
+	created, _ := svc.Create(ctx, "Original", "", "", nil, "", false)
+	_, err := svc.Update(ctx, created.ID, "", "", "", nil, "", false)
 	var ve *services.ValidationError
 	if !errors.As(err, &ve) {
 		t.Errorf("expected ValidationError, got %T: %v", err, err)
@@ -132,7 +131,7 @@ func TestThemeService_Delete(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 
-	created, _ := svc.Create(ctx, "Para deletar", "", "", nil, models.ThemePrompts{}, false)
+	created, _ := svc.Create(ctx, "Para deletar", "", "", nil, "", false)
 	if err := svc.Delete(ctx, created.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
@@ -146,8 +145,8 @@ func TestThemeService_List(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 
-	svc.Create(ctx, "B", "", "", nil, models.ThemePrompts{}, false)
-	svc.Create(ctx, "A", "", "", nil, models.ThemePrompts{}, false)
+	svc.Create(ctx, "B", "", "", nil, "", false)
+	svc.Create(ctx, "A", "", "", nil, "", false)
 
 	themes, err := svc.List(ctx)
 	if err != nil {
@@ -161,27 +160,99 @@ func TestThemeService_List(t *testing.T) {
 	}
 }
 
-func TestThemeService_Create_PersistsTypePrompts(t *testing.T) {
+func TestThemeService_Create_PersistsCustomPrompt(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 
-	theme, err := svc.Create(ctx, "Prompts", "", "", nil,
-		models.ThemePrompts{General: "g", Summary: "s", KeyPoints: "k", Tasks: "t"}, false)
+	theme, err := svc.Create(ctx, "Prompts", "", "", nil, "g", false)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if theme.CustomPrompt != "g" || theme.CustomSummaryPrompt != "s" ||
-		theme.CustomKeyPointsPrompt != "k" || theme.CustomTasksPrompt != "t" {
-		t.Errorf("prompts not mapped: %+v", theme)
+	if theme.CustomPrompt != "g" {
+		t.Errorf("custom prompt = %q, want %q", theme.CustomPrompt, "g")
 	}
 
-	updated, err := svc.Update(ctx, theme.ID, "Prompts", "", "", nil,
-		models.ThemePrompts{General: "g2", Summary: "s2"}, false)
+	updated, err := svc.Update(ctx, theme.ID, "Prompts", "", "", nil, "g2", false)
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if updated.CustomPrompt != "g2" || updated.CustomSummaryPrompt != "s2" ||
-		updated.CustomKeyPointsPrompt != "" || updated.CustomTasksPrompt != "" {
-		t.Errorf("update did not map prompts: %+v", updated)
+	if updated.CustomPrompt != "g2" {
+		t.Errorf("updated custom prompt = %q, want %q", updated.CustomPrompt, "g2")
+	}
+}
+
+func TestThemeService_Update_RejectsSelfAsParent(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+
+	created, _ := svc.Create(ctx, "Solo", "", "", nil, "", false)
+	_, err := svc.Update(ctx, created.ID, "Solo", "", "", &created.ID, "", false)
+
+	var ve *services.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
+	}
+}
+
+func TestThemeService_Update_RejectsThreeLevels(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+
+	root, _ := svc.Create(ctx, "Raiz", "", "", nil, "", false)
+	child, _ := svc.Create(ctx, "Filho", "", "", &root.ID, "", false)
+	grand, _ := svc.Create(ctx, "Neto", "", "", nil, "", false)
+
+	_, err := svc.Update(ctx, grand.ID, "Neto", "", "", &child.ID, "", false)
+
+	var ve *services.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
+	}
+}
+
+func TestThemeService_Update_RejectsMovingParentWithChildren(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+
+	root, _ := svc.Create(ctx, "Raiz", "", "", nil, "", false)
+	_, _ = svc.Create(ctx, "Filho", "", "", &root.ID, "", false)
+	other, _ := svc.Create(ctx, "Outro", "", "", nil, "", false)
+
+	_, err := svc.Update(ctx, root.ID, "Raiz", "", "", &other.ID, "", false)
+
+	var ve *services.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
+	}
+}
+
+func TestThemeService_Update_AcceptsValidReparent(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+
+	root, _ := svc.Create(ctx, "Raiz", "", "", nil, "", false)
+	leaf, _ := svc.Create(ctx, "Folha", "", "", nil, "", false)
+
+	updated, err := svc.Update(ctx, leaf.ID, "Folha", "", "", &root.ID, "", false)
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if updated.ParentID == nil || *updated.ParentID != root.ID {
+		t.Errorf("parent = %v, want %q", updated.ParentID, root.ID)
+	}
+}
+
+func TestThemeService_Create_RejectsSubcategoryOfSubcategory(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+
+	root, _ := svc.Create(ctx, "Raiz", "", "", nil, "", false)
+	child, _ := svc.Create(ctx, "Filho", "", "", &root.ID, "", false)
+
+	_, err := svc.Create(ctx, "Neto", "", "", &child.ID, "", false)
+
+	var ve *services.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
 	}
 }

@@ -22,6 +22,8 @@ Itens fora do escopo das features já implementadas. Para features com plano ati
 
 ## Débitos técnicos
 
+- **Instalador transcreve em CPU** — o bundle do audio-service exclui as DLLs de CUDA de propósito (ver DECISIONS 2026-08-21). Empacotar GPU levaria o instalador de ~125 MB para 700 MB–1 GB. Caminho a investigar: manter só as DLLs que o ctranslate2 carrega de fato (o `cudnn_engines_precompiled` sozinho é a maior fatia) e revalidar `device: cuda` no bundle.
+
 - **Chunk size warning no build do frontend** — bundle JS de ~518 kB. Considerar code-splitting com `React.lazy` para BoardView e modais pesados.
 - **`frontend/dist/` duplicado** — existe `frontend/dist/` com arquivos obsoletos além do `cmd/desktop/frontend/dist/` que é o correto. Remover o diretório obsoleto (já no `.gitignore`, mas o diretório físico ainda existe).
 - **Silero VAD no PyInstaller** — `vad_filter=True` foi removido por falhar no bundle. Se quisermos reativar no futuro, os dados do modelo Silero precisam ser adicionados explicitamente ao `.spec`.

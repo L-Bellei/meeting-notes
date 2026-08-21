@@ -1,11 +1,30 @@
+import { useSyncExternalStore } from "react"
+
 let baseURL = ""
+const listeners = new Set<() => void>()
 
 export function getApiBase(): string {
   return baseURL
 }
 
 export function initApi(port: number) {
-  baseURL = `http://localhost:${port}`
+  const next = `http://localhost:${port}`
+  if (next === baseURL) return
+  baseURL = next
+  listeners.forEach(listener => listener())
+}
+
+function subscribe(callback: () => void): () => void {
+  listeners.add(callback)
+  return () => listeners.delete(callback)
+}
+
+function getReadySnapshot(): boolean {
+  return baseURL !== ""
+}
+
+export function useApiReady(): boolean {
+  return useSyncExternalStore(subscribe, getReadySnapshot)
 }
 
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {

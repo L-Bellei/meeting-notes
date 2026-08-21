@@ -14,6 +14,7 @@ interface MeetingListProps {
   onSelectMeeting: (id: string) => void
   onMeetingDeleted?: (id: string) => void
   onOpenSearch: () => void
+  onClearTheme: () => void
 }
 
 const STATUS_OPTIONS = [
@@ -43,7 +44,7 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })
 }
 
-export function MeetingList({ themeId, selectedMeetingId, onSelectMeeting, onMeetingDeleted, onOpenSearch }: MeetingListProps) {
+export function MeetingList({ themeId, selectedMeetingId, onSelectMeeting, onMeetingDeleted, onOpenSearch, onClearTheme }: MeetingListProps) {
   const [q, setQ] = useState("")
   const [status, setStatus] = useState("")
   const [startedAfter, setStartedAfter] = useState("")
@@ -62,6 +63,8 @@ export function MeetingList({ themeId, selectedMeetingId, onSelectMeeting, onMee
   const { data: themes = [] } = useThemes()
   const createMeeting = useCreateMeeting()
   const deleteMeeting = useDeleteMeeting()
+
+  const activeTheme = themes.find(t => t.id === themeId) ?? null
 
   const [creating, setCreating] = useState(false)
   const [newTitle, setNewTitle] = useState("")
@@ -124,6 +127,20 @@ export function MeetingList({ themeId, selectedMeetingId, onSelectMeeting, onMee
           </button>
         </div>
       </div>
+
+      {activeTheme && (
+        <div className="px-3 py-2 border-b border-border flex-shrink-0">
+          <button
+            onClick={onClearTheme}
+            title="Limpar filtro de tema"
+            className="inline-flex items-center gap-1.5 max-w-full rounded-full pl-2 pr-1.5 py-1 bg-accent border border-border text-xs text-foreground hover:bg-muted transition-colors"
+          >
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: activeTheme.color }} />
+            <span className="truncate">{activeTheme.name}</span>
+            <X size={12} className="flex-shrink-0 text-muted-foreground" />
+          </button>
+        </div>
+      )}
 
       {/* search bar — always visible */}
       <div className="px-2 pt-2 flex-shrink-0">

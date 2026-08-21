@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"meeting-notes/internal/models"
 	"meeting-notes/internal/repository"
 	"meeting-notes/internal/services"
 )
@@ -108,7 +107,7 @@ func (h *KeyPointHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	customPrompt := ""
 	if meeting.ThemeID != nil {
 		if theme, err := h.themeRepo.GetByID(r.Context(), *meeting.ThemeID); err == nil {
-			customPrompt = theme.PromptFor(models.PromptKeyPoints)
+			customPrompt = theme.CustomPrompt
 		}
 	}
 	kps, err := h.svc.Generate(r.Context(), meeting, customPrompt)

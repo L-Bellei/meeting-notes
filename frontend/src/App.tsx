@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { GetPort } from "./wailsjs/go/main/App"
 import { EventsOn } from "./wailsjs/runtime/runtime"
 import { initApi } from "./hooks/useApi"
 import { usePipeline } from "./hooks/usePipeline"
-import { Sidebar } from "./components/layout/Sidebar"
+import { Sidebar } from "./components/sidebar/Sidebar"
 import { MeetingList } from "./components/layout/MeetingList"
 import { MeetingDetail } from "./components/layout/MeetingDetail"
 import { Toolbar } from "./components/layout/Toolbar"
@@ -44,6 +44,13 @@ function AppInner() {
 
   const { data: settings } = useSettings()
   const recordingHotkey = formatHotkey(settings?.recording_hotkey ?? "ctrl+shift+r")
+
+  const pinnedSyncedRef = useRef(false)
+  useEffect(() => {
+    if (pinnedSyncedRef.current || !settings) return
+    pinnedSyncedRef.current = true
+    if (settings.sidebar_pinned === "true") setSidebarOpen(true)
+  }, [settings])
 
   useEffect(() => {
     let cancelled = false
@@ -129,10 +136,14 @@ function AppInner() {
         e.preventDefault()
         setSearchOpen(true)
       }
+      if (e.key === "b" && (e.ctrlKey || e.metaKey) && activeView === "meetings") {
+        e.preventDefault()
+        setSidebarOpen(o => !o)
+      }
     }
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
-  }, [])
+  }, [activeView])
 
   useEffect(() => {
     const unlisten = EventsOn("hotkey:recording-started", ({ meetingId }: { meetingId: string }) => {
@@ -191,23 +202,24 @@ function AppInner() {
             activeView={activeView}
             onChangeView={setActiveView}
           />
-          <Sidebar
-            open={sidebarOpen}
-            onClose={() => setSidebarOpen(false)}
-            selectedThemeId={selectedThemeId}
-            onSelectTheme={setSelectedThemeId}
-          />
           <div className="flex flex-1 overflow-hidden">
             {activeView === "board" ? (
               <BoardView />
             ) : (
               <>
+                <Sidebar
+                  open={sidebarOpen}
+                  onClose={() => setSidebarOpen(false)}
+                  selectedThemeId={selectedThemeId}
+                  onSelectTheme={setSelectedThemeId}
+                />
                 <MeetingList
                   themeId={selectedThemeId}
                   selectedMeetingId={selectedMeetingId}
                   onSelectMeeting={id => { setSelectedMeetingId(id); setHighlightQuery(undefined) }}
                   onMeetingDeleted={id => { if (selectedMeetingId === id) setSelectedMeetingId(null) }}
                   onOpenSearch={() => setSearchOpen(true)}
+                  onClearTheme={() => setSelectedThemeId(null)}
                 />
                 <MeetingDetail
                   meetingId={selectedMeetingId}

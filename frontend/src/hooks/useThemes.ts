@@ -8,9 +8,6 @@ export interface Theme {
   description: string
   color: string
   custom_prompt: string
-  custom_summary_prompt: string
-  custom_key_points_prompt: string
-  custom_tasks_prompt: string
   auto_add_to_board: boolean
   created_at: string
 }
@@ -22,7 +19,7 @@ export function useThemes() {
 export function useCreateTheme() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: { name: string; description: string; color: string; parent_id?: string | null; auto_add_to_board?: boolean }) =>
+    mutationFn: (data: { name: string; description: string; color: string; parent_id?: string | null; custom_prompt?: string; auto_add_to_board?: boolean }) =>
       api<Theme>("/api/themes", { method: "POST", body: JSON.stringify(data) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["themes"] }),
   })
@@ -31,7 +28,7 @@ export function useCreateTheme() {
 export function useUpdateTheme() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: { id: string; name: string; description: string; color: string; parent_id?: string | null; custom_prompt: string; custom_summary_prompt: string; custom_key_points_prompt: string; custom_tasks_prompt: string; auto_add_to_board?: boolean }) =>
+    mutationFn: (data: { id: string; name: string; description: string; color: string; parent_id?: string | null; custom_prompt: string; auto_add_to_board?: boolean }) =>
       api<Theme>(`/api/themes/${data.id}`, { method: "PUT", body: JSON.stringify(data) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["themes"] }),
   })
