@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { DndContext, PointerSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
 import { Plus, Tag, X, Pin, PinOff } from "lucide-react"
 import { useThemes, useDeleteTheme, useUpdateTheme, type Theme } from "../../hooks/useThemes"
 import { useMeetings } from "../../hooks/useMeetings"
@@ -7,8 +7,21 @@ import { useSidebarPinned } from "../../hooks/useSidebarPinned"
 import { useThemeExpanded } from "../../hooks/useThemeExpanded"
 import { ThemeEditModal } from "./ThemeEditModal"
 import { ThemeRow } from "./ThemeRow"
+import { RootDropZone } from "./RootDropZone"
 import { Button } from "../ui/button"
 import { cn } from "../../lib/utils"
+
+const MOVE_ERROR_MESSAGES: Record<string, string> = {
+  "theme cannot be its own parent": "Um tema não pode ser pai de si mesmo.",
+  "parent theme not found": "Tema pai não encontrado.",
+  "parent theme cannot be a subcategory": "O tema de destino já é uma subcategoria.",
+  "theme with subcategories cannot become a subcategory": "Um tema com subcategorias não pode se tornar uma subcategoria.",
+}
+
+function moveErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : ""
+  return MOVE_ERROR_MESSAGES[raw] ?? "Não foi possível mover o tema."
+}
 
 interface SidebarProps {
   open: boolean
@@ -29,10 +42,10 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
   const [confirmDelete, setConfirmDelete] = useState<Theme | null>(null)
   const [editingTheme, setEditingTheme] = useState<Theme | null>(null)
   const [dragError, setDragError] = useState("")
+  const [deleteError, setDeleteError] = useState("")
   const [activeId, setActiveId] = useState<string | null>(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
-  const { setNodeRef: setRootRef, isOver: rootIsOver } = useDroppable({ id: "drop-root" })
 
   async function handleDragEnd(e: DragEndEvent) {
     const themeId = String(e.active.id)
@@ -58,7 +71,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
         auto_add_to_board: moved.auto_add_to_board,
       })
     } catch (err) {
-      setDragError(err instanceof Error ? err.message : "Não foi possível mover o tema.")
+      setDragError(moveErrorMessage(err))
     }
   }
 
@@ -72,10 +85,14 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
   const parents = themes.filter(t => !t.parent_id)
   const childrenOf = (id: string) => themes.filter(t => t.parent_id === id)
 
+  function directCountForTheme(id: string) {
+    return allMeetings.filter(m => m.theme_id === id).length
+  }
+
   function countForTheme(id: string) {
     const children = childrenOf(id)
-    const direct = allMeetings.filter(m => m.theme_id === id).length
-    const fromChildren = children.reduce((acc, c) => acc + allMeetings.filter(m => m.theme_id === c.id).length, 0)
+    const direct = directCountForTheme(id)
+    const fromChildren = children.reduce((acc, c) => acc + directCountForTheme(c.id), 0)
     return direct + fromChildren
   }
 
@@ -102,7 +119,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
           onToggleExpand={() => toggleExpand(theme.id)}
           onCreateChild={() => setCreating({ parentId: theme.id })}
           onEdit={() => setEditingTheme(theme)}
-          onDelete={() => setConfirmDelete(theme)}
+          onDelete={() => { setDeleteError(""); setConfirmDelete(theme) }}
         />
         {expanded[theme.id] && children.map(c => renderRow(c, depth + 1))}
       </div>
@@ -178,17 +195,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
               <span className="text-xs text-muted-foreground">{allMeetings.length}</span>
             </button>
 
-            {activeId && (
-              <div
-                ref={setRootRef}
-                className={cn(
-                  "mx-2 mb-1 px-3 py-1.5 rounded-lg border border-dashed text-[11px] text-muted-foreground text-center transition-colors",
-                  rootIsOver ? "border-primary text-primary" : "border-border"
-                )}
-              >
-                Solte aqui para mover para a raiz
-              </div>
-            )}
+            <RootDropZone active={activeId !== null} />
 
             {parents.map(theme => renderRow(theme))}
           </div>
@@ -202,18 +209,23 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
               Excluir <span className="font-medium">{confirmDelete.name}</span>?
             </p>
             <p className="text-[11px] text-muted-foreground mt-1">
-              {untaggedMeetingsCopy(countForTheme(confirmDelete.id))}
+              {untaggedMeetingsCopy(directCountForTheme(confirmDelete.id))}
               {childrenOf(confirmDelete.id).length > 0 && " As subcategorias sobem para a raiz."}
             </p>
+            {deleteError && <p className="text-[11px] text-destructive mt-1">{deleteError}</p>}
             <div className="flex justify-end gap-2 mt-2">
-              <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(null)}>Cancelar</Button>
+              <Button variant="ghost" size="sm" onClick={() => { setDeleteError(""); setConfirmDelete(null) }}>Cancelar</Button>
               <Button
                 size="sm"
                 onClick={async () => {
                   const id = confirmDelete.id
-                  await deleteTheme.mutateAsync(id)
-                  if (selectedThemeId === id) onSelectTheme(null)
-                  setConfirmDelete(null)
+                  try {
+                    await deleteTheme.mutateAsync(id)
+                    if (selectedThemeId === id) onSelectTheme(null)
+                    setConfirmDelete(null)
+                  } catch (err) {
+                    setDeleteError(err instanceof Error ? err.message : "Não foi possível excluir o tema.")
+                  }
                 }}
                 disabled={deleteTheme.isPending}
               >

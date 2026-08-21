@@ -20,13 +20,16 @@ export function ThemeRowMenu({ anchor, canAddChild, onAddChild, onEdit, onDelete
       if (ref.current && !ref.current.contains(e.target as Node)) onClose()
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose()
+      if (e.key === "Escape") {
+        e.stopPropagation()
+        onClose()
+      }
     }
     document.addEventListener("mousedown", onDown)
-    document.addEventListener("keydown", onKey)
+    document.addEventListener("keydown", onKey, true)
     return () => {
       document.removeEventListener("mousedown", onDown)
-      document.removeEventListener("keydown", onKey)
+      document.removeEventListener("keydown", onKey, true)
     }
   }, [onClose, anchor])
 

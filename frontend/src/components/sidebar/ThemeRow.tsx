@@ -35,10 +35,9 @@ export function ThemeRow({
   return (
     <div
       ref={node => { drag.setNodeRef(node); drop.setNodeRef(node) }}
-      {...drag.attributes}
       {...drag.listeners}
       className={cn(
-        "group relative flex items-center gap-1 rounded-xl pr-1 mt-0.5 hover:bg-accent transition-colors",
+        "relative flex items-center gap-1 rounded-xl pr-1 mt-0.5 hover:bg-accent transition-colors",
         selected && "bg-accent",
         depth > 0 && "ml-4",
         drag.isDragging && "opacity-40",

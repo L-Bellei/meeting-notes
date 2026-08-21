@@ -136,14 +136,14 @@ function AppInner() {
         e.preventDefault()
         setSearchOpen(true)
       }
-      if (e.key === "b" && (e.ctrlKey || e.metaKey)) {
+      if (e.key === "b" && (e.ctrlKey || e.metaKey) && activeView === "meetings") {
         e.preventDefault()
         setSidebarOpen(o => !o)
       }
     }
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
-  }, [])
+  }, [activeView])
 
   useEffect(() => {
     const unlisten = EventsOn("hotkey:recording-started", ({ meetingId }: { meetingId: string }) => {

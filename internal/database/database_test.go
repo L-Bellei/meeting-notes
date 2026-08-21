@@ -80,6 +80,25 @@ func TestOpen_ThemesHasSingleCustomPrompt(t *testing.T) {
 	}
 }
 
+func TestOpen_SeedsSidebarPinnedSetting(t *testing.T) {
+	path := t.TempDir() + "/test.db"
+
+	db, err := database.Open(path)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+
+	var value string
+	row := db.QueryRow("SELECT value FROM settings WHERE key = ?", "sidebar_pinned")
+	if err := row.Scan(&value); err != nil {
+		t.Fatalf("sidebar_pinned setting not found after migration: %v", err)
+	}
+	if value != "false" {
+		t.Errorf("sidebar_pinned = %q, want %q", value, "false")
+	}
+}
+
 func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
