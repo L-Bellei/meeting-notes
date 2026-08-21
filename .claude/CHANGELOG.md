@@ -2,6 +2,37 @@
 
 ---
 
+## [2026-08-21] Prompt único por tema + overhaul da aba de temas — Release v2.6.0
+
+**Plano Superpowers:** `docs/superpowers/plans/2026-08-20-themes-single-prompt-and-sidebar.md`
+**Spec:** `docs/superpowers/specs/2026-08-20-themes-single-prompt-and-sidebar-design.md`
+**Fase do workflow Superpowers:** finishing concluído (PR #43 mergeada) + release.
+
+**Entregue (7 tasks via Subagent-Driven Development):**
+- **Revert dos prompts por tipo** (migration `016` com 3 `DROP COLUMN`): saem `PromptKind`, `Theme.PromptFor`, `models.ThemePrompts`; `ThemeService.Create/Update` recebem `customPrompt string`. `internal/ai` intocado. Motivo: os 3 campos estavam **vazios em todos os temas** do banco de produção.
+- **Painel de temas fixável** (`sidebar_pinned` em settings), sem auto-close ao selecionar, `Ctrl+B`, recolhe no Board e retoma ao voltar.
+- **Chip de filtro ativo** no header de Reuniões — antes nada indicava filtro com a gaveta fechada.
+- **Linha reescrita**: barra de cor de 3px, badges de prompt/auto-board, menu `⋯` sempre visível, três **botões irmãos** (corrige interativo aninhado).
+- **Exclusão com confirmação escrita** usando a contagem de reuniões **diretas** e o efeito real das FKs `ON DELETE SET NULL`.
+- **Hierarquia de 2 níveis** validada no service (auto-referência / pai-com-pai / tema-com-filhos → 422) + drag-and-drop com faixa de raiz; expansão em `localStorage`, podada contra temas existentes.
+- **Modal unificado** de criar/editar com cor, descrição e prompt.
+
+**Bugs achados testando o app rodando (não pelo review estático):**
+- **Faixa "mover para a raiz" era UI morta** — `useDroppable` registrava no contexto default do dnd-kit porque o hook rodava no componente que renderiza o `DndContext`. Rebaixar tema era porta de mão única. (Critical na review final.)
+- **Contagem errada na confirmação de exclusão** — usava a soma que inclui reuniões dos filhos.
+- **`{...drag.attributes}` reaninhava interativos** — dnd-kit emite `role="button" tabIndex=0` mesmo desabilitado, desfazendo a correção de acessibilidade da própria branch.
+- **Corrida no boot da query de settings** — `useSettings` disparava antes de `initApi(port)`, URL relativa retornava HTML, query morria em erro; o pino então parecia morto (clique mandava o valor que já estava no banco). Corrigido com gate de readiness via `useSyncExternalStore`. **Reportado pelo usuário**, não pelos reviews.
+
+**Processo/Qualidade:** brainstorm → spec → plano → execução TDD (7 tasks, implementer + task-reviewer por task) → review final whole-branch (opus): *Ready to merge **No*** com 1 Critical + 2 Important → fix wave de 10 achados → re-review (9/10) → 1 minor parqueado. Duas decisões de "plano vs review" foram levadas ao usuário.
+
+**Build/empacotamento:** o `.spec` do PyInstaller **estava perdido** (vivia em diretório gitignored, nunca commitado). Recriado, validado com `device: cuda` (1,9 GB) e depois reduzido a CPU-only (344 MB) por decisão do usuário. Agora **rastreado no git**. Instalador de 144 MB validado ponta a ponta: o binário de produção sobe o **próprio** bundle e o `/health` responde `model_loaded: true`.
+
+**Decisões transversais registradas:** prompt único (revisita 2026-04-29 e 2026-07-21), localStorage para estado efêmero de UI vs settings no banco, teto de 2 níveis na hierarquia, e **instalador CPU-only** (descoberta de que produção nunca teve CUDA).
+
+**Bloqueios:** o build da release ficou bloqueado até o `.spec` ser recriado do zero — não havia cópia do bundle nem do spec em nenhum lugar da máquina.
+
+---
+
 ## [2026-07-21] Prompts personalizados por tipo de geração — Release v2.5.0
 
 **Plano Superpowers:** `docs/superpowers/plans/2026-07-20-theme-type-prompts.md`

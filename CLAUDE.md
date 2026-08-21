@@ -43,6 +43,14 @@ Este projeto usa o plugin **Superpowers**. Ao iniciar qualquer nova feature:
 Specs em: `docs/superpowers/specs/`
 Planos em: `docs/superpowers/plans/`
 
+## Rodando em dev
+
+`wails dev` a partir de `cmd/desktop`. Duas armadilhas que já custaram tempo:
+- **O watcher só observa `cmd/desktop`.** Mudança em `internal/**` não rebuilda o Go — o app segue com o binário antigo, e depois de uma migration nova isso aparece como erro 500 de código velho contra banco já migrado. Reinicie o `wails dev` após mexer no backend.
+- **`SingleInstanceLock`**: subir um segundo `wails dev` com o primeiro rodando faz o novo sair com exit 0, silenciosamente. Mate o processo antes de reiniciar.
+
+Em dev o audio-service sobe via `audio-service/.venv/Scripts/uvicorn.exe`; sem esse venv o auto-start é pulado (o app funciona, gravação não).
+
 ## Build do installer (Windows)
 Use **sempre** o `build.ps1` na raiz — ele é o caminho canônico. Não rode `wails build -nsis` direto: o `-nsis` empacota o conteúdo de `build/bin`, e sem a etapa de cópia do bundle PyInstaller o instalador sai **sem o audio-service**. O `build.ps1` faz `wails build -clean`, copia `audio-service/build/dist/audio-service` para `build/bin`, roda o NSIS e coleta o artefato em `dist/`.
 
@@ -51,6 +59,13 @@ Use **sempre** o `build.ps1` na raiz — ele é o caminho canônico. Não rode `
 .\build.ps1                 # usa productVersion do wails.json
 .\build.ps1 -Version 2.4.0  # também persiste a versão no wails.json
 ```
-Pré-requisitos: bundle do audio-service em `audio-service/build/dist/audio-service` (gerar com PyInstaller se ausente — o script avisa). Atualizar `productVersion` em `cmd/desktop/wails.json` (ou passar `-Version`) antes de cada release.
+Pré-requisitos: bundle do audio-service em `audio-service/build/dist/audio-service`. Se ausente, gerar com o spec **rastreado no git** (`audio-service/build/pyinstaller/audio-service.spec` — o resto de `audio-service/build/` é ignorado de propósito):
+
+```powershell
+cd audio-service
+python -m PyInstaller build\pyinstaller\audio-service.spec --distpath build\dist --workpath build\work --noconfirm
+```
+
+O bundle é **CPU-only** por decisão consciente (ver `.claude/DECISIONS.md`, 2026-08-21): dev roda em CUDA, produção em CPU. Atualizar `productVersion` em `cmd/desktop/wails.json` (ou passar `-Version`) antes de cada release.
 
 Release completa: bump de versão (via PR — `master` é protegido) → `build.ps1` → tag `vX.Y.Z` → GitHub Release com o `.exe` de `dist/`.
