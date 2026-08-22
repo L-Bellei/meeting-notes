@@ -12,6 +12,8 @@ Itens fora do escopo das features já implementadas. Para features com plano ati
 
 ## Features futuras (não brainstormadas)
 
+- **UI/UX do CardDetailModal** — investigado em 2026-08-22 a pedido do usuário, ainda **sem decisão de escopo**. Dez itens, do que mais dói para o que menos: (1) três áreas de scroll aninhadas (corpo + descrição `max-h-56` + resumo `max-h-40`), que capturam a roda do mouse e deixam a descrição parada no meio de uma frase; (2) é o único modal do app que **não fecha com `Escape`** — `SearchModal`, `SettingsModal`, `RecordingModal`, `Sidebar` e `ThemeRowMenu` todos tratam; falta também `role="dialog"` e focus trap; (3) o confirm de dois cliques do excluir **nunca reseta** `confirmDelete`, então um clique acidental arma a exclusão para qualquer clique posterior; (4) clicar na descrição troca a leitura formatada por um `textarea` com o texto cru (JSON na cara, quando estruturado) e não há nenhuma pista de que é clicável; (5) checkboxes sem feedback — **parcialmente feito**: `salvando...` e mensagem de erro entraram junto com a correção do checkbox; falta o optimistic update; (6) `card.tasks.length > 0` esconde a seção inteira, sem estado vazio nem acesso ao "Gerar tasks" que já existe em `useGenerateTasks`; (7) `priority` e `assignee` vêm na resposta e o modal ignora; (8) hierarquia invertida no header — o título da reunião é `text-sm`, o menor elemento da tela, e o badge do tema herda a cor do tema (vermelho lê como erro); (9) `status` é texto morto, mover de coluna exige fechar o modal e arrastar; (10) `w-[640px]` sem `max-w`, sangra fora da viewport em janela estreita. Vários são decisão de comportamento, não de CSS — pede `/superpowers:brainstorming` antes de plano.
+
 - **Notificações de pipeline** — notificação nativa do Windows quando o processamento de uma reunião termina. **Próxima feature acordada com o usuário**; começar por `/superpowers:brainstorming`. `git.sr.ht/~jackmordaunt/go-toast/v2` já está no `go.mod` como dependência indireta, sem uso direto.
 - **Export** — exportar reunião (ou card do board) em PDF, Markdown ou Notion.
 
@@ -51,4 +53,4 @@ Itens fora do escopo das features já implementadas. Para features com plano ati
 
 ## Bugs conhecidos (sem plano)
 
-- _(nenhum — os cinco bugs desta seção foram corrigidos na branch `fix/known-bugs`)_
+- **Rascunho de descrição é gravado ao mexer nas tasks (cards manuais)** — em `CardDetailModal`, `toggleTask`, `addTask` e `removeTask` mandam o `description` do state local para `updateCard`. A seção de tasks continua visível durante a edição, então editar a descrição, **não** salvar e clicar num checkbox persiste o rascunho sem passar pelo "Salvar". Só afeta `source === "manual"`. Encontrado lendo o arquivo em 2026-08-22, ainda não corrigido.

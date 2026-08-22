@@ -2,6 +2,24 @@
 
 ---
 
+## [2026-08-22] Correção dos bugs conhecidos + checkbox de tasks do board — branch `fix/known-bugs`
+
+**Plano Superpowers:** `docs/superpowers/plans/2026-08-21-known-bug-fixes.md` (2 tasks, Subagent-Driven Development)
+**Fase do workflow Superpowers:** review final + fix wave concluídos; `finishing` pendente (PR, pois `master` é protegido).
+
+**Entregue:**
+- **Fallback GPU→CPU amplo** no `audio-service`: qualquer exceção de inferência na GPU (OOM, driver, DLL) recarrega o modelo em CPU e refaz a transcrição, em vez de só erros de DLL. 3 testes novos, incluindo asserção do log.
+- **Quatro correções de frontend**: mensagem de erro de exclusão em pt-BR, cancelamento de drag, fechamento do menu `⋯` em scroll/resize, hambúrguer na Board view.
+- **Checkbox de tasks do CardDetailModal nunca gravava** (reportado pelo usuário, fora do plano): `TaskRow` mandava só `{ completed }`, o `updateTaskRequest.Description` é `string` simples, o campo ausente decodificava para `""` e o `TaskService.Update` devolvia **422 "description is required"**. O checkbox controlado revertia e o erro era engolido. Correção em três pontos — reusar o tipo `Task` compartilhado em `BoardCardDetail` (o tipo inline estreito escondia `due_date`, que um spread teria apagado), enviar `{ ...task, completed }` como o `MeetingDetail` já fazia, e invalidar `board-card`/`board-cards` no `useUpdateTask`. Mais `salvando...`/mensagem de erro na linha, para a falha parar de ser silenciosa.
+
+**Armadilha de ambiente descoberta (a mais cara desta sessão):** o **HMR do vite não chega à janela nativa** do `wails dev`. A correção do checkbox foi reportada como "não funcionou" com o código já correto: o navegador em `localhost:34115` aplicava a atualização, a janela do WebView2 seguia com o código do boot. Eu tratei o `hmr update` no log do `wails dev` como prova de que o webview recebeu — é o vite *emitindo*, não o cliente *aplicando*. Registrado no `CLAUDE.md` ao lado da armadilha do watcher só observar `cmd/desktop`.
+
+**Método que resolveu:** o diagnóstico saiu de reproduzir o payload exato contra o app rodando (`{completed:true}` → 422; `{...task,completed:true}` → 200) e de conferir o **banco** depois de cada teste, o que separou "não gravou" de "gravou e a tela não atualizou". A prova final foi o usuário testar na web: uma task passou a `completed` no banco, o que descartou o código e apontou para a janela.
+
+**Parqueado no BACKLOG:** downgrade permanente para CPU até reiniciar o app, log do fallback sem destino no app empacotado, foot-gun na fixture de testes do `transcriber`, rascunho de descrição gravado ao mexer nas tasks de cards manuais, e os 10 itens de UI/UX do `CardDetailModal` (investigados, sem decisão de escopo).
+
+---
+
 ## [2026-08-21] Prompt único por tema + overhaul da aba de temas — Release v2.6.0
 
 **Plano Superpowers:** `docs/superpowers/plans/2026-08-20-themes-single-prompt-and-sidebar.md`

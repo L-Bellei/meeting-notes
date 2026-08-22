@@ -1,24 +1,29 @@
-# Estado do Projeto — 2026-08-21
+# Estado do Projeto — 2026-08-22
 
 ## Sessão
-- **Data:** 2026-08-21
-- **Branch atual:** `master` (sincronizado com origin, em `cc2b48a`)
+- **Data:** 2026-08-22
+- **Branch atual:** `fix/known-bugs` (6 commits acima de `master`/`bdcfea7`, não pushada)
 - **Worktree:** nenhum ativo
 
 ## Trabalho recente
 
-**Feature "Prompt único por tema + overhaul da aba de temas" — entregue e lançada (v2.6.0, PR #43).**
-- Revert dos prompts por tipo (migration 016 derruba as 3 colunas) + reconstrução da aba de temas: painel fixável, chip de filtro visível, linha com barra de cor/badges/menu, exclusão com confirmação escrita, hierarquia de 2 níveis com drag-and-drop, expansão persistida.
-- Spec: `docs/superpowers/specs/2026-08-20-themes-single-prompt-and-sidebar-design.md`
-- Plano: `docs/superpowers/plans/2026-08-20-themes-single-prompt-and-sidebar.md` (7/7 tasks)
+**Branch `fix/known-bugs` — implementada e revisada, ainda não integrada.**
+- Plano: `docs/superpowers/plans/2026-08-21-known-bug-fixes.md` (2/2 tasks)
+- Task 1: fallback GPU→CPU amplo no `audio-service` (+3 testes). Task 2: quatro correções de frontend.
+- Review final whole-branch (opus): *Ready to merge **No*** por limpeza omitida do BACKLOG → fix wave de 7 achados → re-review confirmou todos endereçados.
+- **Acumulado depois, fora do plano:** correção do checkbox de tasks do `CardDetailModal` (422 "description is required"), reportada pelo usuário e verificada por ele na janela nativa.
 
 ## Fase Superpowers
 
-**N/A** — ciclo completo (brainstorm → spec → plano → execução subagent-driven → review final → finishing → release). Nenhum trabalho em andamento.
+**`finishing` pendente.** O menu de finalização foi apresentado e o usuário escolheu **acumular** a correção nova nesta branch em vez de integrar. `master` é protegido → o caminho é PR.
 
 ## Próximo passo imediato
 
-Nenhum. Próxima feature acordada com o usuário mas **ainda não brainstormada**: **notificações de pipeline** (toast nativo do Windows ao terminar o processamento). Começar por `/superpowers:brainstorming`.
+Decidir a integração da `fix/known-bugs` (PR contra `master`). Depois, dois itens já mapeados no BACKLOG e aguardando decisão do usuário:
+- Bug do rascunho de descrição em cards manuais (pequeno, isolado).
+- Os 10 itens de UI/UX do `CardDetailModal` — investigados a pedido do usuário, **sem escopo definido**; pede `/superpowers:brainstorming` porque vários são decisão de comportamento.
+
+Feature acordada anteriormente e ainda não brainstormada: **notificações de pipeline**.
 
 ## Worktrees paralelos
 
@@ -29,10 +34,14 @@ Nenhum.
 - **v2.6.0** publicada: https://github.com/L-Bellei/meeting-notes/releases/tag/v2.6.0
 - Installer: `dist/meeting-notes-2.6.0-windows-amd64-installer.exe` (144 MB, audio-service embutido)
 - Build canônico: `build.ps1` (não `wails build -nsis` direto).
-- **O `.spec` do PyInstaller agora é rastreado no git** (`audio-service/build/pyinstaller/audio-service.spec`, com negação no `.gitignore`). Antes vivia num diretório ignorado e foi perdido, bloqueando o build desta release até ser recriado.
+- O `.spec` do PyInstaller é rastreado no git (`audio-service/build/pyinstaller/audio-service.spec`, com negação no `.gitignore`).
+- Nada desta branch foi lançado ainda.
 
-## Armadilhas de ambiente descobertas nesta sessão
+## Armadilhas de ambiente
 
-- **`wails dev` só observa `cmd/desktop`.** Mudanças em `internal/**` não disparam rebuild do Go: o app segue rodando o binário antigo. Depois de mexer no backend, reinicie o `wails dev` — senão dá erro 500 de código velho contra banco já migrado.
-- **`SingleInstanceLock`**: subir um segundo `wails dev` com o primeiro rodando faz o novo sair com exit 0 silenciosamente. Mate o processo antes de reiniciar.
-- **Dev roda CUDA, produção roda CPU** — ver DECISIONS de 2026-08-21.
+Todas as três estão no `CLAUDE.md`, seção "Rodando em dev". A que mais custou tempo até agora:
+
+- **O HMR do vite não chega à janela nativa** do `wails dev` — só ao navegador em `localhost:34115`. Reinicie o `wails dev` depois de mexer no frontend, não só no backend. O `hmr update` no log é o vite emitindo, não o webview aplicando: **não** use como prova de que a janela nativa atualizou. Isso fez uma correção correta ser reportada como "não funcionou".
+- **O watcher só observa `cmd/desktop`** — mudança em `internal/**` não rebuilda o Go.
+- **`SingleInstanceLock`** — um segundo `wails dev` sai com exit 0 em silêncio.
+- Dev roda CUDA, produção roda CPU — ver DECISIONS de 2026-08-21.

@@ -45,8 +45,9 @@ Planos em: `docs/superpowers/plans/`
 
 ## Rodando em dev
 
-`wails dev` a partir de `cmd/desktop`. Duas armadilhas que já custaram tempo:
+`wails dev` a partir de `cmd/desktop`. Três armadilhas que já custaram tempo:
 - **O watcher só observa `cmd/desktop`.** Mudança em `internal/**` não rebuilda o Go — o app segue com o binário antigo, e depois de uma migration nova isso aparece como erro 500 de código velho contra banco já migrado. Reinicie o `wails dev` após mexer no backend.
+- **O HMR do vite não chega à janela nativa.** Mudança em `frontend/**` é aplicada na aba do navegador em `localhost:34115`, mas a janela do WebView2 continua com o código carregado no boot. Reinicie o `wails dev` após mexer no frontend também. O log do `wails dev` mostra `hmr update <arquivo>` de qualquer forma — isso é o vite *emitindo*, não o webview *aplicando*, e não serve como prova de que a janela nativa atualizou. Custou uma correção reportada como "não funcionou" quando o código já estava certo (2026-08-22).
 - **`SingleInstanceLock`**: subir um segundo `wails dev` com o primeiro rodando faz o novo sair com exit 0, silenciosamente. Mate o processo antes de reiniciar.
 
 Em dev o audio-service sobe via `audio-service/.venv/Scripts/uvicorn.exe`; sem esse venv o auto-start é pulado (o app funciona, gravação não).
