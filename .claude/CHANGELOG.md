@@ -48,11 +48,13 @@ só `["meeting", meetingId]`, mas o estado vazio lê `card.tasks` de `["board-ca
 seção continuava mostrando "Nenhuma task" com o servidor já tendo gerado). Os dois casos desta
 branch foram corrigidos nos hooks (`useMoveCard` em `useBoard.ts`, `useGenerateTasks` em
 `useMeeting.ts`), não nos componentes que os chamam. **Quatro hooks irmãos em `useMeeting.ts`
-carregam o mesmo defeito latente, fora do escopo desta branch:** `useGenerateSummary:97`,
-`useGenerateKeyPoints:105`, `useReprocess:89` e `useRetranscribe:134` — todos invalidam só
-`["meeting", …]` e alimentam views que leem de `["board-card"]`. Registrado aqui para não se
-perder; ainda não decidido se entra como item de BACKLOG ou se é corrigido antes do merge desta
-branch.
+carregavam o mesmo defeito latente** — `useGenerateSummary`, `useGenerateKeyPoints`,
+`useReprocess` e `useRetranscribe` invalidavam só `["meeting", …]`, mas alimentam views que leem
+de `["board-card"]`. Fechado na fix wave da review final: extraído o helper único
+`invalidateMeetingDerivedQueries(qc, meetingId)` em `useMeeting.ts`, que os seis mutations do
+arquivo (os quatro acima, mais `useGenerateTasks` e `useUpdateTask`, que já invalidavam as três
+famílias de chave à mão) agora chamam, em vez de deixar um hook correto e quatro errados no mesmo
+arquivo.
 
 **Todo defeito relevante achado nas reviews das tasks 4, 5, 6 e 8 era defeito do plano, não do
 trabalho dos implementers** — eles transcreveram o plano fielmente; era o plano que estava
@@ -72,7 +74,7 @@ branch (foco inicial caindo no botão de excluir em vez do painel, select de col
 montagem pegaria — reforça o débito já registrado no BACKLOG.
 
 **Processo/Qualidade:** brainstorm → spec → plano → execução via Subagent-Driven Development (9
-tasks, implementer + review por task) → 9 rulings do controlador registrados no ledger de
+tasks, implementer + review por task) → 15 rulings do controlador registrados no ledger de
 execução (`.superpowers/sdd/2026-08-22-card-detail-modal-ux/progress.md`). Tasks 1, 2, 3 e 7
 fecharam com review limpa; tasks 5, 6 e 8 precisaram de uma rodada de fix cada. **Task 4
 precisou de duas:** a primeira corrigiu o achado original (foco caindo no botão de excluir a

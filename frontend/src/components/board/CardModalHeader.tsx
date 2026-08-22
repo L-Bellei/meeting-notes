@@ -15,7 +15,7 @@ export function CardModalHeader({ card, confirmDelete, onDelete, onClose }: Prop
   const { data: columns = [] } = useColumns()
   // Sem filtro de propósito: com os filtros ativos do board a carta que define o
   // maior position pode estar filtrada para fora, e o card cairia no meio da coluna.
-  const { data: cards = [] } = useCards()
+  const { data: cards = [], isLoading: cardsLoading } = useCards()
   const moveCard = useMoveCard()
 
   function handleMove(columnID: string) {
@@ -47,7 +47,7 @@ export function CardModalHeader({ card, confirmDelete, onDelete, onClose }: Prop
       <select
         value={card.column_id}
         onChange={e => handleMove(e.target.value)}
-        disabled={moveCard.isPending}
+        disabled={moveCard.isPending || cardsLoading}
         aria-label="Mover para outra coluna"
         className="text-xs rounded-lg px-2 py-1 bg-input border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-primary flex-shrink-0"
       >

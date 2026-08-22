@@ -226,15 +226,17 @@ export function CardDetailModal({ cardId, onClose }: Props) {
             </section>
           )}
 
-          <CardNotesSection
-            value={description}
-            editing={editingNotes}
-            pending={updateCard.isPending}
-            onChange={setDescription}
-            onStartEditing={startEditing}
-            onSave={saveDescription}
-            onCancel={cancelEditing}
-          />
+          {card && (
+            <CardNotesSection
+              value={description}
+              editing={editingNotes}
+              pending={updateCard.isPending}
+              onChange={setDescription}
+              onStartEditing={startEditing}
+              onSave={saveDescription}
+              onCancel={cancelEditing}
+            />
+          )}
 
           {/* Associar a reunião (manual card sem link) */}
           {isManual && !card?.meeting_id && (

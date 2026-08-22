@@ -31,7 +31,7 @@ export function ExpandableText({ text, lines, className }: Props) {
       }
 
   return (
-    <div>
+    <div className="min-w-0 break-words">
       <p
         ref={ref}
         style={clamp}

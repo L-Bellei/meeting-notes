@@ -58,13 +58,11 @@ func (s *BoardCardService) Create(ctx context.Context, meetingID, columnID strin
 		}
 	}
 
-	description := ""
-
 	lastPos, err := s.cardRepo.LastPositionInColumn(ctx, columnID)
 	if err != nil {
 		return nil, err
 	}
-	return s.cardRepo.Create(ctx, meetingID, columnID, description, lastPos+1000)
+	return s.cardRepo.Create(ctx, meetingID, columnID, "", lastPos+1000)
 }
 
 func (s *BoardCardService) GetDetail(ctx context.Context, id string) (*models.BoardCardDetail, error) {
