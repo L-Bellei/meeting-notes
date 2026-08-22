@@ -59,9 +59,6 @@ func (s *BoardCardService) Create(ctx context.Context, meetingID, columnID strin
 	}
 
 	description := ""
-	if sum, err := s.summaryRepo.GetByMeetingID(ctx, meetingID); err == nil {
-		description = sum.Content
-	}
 
 	lastPos, err := s.cardRepo.LastPositionInColumn(ctx, columnID)
 	if err != nil {
