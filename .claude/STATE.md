@@ -2,29 +2,33 @@
 
 ## Sessão
 - **Data:** 2026-08-22
-- **Branch atual:** `fix/manual-card-draft-description` (1 commit acima de `master`/`bbf9fd1`)
+- **`master` (`5d44982`):** já carrega PR #45 (fallback GPU→CPU amplo no `audio-service`, quatro
+  correções de frontend, e o checkbox de tasks do board que nunca gravava) e PR #46 (rascunho de
+  descrição persistindo em cards manuais). Nenhuma release desde a v2.6.0 — ver "Estado de
+  release". Este resumo descreve `master`; para o que uma branch específica mudou, ver o
+  CHANGELOG na data correspondente.
+- **Em andamento:** branch `feat/card-detail-modal-ux`, com as 9 tasks do plano
+  `docs/superpowers/plans/2026-08-22-card-detail-modal-ux.md` completas (ver CHANGELOG
+  [2026-08-22] "CardDetailModal — UI/UX..." para o que ela entrega). Ainda não tem PR aberta.
 - **Worktree:** nenhum ativo
-
-## Trabalho recente
-
-**PR #45 (`fix/known-bugs`) mergeada em `master` (`bbf9fd1`).** Seis bugs fechados:
-- Fallback GPU→CPU amplo no `audio-service` (qualquer exceção de inferência, não só erro de DLL) + 3 testes.
-- Quatro correções de frontend: erro de exclusão em pt-BR, cancelamento de drag, menu `⋯` fechando em scroll/resize, hambúrguer na Board view.
-- **Checkbox de tasks do `CardDetailModal` nunca gravava** — reportado pelo usuário, fora do plano. `TaskRow` mandava só `{ completed }`, o campo ausente decodificava para `""` e o service devolvia 422. Correção: reusar o tipo `Task` compartilhado, enviar `{ ...task, completed }`, invalidar `board-card`/`board-cards`, e mostrar estado/erro na linha.
-
-**Branch atual:** bug do rascunho de descrição em cards manuais. `toggleTask`/`addTask`/`removeTask` mandavam o `description` do state local; como o `PUT` do card **substitui** a descrição, editar sem salvar e clicar num checkbox persistia o rascunho. Passaram a reenviar `card.description`.
 
 ## Fase Superpowers
 
-**N/A** — correção pontual, sem plano. O ciclo da `fix/known-bugs` está completo.
+Plano `2026-08-22-card-detail-modal-ux` com as 9 tasks implementadas via Subagent-Driven
+Development. Falta a etapa de finishing: abrir o PR e decidir se há uma review final de branch
+inteira antes do merge (as reviews até aqui foram por task). Detalhes de execução —
+rulings, achados e o que foi parqueado — estão em
+`.superpowers/sdd/2026-08-22-card-detail-modal-ux/progress.md`, não duplicados aqui.
 
 ## Próximo passo imediato
 
-Abrir/integrar o PR desta branch. Depois, dois itens no BACKLOG aguardando decisão do usuário:
-- **10 itens de UI/UX do `CardDetailModal`** — investigados a pedido do usuário, **sem escopo definido**. Pede `/superpowers:brainstorming`: itens como o `Escape`, o confirm de exclusão e o `status` clicável são decisão de comportamento, não de CSS.
-- **Notificações de pipeline** — feature acordada antes, ainda não brainstormada.
+Decidir o finishing de `feat/card-detail-modal-ux`: abrir o PR (possivelmente com uma review
+final whole-branch antes, como as branches anteriores tiveram) e integrar em `master`. A
+migration 017 roda no banco do usuário no próximo launch depois do merge — ver "Riscos" na spec.
 
-Nenhuma release desde a v2.6.0; as correções mergeadas ficam para a próxima versão.
+Depois disso, dois itens no BACKLOG aguardando decisão do usuário:
+- **Notificações de pipeline** — feature acordada antes, ainda não brainstormada.
+- **Export** — exportar reunião/card em PDF, Markdown ou Notion.
 
 ## Worktrees paralelos
 
@@ -36,7 +40,8 @@ Nenhum.
 - Installer: `dist/meeting-notes-2.6.0-windows-amd64-installer.exe` (144 MB, audio-service embutido)
 - Build canônico: `build.ps1` (não `wails build -nsis` direto).
 - O `.spec` do PyInstaller é rastreado no git (`audio-service/build/pyinstaller/audio-service.spec`, com negação no `.gitignore`).
-- **`master` está à frente da v2.6.0** com seis correções não lançadas.
+- **`master` está à frente da v2.6.0** com as correções de PR #45 e PR #46 ainda não lançadas, e
+  `feat/card-detail-modal-ux` soma mais uma rodada de mudanças quando integrar.
 
 ## Armadilhas de ambiente
 
