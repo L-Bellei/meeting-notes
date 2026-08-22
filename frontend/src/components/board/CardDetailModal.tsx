@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
-import { X, Pencil, Plus, Trash2 } from "lucide-react"
+import { Plus, Trash2 } from "lucide-react"
 import { Button } from "../ui/button"
 import { useCardDetail, useUpdateCard, useLinkCardToMeeting, useDeleteCard, type BoardCardDetail } from "../../hooks/useBoard"
 import { useUpdateTask } from "../../hooks/useMeeting"
 import { useMeetings } from "../../hooks/useMeetings"
 import { cn } from "../../lib/utils"
 import { ExpandableText } from "../ui/ExpandableText"
+import { CardModalHeader } from "./CardModalHeader"
 
 interface Props {
   cardId: string | null
@@ -198,6 +199,12 @@ export function CardDetailModal({ cardId, onClose }: Props) {
     setConfirmDelete(false)
   }, [cardId])
 
+  useEffect(() => {
+    if (!confirmDelete) return
+    const timer = setTimeout(() => setConfirmDelete(false), 4000)
+    return () => clearTimeout(timer)
+  }, [confirmDelete])
+
   if (!cardId) return null
 
   const isManual = card?.source === "manual"
@@ -249,7 +256,10 @@ export function CardDetailModal({ cardId, onClose }: Props) {
   }
 
   function handleDelete() {
-    if (!confirmDelete) { setConfirmDelete(true); return }
+    if (!confirmDelete) {
+      setConfirmDelete(true)
+      return
+    }
     if (!cardId) return
     deleteCard.mutate(cardId, { onSuccess: onClose })
   }
@@ -269,41 +279,19 @@ export function CardDetailModal({ cardId, onClose }: Props) {
           className="h-[3px] flex-shrink-0"
           style={{ background: (!isManual && card?.theme_color) || "#2a2a2a" }}
         />
-        {/* Header */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-border flex-shrink-0">
-          {isLoading && <span className="text-xs text-muted-foreground flex-1">Carregando...</span>}
-          {card && (
-            <>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">#{card.number}</span>
-                {isManual && <Pencil size={11} className="text-muted-foreground/60" />}
-              </div>
-              {!isManual && card.theme_name && (
-                <span
-                  className="text-xs px-1.5 py-0.5 rounded-full"
-                  style={card.theme_color ? { background: card.theme_color + "22", color: card.theme_color } : undefined}
-                >
-                  {card.theme_name}
-                </span>
-              )}
-              <h2 id="card-modal-title" className="font-semibold text-sm flex-1">{card.meeting_title}</h2>
-              <span className="text-xs text-muted-foreground">{card.status}</span>
-            </>
-          )}
-          <button
-            onClick={handleDelete}
-            title={confirmDelete ? "Clique novamente para confirmar exclusão" : "Excluir card"}
-            className={cn(
-              "p-1 rounded transition-colors",
-              confirmDelete
-                ? "text-destructive bg-destructive/20"
-                : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            )}
-          >
-            <Trash2 size={14} />
-          </button>
-          <Button variant="ghost" size="icon" onClick={onClose}><X size={16} /></Button>
-        </div>
+        {isLoading && (
+          <div className="px-5 py-4 border-b border-border flex-shrink-0">
+            <span id="card-modal-title" className="text-xs text-muted-foreground">Carregando...</span>
+          </div>
+        )}
+        {card && (
+          <CardModalHeader
+            card={card}
+            confirmDelete={confirmDelete}
+            onDelete={handleDelete}
+            onClose={onClose}
+          />
+        )}
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
