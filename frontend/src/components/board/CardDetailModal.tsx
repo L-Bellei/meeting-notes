@@ -174,6 +174,12 @@ export function CardDetailModal({ cardId, onClose }: Props) {
       if (focusable.length === 0) return
       const first = focusable[0]
       const last = focusable[focusable.length - 1]
+      if (!Array.from(focusable).includes(document.activeElement as HTMLElement)) {
+        e.preventDefault()
+        const target = e.shiftKey ? last : first
+        target.focus()
+        return
+      }
       if (e.shiftKey && document.activeElement === first) {
         e.preventDefault()
         last.focus()
