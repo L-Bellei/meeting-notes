@@ -123,7 +123,24 @@ export function useUpdateTask(meetingId: string, taskId: string) {
   return useMutation({
     mutationFn: (data: Partial<Task>) =>
       api<Task>(`/api/meetings/${meetingId}/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(data) }),
-    onSuccess: () => {
+    onMutate: async (data) => {
+      await qc.cancelQueries({ queryKey: ["board-card"] })
+      const snapshots = qc.getQueriesData<{ tasks: Task[] }>({ queryKey: ["board-card"] })
+      for (const [key, value] of snapshots) {
+        if (!value?.tasks) continue
+        qc.setQueryData(key, {
+          ...value,
+          tasks: value.tasks.map(t => (t.id === taskId ? { ...t, ...data } : t)),
+        })
+      }
+      return { snapshots }
+    },
+    onError: (_err, _data, context) => {
+      for (const [key, value] of context?.snapshots ?? []) {
+        qc.setQueryData(key, value)
+      }
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["meeting", meetingId] })
       qc.invalidateQueries({ queryKey: ["board-card"] })
       qc.invalidateQueries({ queryKey: ["board-cards"] })
