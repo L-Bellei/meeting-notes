@@ -2,6 +2,27 @@
 
 ---
 
+## [2026-08-22] Release v2.7.0
+
+**Tag:** https://github.com/L-Bellei/meeting-notes/releases/tag/v2.7.0 · **Merge:** PR #47 (`75baa22`)
+**Instalador:** `meeting-notes-2.7.0-windows-amd64-installer.exe`, 143,3 MB, audio-service embutido.
+
+Lança o overhaul do `CardDetailModal` mais as oito correções que estavam acumuladas em `master`
+desde a v2.6.0 (PRs #45 e #46). Detalhe do que entrou: as entradas abaixo desta.
+
+**Verificação antes de publicar:** suíte completa no resultado mergeado (`go vet`, `go test ./...`
+nos 7 pacotes, `pytest` 41/41, `tsc --noEmit`, `npm run build`), e conferência de que o bundle de
+344 MB do audio-service mais o binário de 31 MB estavam em `cmd/desktop/build/bin` antes do NSIS —
+o instalador saiu em 143,3 MB contra 143,3 MB da v2.6.0, delta consistente com as mudanças de
+código. Essa checagem existe porque a v2.0.0 quase publicou instalador sem o audio-service.
+
+**Duas mudanças visíveis que o usuário validou na janela nativa antes do merge:** cards de reunião
+no board ficam só com título (a `description` que servia de preview agora é vazia), e a migration
+017 roda no primeiro launch. Ambas registradas em `BACKLOG.md` com o raciocínio de por que não
+foram revertidas nem alargadas.
+
+---
+
 ## [2026-08-22] CardDetailModal — UI/UX, descrição como anotação do usuário — Release pendente
 
 **Plano Superpowers:** `docs/superpowers/plans/2026-08-22-card-detail-modal-ux.md` (9 tasks, Subagent-Driven Development)
