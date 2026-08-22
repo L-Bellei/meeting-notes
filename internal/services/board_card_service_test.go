@@ -164,4 +164,61 @@ func TestBoardCardService_Create_DoesNotCopySummaryIntoDescription(t *testing.T)
 	}
 }
 
+func TestBoardCardService_GetDetail_ReportsHasTranscript(t *testing.T) {
+	svc, db := newTestBoardCardServiceWithDB(t)
+	ctx := context.Background()
+
+	if _, err := db.Exec(
+		`INSERT INTO meetings (id, title, status, transcript)
+		 VALUES ('m-com', 'Com transcrição', 'processed', 'texto')`); err != nil {
+		t.Fatalf("seed m-com: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO meetings (id, title, status) VALUES ('m-sem', 'Sem transcrição', 'pending')`); err != nil {
+		t.Fatalf("seed m-sem: %v", err)
+	}
+
+	comCard, err := svc.Create(ctx, "m-com", "col-backlog")
+	if err != nil {
+		t.Fatalf("Create m-com: %v", err)
+	}
+	semCard, err := svc.Create(ctx, "m-sem", "col-backlog")
+	if err != nil {
+		t.Fatalf("Create m-sem: %v", err)
+	}
+
+	com, err := svc.GetDetail(ctx, comCard.ID)
+	if err != nil {
+		t.Fatalf("GetDetail m-com: %v", err)
+	}
+	if !com.HasTranscript {
+		t.Error("HasTranscript = false para reunião com transcrição")
+	}
+
+	sem, err := svc.GetDetail(ctx, semCard.ID)
+	if err != nil {
+		t.Fatalf("GetDetail m-sem: %v", err)
+	}
+	if sem.HasTranscript {
+		t.Error("HasTranscript = true para reunião sem transcrição")
+	}
+}
+
+func TestBoardCardService_GetDetail_ManualCardHasNoTranscript(t *testing.T) {
+	svc := newTestBoardCardService(t)
+	ctx := context.Background()
+
+	card, err := svc.CreateManualCard(ctx, "col-backlog", "Card manual", "")
+	if err != nil {
+		t.Fatalf("CreateManualCard: %v", err)
+	}
+	detail, err := svc.GetDetail(ctx, card.ID)
+	if err != nil {
+		t.Fatalf("GetDetail: %v", err)
+	}
+	if detail.HasTranscript {
+		t.Error("card manual não tem reunião, então HasTranscript deve ser false")
+	}
+}
+
 var _ = models.BoardCard{}

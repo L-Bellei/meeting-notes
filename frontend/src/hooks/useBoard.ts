@@ -42,6 +42,7 @@ export interface BoardCardDetail {
   summary: { id: string; content: string; model_used: string } | null
   key_points: Array<{ id: string; content: string; position: number; meeting_id: string }>
   tasks: Task[]
+  has_transcript: boolean
 }
 
 export interface BoardCardFilters {

@@ -84,6 +84,9 @@ func (s *BoardCardService) GetDetail(ctx context.Context, id string) (*models.Bo
 		if err == nil {
 			detail.Tasks = tasks
 		}
+		if has, err := s.meetingRepo.HasTranscript(ctx, *detail.MeetingID); err == nil {
+			detail.HasTranscript = has
+		}
 	}
 	if detail.KeyPoints == nil {
 		detail.KeyPoints = []models.KeyPoint{}
@@ -138,7 +141,6 @@ func (s *BoardCardService) Update(ctx context.Context, id, description string, t
 	}
 	return s.cardRepo.GetByID(ctx, id)
 }
-
 
 func (s *BoardCardService) Move(ctx context.Context, id, columnID string, position float64) error {
 	if _, err := s.columnRepo.GetByID(ctx, columnID); err != nil {

@@ -145,23 +145,24 @@ type BoardCardSummary struct {
 }
 
 type BoardCardDetail struct {
-	ID           string     `json:"id"`
-	MeetingID    *string    `json:"meeting_id"`
-	ColumnID     string     `json:"column_id"`
-	Number       int        `json:"number"`
-	Position     float64    `json:"position"`
-	Title        string     `json:"title"`
-	Description  string     `json:"description"`
-	Source       string     `json:"source"`
-	ManualTasks  []string   `json:"manual_tasks"`
-	UpdatedAt    time.Time  `json:"updated_at"`
-	CreatedAt    time.Time  `json:"created_at"`
-	Status       string     `json:"status"`
-	MeetingTitle string     `json:"meeting_title"`
-	ThemeID      *string    `json:"theme_id"`
-	ThemeName    *string    `json:"theme_name"`
-	ThemeColor   *string    `json:"theme_color"`
-	Summary      *Summary   `json:"summary"`
-	KeyPoints    []KeyPoint `json:"key_points"`
-	Tasks        []Task     `json:"tasks"`
+	ID            string     `json:"id"`
+	MeetingID     *string    `json:"meeting_id"`
+	ColumnID      string     `json:"column_id"`
+	Number        int        `json:"number"`
+	Position      float64    `json:"position"`
+	Title         string     `json:"title"`
+	Description   string     `json:"description"`
+	Source        string     `json:"source"`
+	ManualTasks   []string   `json:"manual_tasks"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+	Status        string     `json:"status"`
+	MeetingTitle  string     `json:"meeting_title"`
+	ThemeID       *string    `json:"theme_id"`
+	ThemeName     *string    `json:"theme_name"`
+	ThemeColor    *string    `json:"theme_color"`
+	Summary       *Summary   `json:"summary"`
+	KeyPoints     []KeyPoint `json:"key_points"`
+	Tasks         []Task     `json:"tasks"`
+	HasTranscript bool       `json:"has_transcript"`
 }
