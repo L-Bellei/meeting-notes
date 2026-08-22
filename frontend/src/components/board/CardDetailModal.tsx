@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { X, Pencil, Plus, Trash2 } from "lucide-react"
 import { Button } from "../ui/button"
@@ -6,6 +6,7 @@ import { useCardDetail, useUpdateCard, useLinkCardToMeeting, useDeleteCard, type
 import { useUpdateTask } from "../../hooks/useMeeting"
 import { useMeetings } from "../../hooks/useMeetings"
 import { cn } from "../../lib/utils"
+import { ExpandableText } from "../ui/ExpandableText"
 
 interface Props {
   cardId: string | null
@@ -47,7 +48,7 @@ function DescriptionView({ description }: { description: string }) {
 
   if (structured) {
     return (
-      <div className="text-sm text-muted-foreground space-y-3 max-h-56 overflow-y-auto pr-1">
+      <div className="text-sm text-muted-foreground space-y-3">
         {structured.panorama_geral && (
           <p className="leading-relaxed">{structured.panorama_geral}</p>
         )}
@@ -105,7 +106,7 @@ function DescriptionView({ description }: { description: string }) {
     return <span className="text-sm italic text-muted-foreground/50">Clique para editar...</span>
   }
   return (
-    <p className="text-sm text-muted-foreground whitespace-pre-wrap max-h-56 overflow-y-auto pr-1 leading-relaxed">
+    <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
       {description}
     </p>
   )
@@ -119,12 +120,13 @@ export function CardDetailModal({ cardId, onClose }: Props) {
   const deleteCard = useDeleteCard()
   const [description, setDescription] = useState("")
   const [descriptionAtEditStart, setDescriptionAtEditStart] = useState("")
-  const [editing, setEditing] = useState(false)
+  const [editingNotes, setEditingNotes] = useState(false)
   const [newTask, setNewTask] = useState("")
   const [linkingMeeting, setLinkingMeeting] = useState(false)
   const [selectedMeetingId, setSelectedMeetingId] = useState("")
   const [confirmDelete, setConfirmDelete] = useState(false)
   const { data: meetings = [] } = useMeetings()
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (card) {
@@ -134,6 +136,53 @@ export function CardDetailModal({ cardId, onClose }: Props) {
     }
   }, [card?.id])
 
+  useEffect(() => {
+    if (!cardId) return
+    const previouslyFocused = document.activeElement as HTMLElement | null
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault()
+        // Dois estágios: com a edição aberta, o primeiro Escape cancela a edição
+        // em vez de fechar o modal e descartar o texto digitado.
+        if (editingNotes) {
+          cancelEditing()
+          return
+        }
+        onClose()
+        return
+      }
+      if (e.key !== "Tab") return
+      const panel = panelRef.current
+      if (!panel) return
+      const focusable = panel.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+
+    window.addEventListener("keydown", onKey)
+    panelRef.current?.querySelector<HTMLElement>("button, textarea, select")?.focus()
+    return () => {
+      window.removeEventListener("keydown", onKey)
+      previouslyFocused?.focus()
+    }
+  }, [cardId, editingNotes, onClose])
+
+  useEffect(() => {
+    setEditingNotes(false)
+    setConfirmDelete(false)
+  }, [cardId])
+
   if (!cardId) return null
 
   const isManual = card?.source === "manual"
@@ -141,17 +190,17 @@ export function CardDetailModal({ cardId, onClose }: Props) {
 
   function startEditing() {
     setDescriptionAtEditStart(description)
-    setEditing(true)
+    setEditingNotes(true)
   }
   function cancelEditing() {
     setDescription(descriptionAtEditStart)
-    setEditing(false)
+    setEditingNotes(false)
   }
   function saveDescription() {
     if (!cardId) return
     updateCard.mutate(
       { id: cardId, description, tasks: isManual ? manualTasks : [] },
-      { onSuccess: () => setEditing(false) },
+      { onSuccess: () => setEditingNotes(false) },
     )
   }
 
@@ -193,9 +242,17 @@ export function CardDetailModal({ cardId, onClose }: Props) {
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="bg-background border border-border rounded-lg w-[640px] max-h-[80vh] flex flex-col shadow-xl overflow-hidden"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="card-modal-title"
+        className="bg-background border border-border rounded-lg w-[640px] max-w-[calc(100vw-2rem)] max-h-[80vh] flex flex-col shadow-xl overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
+        <div
+          className="h-[3px] flex-shrink-0"
+          style={{ background: (!isManual && card?.theme_color) || "#2a2a2a" }}
+        />
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border flex-shrink-0">
           {isLoading && <span className="text-xs text-muted-foreground flex-1">Carregando...</span>}
@@ -213,7 +270,7 @@ export function CardDetailModal({ cardId, onClose }: Props) {
                   {card.theme_name}
                 </span>
               )}
-              <h2 className="font-semibold text-sm flex-1">{card.meeting_title}</h2>
+              <h2 id="card-modal-title" className="font-semibold text-sm flex-1">{card.meeting_title}</h2>
               <span className="text-xs text-muted-foreground">{card.status}</span>
             </>
           )}
@@ -234,31 +291,19 @@ export function CardDetailModal({ cardId, onClose }: Props) {
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          {/* Descrição */}
-          <section>
-            <h3 className="text-xs font-medium text-muted-foreground uppercase mb-2">Descrição</h3>
-            {editing ? (
-              <div className="space-y-2">
-                <textarea
-                  className="w-full text-sm bg-input border border-border rounded px-3 py-2 h-40 resize-none overflow-y-auto"
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  autoFocus
-                />
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={saveDescription}>Salvar</Button>
-                  <Button variant="ghost" size="sm" onClick={cancelEditing}>Cancelar</Button>
-                </div>
+          {/* Meeting tasks (with checkbox) */}
+          {!isManual && card && card.tasks.length > 0 && (
+            <section>
+              <h3 className="text-xs font-medium text-muted-foreground uppercase mb-2">
+                Tasks ({card.tasks.filter(t => t.completed).length}/{card.tasks.length})
+              </h3>
+              <div className="space-y-1.5">
+                {card.tasks.map(task => (
+                  <TaskRow key={task.id} task={task} meetingId={card.meeting_id ?? ""} />
+                ))}
               </div>
-            ) : (
-              <div
-                className="cursor-pointer hover:text-foreground transition-colors min-h-8"
-                onClick={startEditing}
-              >
-                <DescriptionView description={description} />
-              </div>
-            )}
-          </section>
+            </section>
+          )}
 
           {/* Manual tasks */}
           {isManual && (
@@ -308,27 +353,11 @@ export function CardDetailModal({ cardId, onClose }: Props) {
             </section>
           )}
 
-          {/* Meeting tasks (with checkbox) */}
-          {!isManual && card && card.tasks.length > 0 && (
-            <section>
-              <h3 className="text-xs font-medium text-muted-foreground uppercase mb-2">
-                Tasks ({card.tasks.filter(t => t.completed).length}/{card.tasks.length})
-              </h3>
-              <div className="space-y-1.5">
-                {card.tasks.map(task => (
-                  <TaskRow key={task.id} task={task} meetingId={card.meeting_id ?? ""} />
-                ))}
-              </div>
-            </section>
-          )}
-
           {/* Resumo da reunião */}
           {!isManual && card?.summary && (
             <section>
               <h3 className="text-xs font-medium text-muted-foreground uppercase mb-2">Resumo</h3>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap max-h-40 overflow-y-auto pr-1">
-                {card.summary.content}
-              </p>
+              <ExpandableText text={card.summary.content} lines={6} />
             </section>
           )}
 
@@ -339,13 +368,39 @@ export function CardDetailModal({ cardId, onClose }: Props) {
               <ul className="space-y-1">
                 {card.key_points.map(kp => (
                   <li key={kp.id} className="text-sm text-muted-foreground flex gap-2">
-                    <span className="text-primary mt-0.5">·</span>
-                    {kp.content}
+                    <span className="text-primary mt-0.5 flex-shrink-0">·</span>
+                    <ExpandableText text={kp.content} lines={8} className="text-sm" />
                   </li>
                 ))}
               </ul>
             </section>
           )}
+
+          {/* Descrição */}
+          <section>
+            <h3 className="text-xs font-medium text-muted-foreground uppercase mb-2">Descrição</h3>
+            {editingNotes ? (
+              <div className="space-y-2">
+                <textarea
+                  className="w-full text-sm bg-input border border-border rounded px-3 py-2 h-40 resize-none overflow-y-auto"
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={saveDescription}>Salvar</Button>
+                  <Button variant="ghost" size="sm" onClick={cancelEditing}>Cancelar</Button>
+                </div>
+              </div>
+            ) : (
+              <div
+                className="cursor-pointer hover:text-foreground transition-colors min-h-8"
+                onClick={startEditing}
+              >
+                <DescriptionView description={description} />
+              </div>
+            )}
+          </section>
 
           {/* Associar a reunião (manual card sem link) */}
           {isManual && !card?.meeting_id && (
