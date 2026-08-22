@@ -155,26 +155,28 @@ export function CardDetailModal({ cardId, onClose }: Props) {
     )
   }
 
+  // O PUT do card substitui a descrição, então mexer nas tasks tem de reenviar a
+  // descrição já persistida: mandar o state local gravaria um rascunho não salvo.
   function addTask() {
-    if (!cardId || !newTask.trim()) return
+    if (!cardId || !card || !newTask.trim()) return
     const updated = [...manualTasks, encodeManualTask(newTask.trim(), false)]
-    updateCard.mutate({ id: cardId, description, tasks: updated })
+    updateCard.mutate({ id: cardId, description: card.description, tasks: updated })
     setNewTask("")
   }
 
   function toggleTask(index: number) {
-    if (!cardId) return
+    if (!cardId || !card) return
     const { text, done } = parseManualTask(manualTasks[index])
     const updated = manualTasks.map((t, i) =>
       i === index ? encodeManualTask(text, !done) : t
     )
-    updateCard.mutate({ id: cardId, description, tasks: updated })
+    updateCard.mutate({ id: cardId, description: card.description, tasks: updated })
   }
 
   function removeTask(index: number) {
-    if (!cardId) return
+    if (!cardId || !card) return
     const updated = manualTasks.filter((_, i) => i !== index)
-    updateCard.mutate({ id: cardId, description, tasks: updated })
+    updateCard.mutate({ id: cardId, description: card.description, tasks: updated })
   }
 
   function handleLink() {
