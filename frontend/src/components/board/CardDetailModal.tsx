@@ -3,101 +3,14 @@ import { createPortal } from "react-dom"
 import { Button } from "../ui/button"
 import { useCardDetail, useUpdateCard, useLinkCardToMeeting, useDeleteCard } from "../../hooks/useBoard"
 import { useMeetings } from "../../hooks/useMeetings"
-import { cn } from "../../lib/utils"
 import { ExpandableText } from "../ui/ExpandableText"
 import { CardModalHeader } from "./CardModalHeader"
 import { CardTasksSection, parseManualTask, encodeManualTask } from "./CardTasksSection"
+import { CardNotesSection } from "./CardNotesSection"
 
 interface Props {
   cardId: string | null
   onClose: () => void
-}
-
-// ─── structured JSON description renderer ───────────────────────────────────
-interface StructuredDescription {
-  panorama_geral?: string
-  pontos_chave?: Array<{ tipo?: string; descricao: string }>
-  acoes?: Array<{ assignee?: string; tarefa: string; prioridade?: string; motivo?: string }>
-}
-
-function tryParseStructured(desc: string): StructuredDescription | null {
-  if (!desc.trim().startsWith("{")) return null
-  try {
-    const p = JSON.parse(desc)
-    if (p && typeof p === "object" && ("panorama_geral" in p || "pontos_chave" in p || "acoes" in p)) {
-      return p as StructuredDescription
-    }
-  } catch {}
-  return null
-}
-
-function DescriptionView({ description }: { description: string }) {
-  const structured = tryParseStructured(description)
-
-  if (structured) {
-    return (
-      <div className="text-sm text-muted-foreground space-y-3">
-        {structured.panorama_geral && (
-          <p className="leading-relaxed">{structured.panorama_geral}</p>
-        )}
-        {structured.pontos_chave && structured.pontos_chave.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60 mb-1.5">Pontos-chave</p>
-            <ul className="space-y-1.5">
-              {structured.pontos_chave.map((kp, i) => (
-                <li key={i} className="flex gap-2">
-                  <span className="text-primary mt-0.5 flex-shrink-0">·</span>
-                  <span>
-                    {kp.tipo && <span className="font-medium text-foreground/70">{kp.tipo}: </span>}
-                    {kp.descricao}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {structured.acoes && structured.acoes.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60 mb-1.5">Ações</p>
-            <ul className="space-y-2">
-              {structured.acoes.map((a, i) => (
-                <li key={i} className="flex gap-2">
-                  <span className="text-primary mt-0.5 flex-shrink-0">→</span>
-                  <div>
-                    <span className="text-foreground/80">{a.tarefa}</span>
-                    <div className="flex flex-wrap gap-2 mt-0.5">
-                      {a.assignee && (
-                        <span className="text-[10px] text-muted-foreground/70">{a.assignee}</span>
-                      )}
-                      {a.prioridade && (
-                        <span className={cn(
-                          "text-[10px] font-medium px-1 rounded",
-                          a.prioridade === "alta" ? "bg-destructive/15 text-destructive" :
-                          a.prioridade === "média" || a.prioridade === "media" ? "bg-yellow-500/15 text-yellow-600" :
-                          "bg-muted text-muted-foreground"
-                        )}>
-                          {a.prioridade}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  if (!description) {
-    return <span className="text-sm italic text-muted-foreground/50">Clique para editar...</span>
-  }
-  return (
-    <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-      {description}
-    </p>
-  )
 }
 
 // ─── main component ──────────────────────────────────────────────────────────
@@ -313,31 +226,15 @@ export function CardDetailModal({ cardId, onClose }: Props) {
             </section>
           )}
 
-          {/* Descrição */}
-          <section>
-            <h3 className="text-xs font-medium text-muted-foreground uppercase mb-2">Descrição</h3>
-            {editingNotes ? (
-              <div className="space-y-2">
-                <textarea
-                  className="w-full text-sm bg-input border border-border rounded px-3 py-2 h-40 resize-none overflow-y-auto"
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  autoFocus
-                />
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={saveDescription}>Salvar</Button>
-                  <Button variant="ghost" size="sm" onClick={cancelEditing}>Cancelar</Button>
-                </div>
-              </div>
-            ) : (
-              <div
-                className="cursor-pointer hover:text-foreground transition-colors min-h-8"
-                onClick={startEditing}
-              >
-                <DescriptionView description={description} />
-              </div>
-            )}
-          </section>
+          <CardNotesSection
+            value={description}
+            editing={editingNotes}
+            pending={updateCard.isPending}
+            onChange={setDescription}
+            onStartEditing={startEditing}
+            onSave={saveDescription}
+            onCancel={cancelEditing}
+          />
 
           {/* Associar a reunião (manual card sem link) */}
           {isManual && !card?.meeting_id && (
