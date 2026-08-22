@@ -17,9 +17,11 @@ export function Toolbar({ onToggleSidebar, onRecord, onSettings, onSearch, recor
   return (
     <div className="flex-shrink-0 bg-background">
     <div className="h-14 border-b border-border flex items-center px-4 gap-3">
-      <Button variant="ghost" size="icon" onClick={onToggleSidebar}>
-        <Menu size={18} />
-      </Button>
+      {activeView === "meetings" && (
+        <Button variant="ghost" size="icon" onClick={onToggleSidebar} title="Mostrar/ocultar temas (Ctrl+B)" aria-label="Mostrar ou ocultar o painel de temas">
+          <Menu size={18} />
+        </Button>
+      )}
       <span className="font-semibold text-sm text-foreground">Meeting Notes</span>
       <div className="flex gap-1">
         <Button
