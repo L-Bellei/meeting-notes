@@ -564,7 +564,7 @@ Esta task trabalha **dentro do arquivo atual**, sem extrair componentes ainda. A
 
 **Interfaces:**
 - Consumes: `<ExpandableText text lines className? />` da Task 3.
-- Produces: no `CardDetailModal`, o estado `editingNotes: boolean` (renomeado de `editing`) e `confirmDelete: boolean`, mais `notesTextareaRef`, que as tasks 5 e 7 recebem por props.
+- Produces: no `CardDetailModal`, o estado `editingNotes: boolean` (renomeado de `editing`) e `confirmDelete: boolean`, que as tasks 5 e 7 recebem por props. **Nenhum ref de textarea** — `noUnusedLocals` proíbe declarar aqui o que só seria usado adiante, e o `autoFocus` do `textarea` já resolve o foco.
 
 - [ ] **Step 1: Renomear o estado de edição e adicionar o container do modal**
 
@@ -1134,12 +1134,11 @@ git commit -m "feat: tasks section with empty state, generate action, priority a
 
 **Interfaces:**
 - Consumes: `editingNotes` e os callbacks da casca (Task 4).
-- Produces: `<CardNotesSection value editing pending onChange onStartEditing onSave onCancel textareaRef />`.
+- Produces: `<CardNotesSection value editing pending onChange onStartEditing onSave onCancel />`.
 
 - [ ] **Step 1: Criar o componente**
 
 ```tsx
-import type { RefObject } from "react"
 import { Pencil } from "lucide-react"
 import { Button } from "../ui/button"
 
@@ -1151,11 +1150,10 @@ interface Props {
   onStartEditing: () => void
   onSave: () => void
   onCancel: () => void
-  textareaRef: RefObject<HTMLTextAreaElement | null>
 }
 
 export function CardNotesSection({
-  value, editing, pending, onChange, onStartEditing, onSave, onCancel, textareaRef,
+  value, editing, pending, onChange, onStartEditing, onSave, onCancel,
 }: Props) {
   return (
     <section>
@@ -1175,7 +1173,6 @@ export function CardNotesSection({
       {editing ? (
         <div className="space-y-2">
           <textarea
-            ref={textareaRef}
             className="w-full text-sm bg-input border border-border rounded px-3 py-2 h-40 resize-none"
             value={value}
             onChange={e => onChange(e.target.value)}
@@ -1215,7 +1212,6 @@ Substitua a seção de descrição por:
             onStartEditing={startEditing}
             onSave={saveDescription}
             onCancel={cancelEditing}
-            textareaRef={notesTextareaRef}
           />
 ```
 
