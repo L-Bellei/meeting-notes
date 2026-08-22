@@ -2,10 +2,10 @@
 
 ---
 
-## [2026-08-22] Correção dos bugs conhecidos + checkbox de tasks do board — branch `fix/known-bugs`
+## [2026-08-22] Correção dos bugs conhecidos + checkbox de tasks do board — Release pendente
 
 **Plano Superpowers:** `docs/superpowers/plans/2026-08-21-known-bug-fixes.md` (2 tasks, Subagent-Driven Development)
-**Fase do workflow Superpowers:** review final + fix wave concluídos; `finishing` pendente (PR, pois `master` é protegido).
+**Fase do workflow Superpowers:** ciclo completo — PR #45 mergeada em `master` (`bbf9fd1`). Sem release: as correções ficam para a próxima versão.
 
 **Entregue:**
 - **Fallback GPU→CPU amplo** no `audio-service`: qualquer exceção de inferência na GPU (OOM, driver, DLL) recarrega o modelo em CPU e refaz a transcrição, em vez de só erros de DLL. 3 testes novos, incluindo asserção do log.
@@ -16,7 +16,9 @@
 
 **Método que resolveu:** o diagnóstico saiu de reproduzir o payload exato contra o app rodando (`{completed:true}` → 422; `{...task,completed:true}` → 200) e de conferir o **banco** depois de cada teste, o que separou "não gravou" de "gravou e a tela não atualizou". A prova final foi o usuário testar na web: uma task passou a `completed` no banco, o que descartou o código e apontou para a janela.
 
-**Parqueado no BACKLOG:** downgrade permanente para CPU até reiniciar o app, log do fallback sem destino no app empacotado, foot-gun na fixture de testes do `transcriber`, rascunho de descrição gravado ao mexer nas tasks de cards manuais, e os 10 itens de UI/UX do `CardDetailModal` (investigados, sem decisão de escopo).
+**Parqueado no BACKLOG:** downgrade permanente para CPU até reiniciar o app, log do fallback sem destino no app empacotado, foot-gun na fixture de testes do `transcriber`, e os 10 itens de UI/UX do `CardDetailModal` (investigados, sem decisão de escopo).
+
+**Sequência (PR seguinte, `fix/manual-card-draft-description`):** o bug do rascunho de descrição em cards manuais — `toggleTask`/`addTask`/`removeTask` mandavam o `description` do state local, e como o `PUT /api/board/cards/{id}` **substitui** a descrição, editar sem salvar e clicar num checkbox persistia o rascunho. Passaram a reenviar `card.description` (o valor persistido). Mecanismo confirmado contra a API antes da correção: marcar uma task gravou `'RASCUNHO nao salvo'` como descrição de um card temporário.
 
 ---
 
