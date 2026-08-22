@@ -110,7 +110,11 @@ export function useGenerateTasks(meetingId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => api<Task[]>(`/api/meetings/${meetingId}/tasks/generate`, { method: "POST" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["meeting", meetingId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["meeting", meetingId] })
+      qc.invalidateQueries({ queryKey: ["board-card"] })
+      qc.invalidateQueries({ queryKey: ["board-cards"] })
+    },
   })
 }
 
