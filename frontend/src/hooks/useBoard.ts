@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "./useApi"
+import type { Task } from "./useMeeting"
 
 export interface TaskProgress { total: number; completed: number }
 
@@ -40,7 +41,7 @@ export interface BoardCardDetail {
   theme_color: string | null
   summary: { id: string; content: string; model_used: string } | null
   key_points: Array<{ id: string; content: string; position: number; meeting_id: string }>
-  tasks: Array<{ id: string; description: string; completed: boolean; priority: string; assignee: string | null; meeting_id: string }>
+  tasks: Task[]
 }
 
 export interface BoardCardFilters {

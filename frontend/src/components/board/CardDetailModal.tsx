@@ -387,16 +387,26 @@ export function CardDetailModal({ cardId, onClose }: Props) {
 function TaskRow({ task, meetingId }: { task: TaskItem; meetingId: string }) {
   const updateTask = useUpdateTask(meetingId, task.id)
   return (
-    <label className="flex items-start gap-2 cursor-pointer">
-      <input
-        type="checkbox"
-        className="mt-0.5 accent-primary"
-        checked={task.completed}
-        onChange={e => updateTask.mutate({ completed: e.target.checked })}
-      />
-      <span className={cn("text-sm", task.completed ? "line-through text-muted-foreground" : "")}>
-        {task.description}
-      </span>
-    </label>
+    <div>
+      <label className="flex items-start gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          className="mt-0.5 accent-primary"
+          checked={task.completed}
+          onChange={e => updateTask.mutate({ ...task, completed: e.target.checked })}
+        />
+        <span className={cn("text-sm", task.completed ? "line-through text-muted-foreground" : "")}>
+          {task.description}
+        </span>
+        {updateTask.isPending && (
+          <span className="text-[10px] text-muted-foreground/70 mt-0.5 flex-shrink-0">salvando...</span>
+        )}
+      </label>
+      {updateTask.isError && (
+        <p className="text-xs text-destructive ml-6 mt-0.5">
+          Falha ao salvar: {updateTask.error?.message ?? "erro desconhecido"}
+        </p>
+      )}
+    </div>
   )
 }

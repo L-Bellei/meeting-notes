@@ -46,3 +46,6 @@ desktop.exe
 # Stray files
 /docs/estado-da-conversa-*.md
 /migrations/
+
+# QA residue from Playwright MCP browser-driven verification
+/.playwright-mcp/

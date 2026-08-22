@@ -119,7 +119,11 @@ export function useUpdateTask(meetingId: string, taskId: string) {
   return useMutation({
     mutationFn: (data: Partial<Task>) =>
       api<Task>(`/api/meetings/${meetingId}/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(data) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["meeting", meetingId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["meeting", meetingId] })
+      qc.invalidateQueries({ queryKey: ["board-card"] })
+      qc.invalidateQueries({ queryKey: ["board-cards"] })
+    },
   })
 }
 

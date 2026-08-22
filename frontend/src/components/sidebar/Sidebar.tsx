@@ -23,6 +23,15 @@ function moveErrorMessage(err: unknown): string {
   return MOVE_ERROR_MESSAGES[raw] ?? "Não foi possível mover o tema."
 }
 
+const DELETE_ERROR_MESSAGES: Record<string, string> = {
+  "theme not found": "Tema não encontrado — talvez já tenha sido excluído.",
+}
+
+function deleteErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : ""
+  return DELETE_ERROR_MESSAGES[raw] ?? "Não foi possível excluir o tema."
+}
+
 interface SidebarProps {
   open: boolean
   onClose: () => void
@@ -181,6 +190,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
           sensors={sensors}
           onDragStart={e => setActiveId(String(e.active.id))}
           onDragEnd={e => { setActiveId(null); handleDragEnd(e) }}
+          onDragCancel={() => setActiveId(null)}
         >
           <div className="flex-1 overflow-y-auto px-2">
             <button
@@ -225,7 +235,7 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
                     if (selectedThemeId === id) onSelectTheme(null)
                     setConfirmDelete(null)
                   } catch (err) {
-                    setDeleteError(err instanceof Error ? err.message : "Não foi possível excluir o tema.")
+                    setDeleteError(deleteErrorMessage(err))
                   }
                 }}
                 disabled={deleteTheme.isPending}

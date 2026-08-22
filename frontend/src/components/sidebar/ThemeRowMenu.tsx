@@ -27,9 +27,14 @@ export function ThemeRowMenu({ anchor, canAddChild, onAddChild, onEdit, onDelete
     }
     document.addEventListener("mousedown", onDown)
     document.addEventListener("keydown", onKey, true)
+    // scroll events don't bubble, so capture phase is needed to see the inner list container scrolling
+    document.addEventListener("scroll", onClose, true)
+    window.addEventListener("resize", onClose)
     return () => {
       document.removeEventListener("mousedown", onDown)
       document.removeEventListener("keydown", onKey, true)
+      document.removeEventListener("scroll", onClose, true)
+      window.removeEventListener("resize", onClose)
     }
   }, [onClose, anchor])
 

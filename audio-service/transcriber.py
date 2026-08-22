@@ -120,17 +120,16 @@ class Transcriber:
             # Consume the generator inside the try block — errors from lazy CUDA ops surface here
             text = " ".join(seg.text.strip() for seg in segments).strip()
         except Exception as e:
-            err = str(e).lower()
-            if self.device == "cuda" and any(kw in err for kw in ("dll", "cublas", "cudnn", "library", "not found", "cannot be loaded")):
-                # GPU inference failed due to missing CUDA DLL — reload model on CPU and retry
-                import logging
-                logging.warning("CUDA inference failed (%s), reloading model on CPU", e)
-                self._model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
-                self.device = "cpu"
-                segments, info = self._model.transcribe(str(resolved), **transcribe_kwargs)
-                text = " ".join(seg.text.strip() for seg in segments).strip()
-            else:
+            if self.device != "cuda":
                 raise
+            # Transcrição é o ativo primário: qualquer falha na GPU (DLL ausente,
+            # falta de VRAM, driver) vale uma retentativa em CPU antes de desistir.
+            import logging
+            logging.warning("GPU inference failed (%s), reloading model on CPU", e)
+            self._model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
+            self.device = "cpu"
+            segments, info = self._model.transcribe(str(resolved), **transcribe_kwargs)
+            text = " ".join(seg.text.strip() for seg in segments).strip()
         return TranscribeResult(
             transcript=text,
             language=info.language,
