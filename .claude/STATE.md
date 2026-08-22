@@ -25,6 +25,10 @@ rulings, achados e o que foi parqueado — estão em
 Decidir o finishing de `feat/card-detail-modal-ux`: abrir o PR (possivelmente com uma review
 final whole-branch antes, como as branches anteriores tiveram) e integrar em `master`. A
 migration 017 roda no banco do usuário no próximo launch depois do merge — ver "Riscos" na spec.
+Antes de fechar essa decisão, falta decidir se os quatro hooks irmãos de `useMeeting.ts` com o
+defeito de invalidação de cache (`useGenerateSummary`, `useGenerateKeyPoints`, `useReprocess`,
+`useRetranscribe` — ver BACKLOG, "Débitos técnicos") entram nesta branch ou ficam para depois; a
+review final da branch é quem decide.
 
 Depois disso, dois itens no BACKLOG aguardando decisão do usuário:
 - **Notificações de pipeline** — feature acordada antes, ainda não brainstormada.

@@ -74,8 +74,13 @@ montagem pegaria — reforça o débito já registrado no BACKLOG.
 **Processo/Qualidade:** brainstorm → spec → plano → execução via Subagent-Driven Development (9
 tasks, implementer + review por task) → 9 rulings do controlador registrados no ledger de
 execução (`.superpowers/sdd/2026-08-22-card-detail-modal-ux/progress.md`). Tasks 1, 2, 3 e 7
-fecharam com review limpa; tasks 4, 5, 6 e 8 precisaram de uma rodada de fix cada, todas
-resolvidas antes de seguir para a próxima task.
+fecharam com review limpa; tasks 5, 6 e 8 precisaram de uma rodada de fix cada. **Task 4
+precisou de duas:** a primeira corrigiu o achado original (foco caindo no botão de excluir a
+cada re-render), mas a própria correção — focar o painel do modal em vez do primeiro elemento
+focável — abriu um novo Important (`Shift+Tab` escapando do focus trap, porque o painel focado
+tem `tabIndex={-1}` e ficava fora do seletor de `focusable`); a segunda rodada fechou esse achado
+generalizando o handler de `Tab` para tratar qualquer foco fora de `focusable` como o caso de
+wrap. Todas resolvidas antes de seguir para a próxima task.
 
 **Parqueado no BACKLOG:** o primitivo `Modal` compartilhado para os outros cinco modais do app
 (nenhum tem `role="dialog"` nem focus trap) — ver decisão 4 da spec.

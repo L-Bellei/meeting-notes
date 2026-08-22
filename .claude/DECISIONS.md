@@ -6,11 +6,19 @@ Registro de decisões transversais ao projeto. Decisões específicas de cada fe
 
 ## [2026-08-22] Descrição de card é anotação do usuário, não cópia do resumo
 
-`BoardCardService.Create` copiava `summary.Content` para a descrição do card. A cópia
-nunca ressincronizava, e o modal renderizava a cópia (DESCRIÇÃO) e a fonte viva (RESUMO)
-uma embaixo da outra — byte-a-byte idênticas no card medido. A descrição passa a ser
-anotação do usuário, vazia por padrão; o Resumo é a fonte da IA. A migration 017 limpa
-**apenas** as descrições ainda idênticas ao resumo, preservando o que foi editado.
+**Contexto:** `BoardCardService.Create` copiava `summary.Content` para a descrição do card. A
+cópia nunca ressincronizava, e o modal renderizava a cópia (seção DESCRIÇÃO) e a fonte viva
+(seção RESUMO) uma embaixo da outra — byte-a-byte idênticas no card medido (1867 caracteres nos
+dois campos).
+
+**Escolha:** A descrição passa a ser anotação do usuário, vazia por padrão; o Resumo continua
+sendo a fonte da IA. A migration `017_card_description_annotations.sql` limpa **apenas** as
+descrições ainda idênticas ao resumo, preservando o que foi editado por cima da cópia.
+
+**Justificativa:** Dois campos, dois propósitos — sem essa separação, "editar a descrição" de um
+card de reunião era editar uma cópia congelada do resumo, sem nenhuma relação com o resumo vivo
+mostrado ao lado. Limpar só as descrições ainda idênticas evita apagar anotações que o usuário já
+tenha escrito por cima da cópia antiga.
 
 ---
 
