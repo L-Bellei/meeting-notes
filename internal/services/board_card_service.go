@@ -58,16 +58,11 @@ func (s *BoardCardService) Create(ctx context.Context, meetingID, columnID strin
 		}
 	}
 
-	description := ""
-	if sum, err := s.summaryRepo.GetByMeetingID(ctx, meetingID); err == nil {
-		description = sum.Content
-	}
-
 	lastPos, err := s.cardRepo.LastPositionInColumn(ctx, columnID)
 	if err != nil {
 		return nil, err
 	}
-	return s.cardRepo.Create(ctx, meetingID, columnID, description, lastPos+1000)
+	return s.cardRepo.Create(ctx, meetingID, columnID, "", lastPos+1000)
 }
 
 func (s *BoardCardService) GetDetail(ctx context.Context, id string) (*models.BoardCardDetail, error) {
@@ -86,6 +81,9 @@ func (s *BoardCardService) GetDetail(ctx context.Context, id string) (*models.Bo
 		tasks, err := s.taskRepo.ListByMeetingID(ctx, *detail.MeetingID)
 		if err == nil {
 			detail.Tasks = tasks
+		}
+		if has, err := s.meetingRepo.HasTranscript(ctx, *detail.MeetingID); err == nil {
+			detail.HasTranscript = has
 		}
 	}
 	if detail.KeyPoints == nil {
@@ -141,7 +139,6 @@ func (s *BoardCardService) Update(ctx context.Context, id, description string, t
 	}
 	return s.cardRepo.GetByID(ctx, id)
 }
-
 
 func (s *BoardCardService) Move(ctx context.Context, id, columnID string, position float64) error {
 	if _, err := s.columnRepo.GetByID(ctx, columnID); err != nil {

@@ -2,6 +2,93 @@
 
 ---
 
+## [2026-08-22] CardDetailModal — UI/UX, descrição como anotação do usuário — Release pendente
+
+**Plano Superpowers:** `docs/superpowers/plans/2026-08-22-card-detail-modal-ux.md` (9 tasks, Subagent-Driven Development)
+**Spec:** `docs/superpowers/specs/2026-08-22-card-detail-modal-ux-design.md`
+**Fase do workflow Superpowers:** implementação completa (9/9 tasks, cada uma com review de task) na branch `feat/card-detail-modal-ux`, ainda não integrada — falta abrir o PR e a review final. `master` não muda nesta sessão; ver STATE.md para o que já está lá.
+
+**Entregue — os dez achados de UI/UX investigados nesta mesma data:**
+- Um único scroll no corpo do modal; saem as três áreas de scroll aninhadas (corpo + descrição + resumo), que capturavam a roda do mouse.
+- `Escape` fecha o modal — era o único do app que não fechava — com `role="dialog"`, `aria-modal` e focus trap.
+- Confirmação de exclusão de dois cliques passa a resetar sozinha depois de ~4s (antes nunca resetava) e também ao trocar ou fechar o card.
+- Edição de descrição ganha um lápis explícito; clicar no texto não entra mais em edição.
+- Optimistic update no checkbox de tasks, com rollback e mensagem de erro por-task.
+- Estado vazio de tasks com botão "Gerar tasks", habilitado por `has_transcript`.
+- Prioridade e responsável de cada task aparecem na linha.
+- Header reescrito: título dominante, barra de 3px na cor do tema, sem badge com fundo colorido.
+- Mover de coluna por `<select>` no header, sem precisar fechar o modal e arrastar no board.
+- `max-w-[calc(100vw-2rem)]` — o modal encolhe em janela estreita em vez de sangrar.
+
+**O 11º achado, que mudou o desenho mais que os dez juntos:** medido no banco de dev, o card #1
+tinha `description` e `summary` byte-a-byte idênticos, **1867 caracteres** cada — a descrição
+era a cópia que `BoardCardService.Create` tirava do resumo na criação e nunca ressincronizava.
+Editar "a descrição" de um card de reunião era editar uma cópia congelada do resumo, sem
+relação nenhuma com o resumo vivo mostrado ao lado. A descrição passa a ser anotação do
+usuário, vazia por padrão; a migration `017_card_description_annotations.sql` limpa **apenas**
+as descrições ainda idênticas ao resumo, preservando o que foi editado (decisão em
+DECISIONS.md).
+
+**Backend:** `has_transcript: boolean` no detalhe do card, via `MeetingRepository.HasTranscript`
+(`COUNT(*)`, sem carregar o transcript inteiro), para o botão "Gerar tasks" saber se a operação
+é possível antes de o usuário bater num 422.
+
+**Frontend — decomposição em cinco arquivos:** `CardDetailModal.tsx` (~415 linhas) virou casca
+mais quatro componentes focados, seguindo o padrão que a aba de temas estabeleceu na v2.6.0:
+`CardModalHeader.tsx`, `CardTasksSection.tsx`, `CardNotesSection.tsx` e `ui/ExpandableText.tsx`
+(o "ver mais" medido por `scrollHeight` vs `clientHeight`, com `WebkitLineClamp` inline porque o
+Tailwind JIT não gera classe de `line-clamp` com valor dinâmico).
+
+**A mesma classe de bug apareceu três vezes neste código:** uma mutation invalidando uma chave
+do React Query diferente da que alimenta a view que deveria reagir. Primeiro o checkbox de task
+(PR #45), depois o `<select>` de coluna desta branch (`useMoveCard` invalidava só
+`["board-cards"]`, mas o select lê `card.column_id` de `["board-card", id]` e revertia
+visualmente depois de mover), e depois "Gerar tasks" desta branch (`useGenerateTasks` invalidava
+só `["meeting", meetingId]`, mas o estado vazio lê `card.tasks` de `["board-card", id]`, então a
+seção continuava mostrando "Nenhuma task" com o servidor já tendo gerado). Os dois casos desta
+branch foram corrigidos nos hooks (`useMoveCard` em `useBoard.ts`, `useGenerateTasks` em
+`useMeeting.ts`), não nos componentes que os chamam. **Quatro hooks irmãos em `useMeeting.ts`
+carregavam o mesmo defeito latente** — `useGenerateSummary`, `useGenerateKeyPoints`,
+`useReprocess` e `useRetranscribe` invalidavam só `["meeting", …]`, mas alimentam views que leem
+de `["board-card"]`. Fechado na fix wave da review final: extraído o helper único
+`invalidateMeetingDerivedQueries(qc, meetingId)` em `useMeeting.ts`, que os seis mutations do
+arquivo (os quatro acima, mais `useGenerateTasks` e `useUpdateTask`, que já invalidavam as três
+famílias de chave à mão) agora chamam, em vez de deixar um hook correto e quatro errados no mesmo
+arquivo.
+
+**Todo defeito relevante achado nas reviews das tasks 4, 5, 6 e 8 era defeito do plano, não do
+trabalho dos implementers** — eles transcreveram o plano fielmente; era o plano que estava
+errado (Task 5: `useMoveCard` sem a invalidação certa; Task 8: o `onError` do plano restaurava o
+snapshot de **todas** as tasks em vez de só a que falhou, então marcar duas tasks em sequência e
+uma falhar desmarcava a outra, que tinha tido sucesso). Duas dessas ocorrências foram introduzidas
+pela própria correção do controlador para um achado anterior, não pelo plano original: a remoção
+do `notesTextareaRef` (para não violar `noUnusedLocals` na Task 4) deixaria a Task 7 sem compilar
+se não fosse pega no preflight; e o Shift+Tab escapando do focus trap na Task 4 foi consequência
+direta de focar o painel do modal em vez do primeiro elemento focável — a própria correção do
+achado anterior daquela mesma task.
+
+**Sem teste de render no frontend, a verificação continua sendo `tsc --noEmit` + `npm run build`
+mais roteiro manual na janela nativa.** Os dois bugs corrigidos nos PRs #45/#46 e os achados desta
+branch (foco inicial caindo no botão de excluir em vez do painel, select de coluna revertendo,
+"Gerar tasks" não atualizando a view) são exatamente o tipo de regressão que um único teste de
+montagem pegaria — reforça o débito já registrado no BACKLOG.
+
+**Processo/Qualidade:** brainstorm → spec → plano → execução via Subagent-Driven Development (9
+tasks, implementer + review por task) → 15 rulings do controlador registrados no ledger de
+execução (`.superpowers/sdd/2026-08-22-card-detail-modal-ux/progress.md`). Tasks 1, 2, 3 e 7
+fecharam com review limpa; tasks 5, 6 e 8 precisaram de uma rodada de fix cada. **Task 4
+precisou de duas:** a primeira corrigiu o achado original (foco caindo no botão de excluir a
+cada re-render), mas a própria correção — focar o painel do modal em vez do primeiro elemento
+focável — abriu um novo Important (`Shift+Tab` escapando do focus trap, porque o painel focado
+tem `tabIndex={-1}` e ficava fora do seletor de `focusable`); a segunda rodada fechou esse achado
+generalizando o handler de `Tab` para tratar qualquer foco fora de `focusable` como o caso de
+wrap. Todas resolvidas antes de seguir para a próxima task.
+
+**Parqueado no BACKLOG:** o primitivo `Modal` compartilhado para os outros cinco modais do app
+(nenhum tem `role="dialog"` nem focus trap) — ver decisão 4 da spec.
+
+---
+
 ## [2026-08-22] Correção dos bugs conhecidos + checkbox de tasks do board — Release pendente
 
 **Plano Superpowers:** `docs/superpowers/plans/2026-08-21-known-bug-fixes.md` (2 tasks, Subagent-Driven Development)

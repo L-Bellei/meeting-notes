@@ -269,6 +269,46 @@ func TestMeetingRepository_GetRecording(t *testing.T) {
 	}
 }
 
+func TestMeetingRepository_HasTranscript(t *testing.T) {
+	repo := openMeetingTestDB(t)
+	ctx := context.Background()
+
+	now := time.Now().UTC().Truncate(time.Second)
+	transcript := "texto transcrito"
+	empty := ""
+
+	cases := []struct {
+		id         string
+		transcript *string
+		want       bool
+	}{
+		{"m-com", &transcript, true},
+		{"m-vazio", &empty, false},
+		{"m-nulo", nil, false},
+	}
+	for _, c := range cases {
+		m := &models.Meeting{ID: c.id, Title: c.id, StartedAt: &now, Status: models.StatusPending, Transcript: c.transcript}
+		if err := repo.Create(ctx, m); err != nil {
+			t.Fatalf("Create %s: %v", c.id, err)
+		}
+		got, err := repo.HasTranscript(ctx, c.id)
+		if err != nil {
+			t.Fatalf("HasTranscript %s: %v", c.id, err)
+		}
+		if got != c.want {
+			t.Errorf("HasTranscript(%s) = %v, want %v", c.id, got, c.want)
+		}
+	}
+
+	got, err := repo.HasTranscript(ctx, "nao-existe")
+	if err != nil {
+		t.Fatalf("HasTranscript de id inexistente deveria devolver false sem erro: %v", err)
+	}
+	if got {
+		t.Errorf("HasTranscript(nao-existe) = true, want false")
+	}
+}
+
 func TestMeetingRepository_Language_RoundTrip(t *testing.T) {
 	repo := openMeetingTestDB(t)
 	ctx := context.Background()

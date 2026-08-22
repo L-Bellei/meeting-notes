@@ -42,6 +42,7 @@ export interface BoardCardDetail {
   summary: { id: string; content: string; model_used: string } | null
   key_points: Array<{ id: string; content: string; position: number; meeting_id: string }>
   tasks: Task[]
+  has_transcript: boolean
 }
 
 export interface BoardCardFilters {
@@ -169,7 +170,13 @@ export function useMoveCard() {
         method: "PATCH",
         body: JSON.stringify({ column_id, position }),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["board-cards"] }),
-    onError: () => qc.invalidateQueries({ queryKey: ["board-cards"] }),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: ["board-cards"] })
+      qc.invalidateQueries({ queryKey: ["board-card", id] })
+    },
+    onError: (_err, { id }) => {
+      qc.invalidateQueries({ queryKey: ["board-cards"] })
+      qc.invalidateQueries({ queryKey: ["board-card", id] })
+    },
   })
 }

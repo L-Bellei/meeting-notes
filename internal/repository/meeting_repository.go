@@ -21,10 +21,10 @@ func NewMeetingRepository(db *sql.DB) *MeetingRepository {
 
 // ListFilters holds all optional filters for listing meetings.
 type ListFilters struct {
-	ThemeIDs     []string // empty = no filter; multiple = OR match
-	Status       string
-	Q            string // title LIKE %q%
-	StartedAfter string // RFC3339 date
+	ThemeIDs      []string // empty = no filter; multiple = OR match
+	Status        string
+	Q             string // title LIKE %q%
+	StartedAfter  string // RFC3339 date
 	StartedBefore string // RFC3339 date
 }
 
@@ -117,6 +117,18 @@ func (r *MeetingRepository) GetByID(ctx context.Context, id string) (*models.Mee
 		return nil, fmt.Errorf("get meeting: %w", err)
 	}
 	return m, nil
+}
+
+// COUNT em vez de GetByID: só interessa a existência, e o transcript pode ter megabytes.
+func (r *MeetingRepository) HasTranscript(ctx context.Context, meetingID string) (bool, error) {
+	var n int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM meetings WHERE id = ? AND transcript IS NOT NULL AND transcript != ''`,
+		meetingID).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 func (r *MeetingRepository) Update(ctx context.Context, m *models.Meeting) error {

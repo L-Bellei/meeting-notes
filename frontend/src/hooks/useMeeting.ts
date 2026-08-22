@@ -1,6 +1,12 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { api } from "./useApi"
 import type { Meeting } from "./useMeetings"
+
+export function invalidateMeetingDerivedQueries(qc: QueryClient, meetingId: string) {
+  qc.invalidateQueries({ queryKey: ["meeting", meetingId] })
+  qc.invalidateQueries({ queryKey: ["board-card"] })
+  qc.invalidateQueries({ queryKey: ["board-cards"] })
+}
 
 export interface Summary {
   id: string
@@ -86,7 +92,7 @@ export function useReprocess(id: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => api<void>(`/api/meetings/${id}/process`, { method: "POST" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["meeting", id] }),
+    onSuccess: () => invalidateMeetingDerivedQueries(qc, id),
   })
 }
 
@@ -94,7 +100,7 @@ export function useGenerateSummary(meetingId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => api<Summary>(`/api/meetings/${meetingId}/summary/generate`, { method: "POST" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["meeting", meetingId] }),
+    onSuccess: () => invalidateMeetingDerivedQueries(qc, meetingId),
   })
 }
 
@@ -102,7 +108,7 @@ export function useGenerateKeyPoints(meetingId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => api<KeyPoint[]>(`/api/meetings/${meetingId}/key_points/generate`, { method: "POST" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["meeting", meetingId] }),
+    onSuccess: () => invalidateMeetingDerivedQueries(qc, meetingId),
   })
 }
 
@@ -110,7 +116,7 @@ export function useGenerateTasks(meetingId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => api<Task[]>(`/api/meetings/${meetingId}/tasks/generate`, { method: "POST" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["meeting", meetingId] }),
+    onSuccess: () => invalidateMeetingDerivedQueries(qc, meetingId),
   })
 }
 
@@ -119,11 +125,29 @@ export function useUpdateTask(meetingId: string, taskId: string) {
   return useMutation({
     mutationFn: (data: Partial<Task>) =>
       api<Task>(`/api/meetings/${meetingId}/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(data) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["meeting", meetingId] })
-      qc.invalidateQueries({ queryKey: ["board-card"] })
-      qc.invalidateQueries({ queryKey: ["board-cards"] })
+    onMutate: async (data) => {
+      await qc.cancelQueries({ queryKey: ["board-card"] })
+      const queries = qc.getQueriesData<{ tasks: Task[] }>({ queryKey: ["board-card"] })
+      const snapshots = queries.map(([key, value]) => [key, value?.tasks?.find(t => t.id === taskId)] as const)
+      for (const [key, value] of queries) {
+        if (!value?.tasks) continue
+        qc.setQueryData(key, {
+          ...value,
+          tasks: value.tasks.map(t => (t.id === taskId ? { ...t, ...data } : t)),
+        })
+      }
+      return { snapshots }
     },
+    onError: (_err, _data, context) => {
+      for (const [key, previousTask] of context?.snapshots ?? []) {
+        if (!previousTask) continue
+        qc.setQueryData<{ tasks: Task[] }>(key, current => {
+          if (!current?.tasks) return current
+          return { ...current, tasks: current.tasks.map(t => (t.id === taskId ? previousTask : t)) }
+        })
+      }
+    },
+    onSettled: () => invalidateMeetingDerivedQueries(qc, meetingId),
   })
 }
 
@@ -131,6 +155,6 @@ export function useRetranscribe(meetingId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => api(`/api/meetings/${meetingId}/retranscribe`, { method: "POST" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["meeting", meetingId] }),
+    onSuccess: () => invalidateMeetingDerivedQueries(qc, meetingId),
   })
 }

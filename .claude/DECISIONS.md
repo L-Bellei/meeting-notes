@@ -4,6 +4,24 @@ Registro de decisões transversais ao projeto. Decisões específicas de cada fe
 
 ---
 
+## [2026-08-22] Descrição de card é anotação do usuário, não cópia do resumo
+
+**Contexto:** `BoardCardService.Create` copiava `summary.Content` para a descrição do card. A
+cópia nunca ressincronizava, e o modal renderizava a cópia (seção DESCRIÇÃO) e a fonte viva
+(seção RESUMO) uma embaixo da outra — byte-a-byte idênticas no card medido (1867 caracteres nos
+dois campos).
+
+**Escolha:** A descrição passa a ser anotação do usuário, vazia por padrão; o Resumo continua
+sendo a fonte da IA. A migration `017_card_description_annotations.sql` limpa **apenas** as
+descrições ainda idênticas ao resumo, preservando o que foi editado por cima da cópia.
+
+**Justificativa:** Dois campos, dois propósitos — sem essa separação, "editar a descrição" de um
+card de reunião era editar uma cópia congelada do resumo, sem nenhuma relação com o resumo vivo
+mostrado ao lado. Limpar só as descrições ainda idênticas evita apagar anotações que o usuário já
+tenha escrito por cima da cópia antiga.
+
+---
+
 ## [2026-08-21] Instalador empacota o audio-service sem CUDA — produção transcreve em CPU
 
 **Contexto:** O `.spec` do PyInstaller vivia em `audio-service/build/pyinstaller/`, que é **gitignored** — nunca foi commitado e foi perdido junto com o diretório `build/`. Ao recriá-lo, um bundle com as DLLs da NVIDIA saiu com **1,9 GB** (`nvidia/cudnn` 993 MB + `nvidia/cublas` 548 MB; todo o resto ~300 MB). Isso expôs um fato que nenhum registro anterior mencionava: os instaladores publicados da v2.4.1, v2.4.2 e v2.5.0 têm **125,7 MB os três**, tamanho compatível apenas com o bundle **sem** as DLLs de CUDA.
