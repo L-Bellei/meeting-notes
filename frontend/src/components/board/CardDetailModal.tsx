@@ -136,9 +136,22 @@ export function CardDetailModal({ cardId, onClose }: Props) {
     }
   }, [card?.id])
 
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  })
+
   useEffect(() => {
     if (!cardId) return
     const previouslyFocused = document.activeElement as HTMLElement | null
+    panelRef.current?.focus()
+    return () => {
+      previouslyFocused?.focus()
+    }
+  }, [cardId])
+
+  useEffect(() => {
+    if (!cardId) return
 
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -149,7 +162,7 @@ export function CardDetailModal({ cardId, onClose }: Props) {
           cancelEditing()
           return
         }
-        onClose()
+        onCloseRef.current()
         return
       }
       if (e.key !== "Tab") return
@@ -171,12 +184,8 @@ export function CardDetailModal({ cardId, onClose }: Props) {
     }
 
     window.addEventListener("keydown", onKey)
-    panelRef.current?.querySelector<HTMLElement>("button, textarea, select")?.focus()
-    return () => {
-      window.removeEventListener("keydown", onKey)
-      previouslyFocused?.focus()
-    }
-  }, [cardId, editingNotes, onClose])
+    return () => window.removeEventListener("keydown", onKey)
+  }, [cardId, editingNotes])
 
   useEffect(() => {
     setEditingNotes(false)
@@ -246,6 +255,7 @@ export function CardDetailModal({ cardId, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="card-modal-title"
+        tabIndex={-1}
         className="bg-background border border-border rounded-lg w-[640px] max-w-[calc(100vw-2rem)] max-h-[80vh] flex flex-col shadow-xl overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
