@@ -1,29 +1,16 @@
 import { useState, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
-import { Plus, Trash2 } from "lucide-react"
 import { Button } from "../ui/button"
-import { useCardDetail, useUpdateCard, useLinkCardToMeeting, useDeleteCard, type BoardCardDetail } from "../../hooks/useBoard"
-import { useUpdateTask } from "../../hooks/useMeeting"
+import { useCardDetail, useUpdateCard, useLinkCardToMeeting, useDeleteCard } from "../../hooks/useBoard"
 import { useMeetings } from "../../hooks/useMeetings"
 import { cn } from "../../lib/utils"
 import { ExpandableText } from "../ui/ExpandableText"
 import { CardModalHeader } from "./CardModalHeader"
+import { CardTasksSection, parseManualTask, encodeManualTask } from "./CardTasksSection"
 
 interface Props {
   cardId: string | null
   onClose: () => void
-}
-
-type TaskItem = BoardCardDetail["tasks"][number]
-
-// ─── manual task encoding ───────────────────────────────────────────────────
-function parseManualTask(s: string): { text: string; done: boolean } {
-  if (s.startsWith("[x] ")) return { text: s.slice(4), done: true }
-  if (s.startsWith("[ ] ")) return { text: s.slice(4), done: false }
-  return { text: s, done: false }
-}
-function encodeManualTask(text: string, done: boolean): string {
-  return `${done ? "[x]" : "[ ]"} ${text}`
 }
 
 // ─── structured JSON description renderer ───────────────────────────────────
@@ -122,7 +109,6 @@ export function CardDetailModal({ cardId, onClose }: Props) {
   const [description, setDescription] = useState("")
   const [descriptionAtEditStart, setDescriptionAtEditStart] = useState("")
   const [editingNotes, setEditingNotes] = useState(false)
-  const [newTask, setNewTask] = useState("")
   const [linkingMeeting, setLinkingMeeting] = useState(false)
   const [selectedMeetingId, setSelectedMeetingId] = useState("")
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -228,11 +214,10 @@ export function CardDetailModal({ cardId, onClose }: Props) {
 
   // O PUT do card substitui a descrição, então mexer nas tasks tem de reenviar a
   // descrição já persistida: mandar o state local gravaria um rascunho não salvo.
-  function addTask() {
-    if (!cardId || !card || !newTask.trim()) return
-    const updated = [...manualTasks, encodeManualTask(newTask.trim(), false)]
+  function addTask(text: string) {
+    if (!cardId || !card || !text) return
+    const updated = [...manualTasks, encodeManualTask(text, false)]
     updateCard.mutate({ id: cardId, description: card.description, tasks: updated })
-    setNewTask("")
   }
 
   function toggleTask(index: number) {
@@ -295,66 +280,14 @@ export function CardDetailModal({ cardId, onClose }: Props) {
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          {/* Meeting tasks (with checkbox) */}
-          {!isManual && card && card.tasks.length > 0 && (
-            <section>
-              <h3 className="text-xs font-medium text-muted-foreground uppercase mb-2">
-                Tasks ({card.tasks.filter(t => t.completed).length}/{card.tasks.length})
-              </h3>
-              <div className="space-y-1.5">
-                {card.tasks.map(task => (
-                  <TaskRow key={task.id} task={task} meetingId={card.meeting_id ?? ""} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Manual tasks */}
-          {isManual && (
-            <section>
-              <h3 className="text-xs font-medium text-muted-foreground uppercase mb-2">
-                Tasks {manualTasks.length > 0 && `(${manualTasks.filter(t => parseManualTask(t).done).length}/${manualTasks.length})`}
-              </h3>
-              <div className="space-y-1.5 mb-2">
-                {manualTasks.map((raw, i) => {
-                  const { text, done } = parseManualTask(raw)
-                  return (
-                    <div key={i} className="flex items-center gap-2 group">
-                      <input
-                        type="checkbox"
-                        className="accent-primary flex-shrink-0"
-                        checked={done}
-                        onChange={() => toggleTask(i)}
-                      />
-                      <span className={cn(
-                        "text-sm flex-1",
-                        done ? "line-through text-muted-foreground" : "text-foreground"
-                      )}>
-                        {text}
-                      </span>
-                      <button
-                        onClick={() => removeTask(i)}
-                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  className="flex-1 text-sm rounded-lg px-3 py-1.5 bg-input border border-border text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary"
-                  placeholder="Nova task..."
-                  value={newTask}
-                  onChange={e => setNewTask(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && addTask()}
-                />
-                <Button size="sm" variant="ghost" onClick={addTask} disabled={!newTask.trim()}>
-                  <Plus size={14} />
-                </Button>
-              </div>
-            </section>
+          {card && (
+            <CardTasksSection
+              card={card}
+              manualTasks={manualTasks}
+              onToggleManual={toggleTask}
+              onAddManual={addTask}
+              onRemoveManual={removeTask}
+            />
           )}
 
           {/* Resumo da reunião */}
@@ -442,32 +375,5 @@ export function CardDetailModal({ cardId, onClose }: Props) {
       </div>
     </div>,
     document.body,
-  )
-}
-
-function TaskRow({ task, meetingId }: { task: TaskItem; meetingId: string }) {
-  const updateTask = useUpdateTask(meetingId, task.id)
-  return (
-    <div>
-      <label className="flex items-start gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          className="mt-0.5 accent-primary"
-          checked={task.completed}
-          onChange={e => updateTask.mutate({ ...task, completed: e.target.checked })}
-        />
-        <span className={cn("text-sm", task.completed ? "line-through text-muted-foreground" : "")}>
-          {task.description}
-        </span>
-        {updateTask.isPending && (
-          <span className="text-[10px] text-muted-foreground/70 mt-0.5 flex-shrink-0">salvando...</span>
-        )}
-      </label>
-      {updateTask.isError && (
-        <p className="text-xs text-destructive ml-6 mt-0.5">
-          Falha ao salvar: {updateTask.error?.message ?? "erro desconhecido"}
-        </p>
-      )}
-    </div>
   )
 }
