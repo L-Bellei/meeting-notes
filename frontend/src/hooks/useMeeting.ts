@@ -125,8 +125,9 @@ export function useUpdateTask(meetingId: string, taskId: string) {
       api<Task>(`/api/meetings/${meetingId}/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(data) }),
     onMutate: async (data) => {
       await qc.cancelQueries({ queryKey: ["board-card"] })
-      const snapshots = qc.getQueriesData<{ tasks: Task[] }>({ queryKey: ["board-card"] })
-      for (const [key, value] of snapshots) {
+      const queries = qc.getQueriesData<{ tasks: Task[] }>({ queryKey: ["board-card"] })
+      const snapshots = queries.map(([key, value]) => [key, value?.tasks.find(t => t.id === taskId)] as const)
+      for (const [key, value] of queries) {
         if (!value?.tasks) continue
         qc.setQueryData(key, {
           ...value,
@@ -136,8 +137,12 @@ export function useUpdateTask(meetingId: string, taskId: string) {
       return { snapshots }
     },
     onError: (_err, _data, context) => {
-      for (const [key, value] of context?.snapshots ?? []) {
-        qc.setQueryData(key, value)
+      for (const [key, previousTask] of context?.snapshots ?? []) {
+        if (!previousTask) continue
+        qc.setQueryData<{ tasks: Task[] }>(key, current => {
+          if (!current?.tasks) return current
+          return { ...current, tasks: current.tasks.map(t => (t.id === taskId ? previousTask : t)) }
+        })
       }
     },
     onSettled: () => {
