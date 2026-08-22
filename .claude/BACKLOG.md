@@ -53,4 +53,4 @@ Itens fora do escopo das features já implementadas. Para features com plano ati
 
 ## Bugs conhecidos (sem plano)
 
-- **Rascunho de descrição é gravado ao mexer nas tasks (cards manuais)** — em `CardDetailModal`, `toggleTask`, `addTask` e `removeTask` mandam o `description` do state local para `updateCard`. A seção de tasks continua visível durante a edição, então editar a descrição, **não** salvar e clicar num checkbox persiste o rascunho sem passar pelo "Salvar". Só afeta `source === "manual"`. Encontrado lendo o arquivo em 2026-08-22, ainda não corrigido.
+- _(nenhum)_

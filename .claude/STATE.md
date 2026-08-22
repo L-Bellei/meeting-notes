@@ -2,28 +2,29 @@
 
 ## Sessão
 - **Data:** 2026-08-22
-- **Branch atual:** `fix/known-bugs` (6 commits acima de `master`/`bdcfea7`, não pushada)
+- **Branch atual:** `fix/manual-card-draft-description` (1 commit acima de `master`/`bbf9fd1`)
 - **Worktree:** nenhum ativo
 
 ## Trabalho recente
 
-**Branch `fix/known-bugs` — implementada e revisada, ainda não integrada.**
-- Plano: `docs/superpowers/plans/2026-08-21-known-bug-fixes.md` (2/2 tasks)
-- Task 1: fallback GPU→CPU amplo no `audio-service` (+3 testes). Task 2: quatro correções de frontend.
-- Review final whole-branch (opus): *Ready to merge **No*** por limpeza omitida do BACKLOG → fix wave de 7 achados → re-review confirmou todos endereçados.
-- **Acumulado depois, fora do plano:** correção do checkbox de tasks do `CardDetailModal` (422 "description is required"), reportada pelo usuário e verificada por ele na janela nativa.
+**PR #45 (`fix/known-bugs`) mergeada em `master` (`bbf9fd1`).** Seis bugs fechados:
+- Fallback GPU→CPU amplo no `audio-service` (qualquer exceção de inferência, não só erro de DLL) + 3 testes.
+- Quatro correções de frontend: erro de exclusão em pt-BR, cancelamento de drag, menu `⋯` fechando em scroll/resize, hambúrguer na Board view.
+- **Checkbox de tasks do `CardDetailModal` nunca gravava** — reportado pelo usuário, fora do plano. `TaskRow` mandava só `{ completed }`, o campo ausente decodificava para `""` e o service devolvia 422. Correção: reusar o tipo `Task` compartilhado, enviar `{ ...task, completed }`, invalidar `board-card`/`board-cards`, e mostrar estado/erro na linha.
+
+**Branch atual:** bug do rascunho de descrição em cards manuais. `toggleTask`/`addTask`/`removeTask` mandavam o `description` do state local; como o `PUT` do card **substitui** a descrição, editar sem salvar e clicar num checkbox persistia o rascunho. Passaram a reenviar `card.description`.
 
 ## Fase Superpowers
 
-**`finishing` pendente.** O menu de finalização foi apresentado e o usuário escolheu **acumular** a correção nova nesta branch em vez de integrar. `master` é protegido → o caminho é PR.
+**N/A** — correção pontual, sem plano. O ciclo da `fix/known-bugs` está completo.
 
 ## Próximo passo imediato
 
-Decidir a integração da `fix/known-bugs` (PR contra `master`). Depois, dois itens já mapeados no BACKLOG e aguardando decisão do usuário:
-- Bug do rascunho de descrição em cards manuais (pequeno, isolado).
-- Os 10 itens de UI/UX do `CardDetailModal` — investigados a pedido do usuário, **sem escopo definido**; pede `/superpowers:brainstorming` porque vários são decisão de comportamento.
+Abrir/integrar o PR desta branch. Depois, dois itens no BACKLOG aguardando decisão do usuário:
+- **10 itens de UI/UX do `CardDetailModal`** — investigados a pedido do usuário, **sem escopo definido**. Pede `/superpowers:brainstorming`: itens como o `Escape`, o confirm de exclusão e o `status` clicável são decisão de comportamento, não de CSS.
+- **Notificações de pipeline** — feature acordada antes, ainda não brainstormada.
 
-Feature acordada anteriormente e ainda não brainstormada: **notificações de pipeline**.
+Nenhuma release desde a v2.6.0; as correções mergeadas ficam para a próxima versão.
 
 ## Worktrees paralelos
 
@@ -35,11 +36,11 @@ Nenhum.
 - Installer: `dist/meeting-notes-2.6.0-windows-amd64-installer.exe` (144 MB, audio-service embutido)
 - Build canônico: `build.ps1` (não `wails build -nsis` direto).
 - O `.spec` do PyInstaller é rastreado no git (`audio-service/build/pyinstaller/audio-service.spec`, com negação no `.gitignore`).
-- Nada desta branch foi lançado ainda.
+- **`master` está à frente da v2.6.0** com seis correções não lançadas.
 
 ## Armadilhas de ambiente
 
-Todas as três estão no `CLAUDE.md`, seção "Rodando em dev". A que mais custou tempo até agora:
+Todas no `CLAUDE.md`, seção "Rodando em dev". A que mais custou tempo:
 
 - **O HMR do vite não chega à janela nativa** do `wails dev` — só ao navegador em `localhost:34115`. Reinicie o `wails dev` depois de mexer no frontend, não só no backend. O `hmr update` no log é o vite emitindo, não o webview aplicando: **não** use como prova de que a janela nativa atualizou. Isso fez uma correção correta ser reportada como "não funcionou".
 - **O watcher só observa `cmd/desktop`** — mudança em `internal/**` não rebuilda o Go.
