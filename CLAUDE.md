@@ -1,7 +1,7 @@
 # Meeting Notes — Guia para o Agente
 
 ## O que é este projeto
-Aplicação desktop local (Wails v2) que grava reuniões, transcreve com Whisper e gera resumo, pontos-chave e tasks via Claude API. Single-user, sem autenticação.
+Aplicação desktop local (Wails v2) que grava reuniões, transcreve com Whisper e gera resumo, pontos-chave e tasks pela assinatura Claude (Claude Code headless). Single-user, sem autenticação.
 
 ## Stack
 - **Backend:** Go 1.22+, chi v5, modernc/sqlite (sem CGO), uuid

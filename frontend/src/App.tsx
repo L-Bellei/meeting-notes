@@ -99,7 +99,7 @@ function AppInner() {
         upd(1, { status: "done" })
       }
 
-      // Check 3 — Chave da API (condicional)
+      // Check 3 — Assistente de IA (condicional)
       try {
         const aiHealth = await fetch(`http://localhost:${port}/api/ai/health`).then(r => r.json()) as
           { configured: boolean; valid?: boolean; error?: string }
@@ -111,7 +111,7 @@ function AppInner() {
             if (aiHealth.valid) {
               upd(2, { status: "done" })
             } else {
-              upd(2, { status: "error", error: aiHealth.error ?? "Chave inválida. Verifique nas configurações." })
+              upd(2, { status: "error", error: aiHealth.error ?? "Não conectado ao Claude. Verifique nas configurações." })
             }
           }
         }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"meeting-notes/internal/ai"
@@ -81,7 +82,7 @@ func TestAITestHandler_Test_AuthError(t *testing.T) {
 	if msg == "" {
 		t.Fatal("want error field")
 	}
-	if !containsReconecte(msg) {
+	if !strings.Contains(msg, "reconecte") {
 		t.Fatalf("want message containing 'reconecte', got %q", msg)
 	}
 }
@@ -100,11 +101,3 @@ func TestAITestHandler_Test_GenericError(t *testing.T) {
 	}
 }
 
-func containsReconecte(s string) bool {
-	for i := 0; i+len("reconecte") <= len(s); i++ {
-		if s[i:i+len("reconecte")] == "reconecte" {
-			return true
-		}
-	}
-	return false
-}
