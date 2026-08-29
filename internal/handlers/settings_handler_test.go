@@ -35,8 +35,8 @@ func TestSettingsHandler_Get_OK(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&m); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if m["ai_provider"] != "anthropic" {
-		t.Errorf("ai_provider = %q, want anthropic", m["ai_provider"])
+	if m["ai_provider"] != "claude-code" {
+		t.Errorf("ai_provider = %q, want claude-code", m["ai_provider"])
 	}
 }
 

@@ -10,7 +10,7 @@ import (
 var validSettings = map[string]func(string) error{
 	"user_name":             func(string) error { return nil },
 	"claude_code_token":     func(string) error { return nil },
-	"claude_code_model":     validateEnum("", "haiku", "sonnet", "opus"),
+	"claude_code_model":     func(string) error { return nil },
 	"auto_generate":         validateEnum("true", "false"),
 	"whisper_language":      validateEnum("pt", "en", "es", "auto"),
 	"whisper_model":         validateEnum("tiny", "base", "small", "medium", "large"),

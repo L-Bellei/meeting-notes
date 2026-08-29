@@ -64,12 +64,15 @@ func TestSettingsService_Update_ClaudeCodeModel_ValidValue(t *testing.T) {
 	}
 }
 
-func TestSettingsService_Update_ClaudeCodeModel_InvalidValue(t *testing.T) {
+func TestSettingsService_Update_ClaudeCodeModel_FreeTextAccepted(t *testing.T) {
 	svc := newSettingsSvc(t)
-	err := svc.Update(context.Background(), map[string]string{"claude_code_model": "gpt-4o"})
-	var ve *services.ValidationError
-	if !errors.As(err, &ve) {
-		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
+	err := svc.Update(context.Background(), map[string]string{"claude_code_model": "claude-sonnet-4-6"})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	m, _ := svc.GetAll(context.Background())
+	if m["claude_code_model"] != "claude-sonnet-4-6" {
+		t.Errorf("claude_code_model = %q, want claude-sonnet-4-6", m["claude_code_model"])
 	}
 }
 
