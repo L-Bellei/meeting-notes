@@ -223,6 +223,17 @@ func (a *App) OnStartup(ctx context.Context) {
 	})
 	r.Get("/api/ai/health", aiHealthHandler.Check)
 
+	claudeLoginHandler := handlers.NewClaudeLoginHandler(ai.LaunchSetupToken)
+	r.Post("/api/ai/claude-login", claudeLoginHandler.Login)
+	aiTestHandler := handlers.NewAITestHandler(func(ctx context.Context) error {
+		m, err := settingsRepo.GetAll(ctx)
+		if err != nil {
+			return err
+		}
+		return ai.TestConnection(ctx, m["claude_code_token"], m["claude_code_model"])
+	})
+	r.Post("/api/ai/test", aiTestHandler.Test)
+
 	audioServeHandler := handlers.NewAudioServeHandler(meetingRepo)
 	retranscribeHandler := handlers.NewRetranscribeHandler(orch)
 	r.Get("/api/meetings/{id}/audio", audioServeHandler.ServeAudio)
