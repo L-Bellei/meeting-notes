@@ -29,7 +29,7 @@ function AppInner() {
   const [checks, setChecks] = useState<LoadingCheck[]>([
     { label: "Servidor HTTP",          status: "loading" },
     { label: "Modelo de transcrição",  status: "pending" },
-    { label: "Chave da API Anthropic", status: "hidden"  },
+    { label: "Assistente de IA",       status: "hidden"  },
   ])
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null)
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null)

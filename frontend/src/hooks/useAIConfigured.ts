@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { api, getApiBase } from "./useApi"
 import { useSettings } from "./useSettings"
 
@@ -34,7 +34,6 @@ export function useAIConfigured() {
 }
 
 export function useClaudeLogin() {
-  const qc = useQueryClient()
   return useMutation({
     mutationFn: async () => {
       const res = await fetch(`${getApiBase()}/api/ai/claude-login`, { method: "POST" })
@@ -48,10 +47,6 @@ export function useClaudeLogin() {
         throw new Error(body.error ?? "não foi possível abrir o login")
       }
       return (await res.json()) as { status: string }
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["settings"] })
-      qc.invalidateQueries({ queryKey: ["ai-health"] })
     },
   })
 }

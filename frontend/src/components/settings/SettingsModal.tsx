@@ -146,9 +146,10 @@ export function SettingsModal({ open, onClose }: Props) {
     }
   }
 
-  const token = (form.claude_code_token ?? "").trim()
-  const hasToken = token !== ""
-  const maskedToken = token.slice(0, 10) + "…"
+  // Status e teste de conexão refletem o token PERSISTIDO — é o que o backend usa.
+  const savedToken = (settings?.claude_code_token ?? "").trim()
+  const hasToken = savedToken !== ""
+  const maskedToken = savedToken.slice(0, 10) + "…"
   const model = form.claude_code_model ?? ""
   const aiDirty =
     (settings?.claude_code_token ?? "") !== (form.claude_code_token ?? "") ||
