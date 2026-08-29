@@ -10,11 +10,12 @@ api.exe
 __pycache__/
 *.pyc
 
-# Wails build artifacts (binaries, generated files)
+# Wails build artifacts (binaries, generated files). appicon.png e
+# windows/icon.ico são ASSETS-FONTE rastreados de propósito: quando ausentes,
+# o `wails build` os regenera com o logo default do Wails — foi assim que as
+# v2.6.0-v2.8.0 saíram com o "W" no exe e no instalador (ver DECISIONS 2026-08-29).
 /cmd/desktop/build/bin/
-/cmd/desktop/build/appicon.png
 /cmd/desktop/build/windows/tray.ico
-/cmd/desktop/build/windows/icon.ico
 /cmd/desktop/build/windows/wails_tools.nsh
 /cmd/desktop/build/windows/info.json
 /cmd/desktop/build/windows/installer/
