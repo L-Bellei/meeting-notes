@@ -62,9 +62,11 @@ Use **sempre** o `build.ps1` na raiz — ele é o caminho canônico. Não rode `
 ```
 Pré-requisitos: bundle do audio-service em `audio-service/build/dist/audio-service`. Se ausente, gerar com o spec **rastreado no git** (`audio-service/build/pyinstaller/audio-service.spec` — o resto de `audio-service/build/` é ignorado de propósito):
 
+O bundle **precisa** ser gerado com o Python do `.venv` (criado a partir de `requirements.txt`) — o bundle da v2.6.0/v2.7.0 saiu morto porque foi gerado com o Python global, que tinha um uvicorn de outra versão e sem os extras de `uvicorn[standard]`.
+
 ```powershell
 cd audio-service
-python -m PyInstaller build\pyinstaller\audio-service.spec --distpath build\dist --workpath build\work --noconfirm
+.venv\Scripts\python.exe -m PyInstaller build\pyinstaller\audio-service.spec --distpath build\dist --workpath build\work --noconfirm
 ```
 
 O bundle é **CPU-only** por decisão consciente (ver `.claude/DECISIONS.md`, 2026-08-21): dev roda em CUDA, produção em CPU. Atualizar `productVersion` em `cmd/desktop/wails.json` (ou passar `-Version`) antes de cada release.

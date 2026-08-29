@@ -72,7 +72,10 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=False,
+    # console=True keeps real sys.stdout/stderr in the frozen app - uvicorn's
+    # log formatter calls sys.stdout.isatty() and dies on None with console=False.
+    # No window ever shows: the Go launcher starts this exe with CREATE_NO_WINDOW.
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
 )
