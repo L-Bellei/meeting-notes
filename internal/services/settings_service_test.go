@@ -114,3 +114,15 @@ func TestSettingsService_Update_InvalidSidebarPinned(t *testing.T) {
 		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
 	}
 }
+
+func TestSettingsService_Update_WhisperDeviceValidValues(t *testing.T) {
+	svc := newSettingsSvc(t)
+	for _, v := range []string{"auto", "cuda", "cpu"} {
+		if err := svc.Update(context.Background(), map[string]string{"whisper_device": v}); err != nil {
+			t.Fatalf("%s: %v", v, err)
+		}
+	}
+	if err := svc.Update(context.Background(), map[string]string{"whisper_device": "tpu"}); err == nil {
+		t.Fatal("tpu deveria ser rejeitado")
+	}
+}

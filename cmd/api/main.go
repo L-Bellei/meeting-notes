@@ -92,18 +92,26 @@ func main() {
 			statusCode = http.StatusServiceUnavailable
 		}
 
-		modelLoaded := false
+		resp := map[string]any{
+			"status":        "ok",
+			"database":      dbStatus,
+			"model_loaded":  false,
+			"gpu_available": false,
+			"gpu_name":      nil,
+			"gpu_vram_mb":   nil,
+			"device":        "",
+		}
 		if h, err := audioClient.Health(r.Context()); err == nil {
-			modelLoaded = h.ModelLoaded
+			resp["model_loaded"] = h.ModelLoaded
+			resp["gpu_available"] = h.GPUAvailable
+			resp["gpu_name"] = h.GPUName
+			resp["gpu_vram_mb"] = h.GPUVRAMMB
+			resp["device"] = h.Device
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
-		json.NewEncoder(w).Encode(map[string]any{
-			"status":       "ok",
-			"database":     dbStatus,
-			"model_loaded": modelLoaded,
-		})
+		json.NewEncoder(w).Encode(resp)
 	})
 
 	r.Route("/api/themes", func(r chi.Router) {
