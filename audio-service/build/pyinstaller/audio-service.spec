@@ -48,12 +48,6 @@ for pkg in ("nvidia.cudnn", "nvidia.cublas"):
     binaries += pkg_binaries
     hiddenimports += pkg_hiddenimports
 
-# Medido em 2026-08-29: cudnn_engines_precompiled (562 MB) e cudnn_adv (230 MB)
-# não são exercitados pelo faster-whisper; cortá-los leva o instalador de
-# ~610 MB para ~390 MB. Validado com transcrição real em device=cuda.
-binaries = [entry for entry in binaries
-            if "cudnn_engines_precompiled" not in str(entry[0]) and "cudnn_adv" not in str(entry[0])]
-
 a = Analysis(
     [str(AUDIO_SERVICE_ROOT / "run.py")],
     pathex=[str(AUDIO_SERVICE_ROOT)],
@@ -67,6 +61,17 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+
+# Medido em 2026-08-29: cudnn_engines_precompiled (562 MB) e cudnn_adv (230 MB)
+# não são exercitados pelo faster-whisper — validado com transcrição real em
+# device=cuda. O filtro é pós-Analysis porque os hooks do hooks-contrib para
+# nvidia.* re-coletam as DLLs durante a análise, por fora das listas de entrada.
+def _drop_pruned(toc):
+    return [entry for entry in toc
+            if "cudnn_engines_precompiled" not in str(entry[0]) and "cudnn_adv" not in str(entry[0])]
+
+a.binaries = _drop_pruned(a.binaries)
+a.datas = _drop_pruned(a.datas)
 
 pyz = PYZ(a.pure)
 
