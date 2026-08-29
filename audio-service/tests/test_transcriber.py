@@ -18,7 +18,7 @@ def _make_transcriber(tmp_path, device="cuda", compute_type="int8_float16"):
     fake_model = MagicMock()
     with patch("transcriber.WhisperModel", return_value=fake_model) as mock_cls, \
          patch.object(Transcriber, "_setup_dll_paths"), \
-         patch.object(Transcriber, "_resolve_device_compute", return_value=(device, compute_type)):
+         patch.object(Transcriber, "_scan_gpu", return_value=(device == "cuda", None, None)):
         t = Transcriber(
             model_name="medium",
             device=device,
@@ -41,19 +41,20 @@ def test_fixture_patch_active_during_test_body(transcriber, tmp_path):
     wav = tmp_path / "rec.wav"
     wav.write_bytes(b"fake")
     transcriber._fake_model.transcribe.side_effect = RuntimeError("boom cuda")
-    with pytest.raises(RuntimeError):
-        # device é cuda: o except tenta recarregar em CPU — que DEVE bater no mock,
-        # não no WhisperModel real. side_effect abaixo prova que bateu no mock.
-        transcriber._mock_cls.side_effect = RuntimeError("segundo load também falha")
+    # device é cuda: o except tenta carregar o modelo de CPU — que DEVE bater no
+    # mock, não no WhisperModel real. O side_effect abaixo prova que bateu no
+    # mock via asserção (call_count), não via tempo de execução.
+    transcriber._mock_cls.side_effect = RuntimeError("segundo load também falha")
+    with pytest.raises(RuntimeError, match="segundo load também falha"):
         transcriber.transcribe(wav)
-    assert transcriber._mock_cls.call_count >= 1
+    assert transcriber._mock_cls.call_count == 2
 
 
 def test_init_loads_model_and_sets_attributes(tmp_path):
     fake_model = MagicMock()
     with patch("transcriber.WhisperModel", return_value=fake_model) as mock_cls, \
          patch.object(Transcriber, "_setup_dll_paths") as mock_setup, \
-         patch.object(Transcriber, "_resolve_device_compute", return_value=("cuda", "int8_float16")):
+         patch.object(Transcriber, "_scan_gpu", return_value=(True, "NVIDIA GeForce RTX 2050", 4096)):
         t = Transcriber("medium", "cuda", "int8_float16", tmp_path)
     mock_cls.assert_called_once_with("medium", device="cuda", compute_type="int8_float16")
     mock_setup.assert_called_once()
@@ -152,37 +153,110 @@ def test_transcribe_uses_provided_language(transcriber, tmp_path):
     assert kwargs["language"] == "en"
 
 
+def test_transcribe_uses_cpu_when_device_cpu_requested(transcriber, tmp_path):
+    """Mesmo com GPU disponível, device=cpu força CPU."""
+    wav = tmp_path / "rec.wav"
+    wav.write_bytes(b"fake")
+    info = MagicMock(); info.language = "pt"; info.duration = 1.0
+    transcriber._fake_model.transcribe.return_value = (iter([]), info)
+
+    result = transcriber.transcribe(wav, device="cpu")
+
+    assert result.device == "cpu"
+    # segundo load (cpu) aconteceu além do load do boot (cuda)
+    assert transcriber._mock_cls.call_count == 2
+    transcriber._mock_cls.assert_called_with("medium", device="cpu", compute_type="int8")
+
+
+def test_transcribe_model_cache_reuses_per_device(transcriber, tmp_path):
+    wav = tmp_path / "rec.wav"
+    wav.write_bytes(b"fake")
+    info = MagicMock(); info.language = "pt"; info.duration = 1.0
+    transcriber._fake_model.transcribe.return_value = (iter([]), info)
+
+    transcriber.transcribe(wav)
+    transcriber.transcribe(wav)
+
+    assert transcriber._mock_cls.call_count == 1  # só o load do boot
+
+
+def test_transcribe_fallback_does_not_stick(tmp_path):
+    """Falha em CUDA cai para CPU NA CHAMADA; a próxima chamada retenta CUDA."""
+    calls = []
+
+    def model_factory(name, device, compute_type):
+        m = MagicMock()
+        if device == "cuda":
+            def flaky(*a, **k):
+                calls.append("cuda")
+                if len([c for c in calls if c == "cuda"]) == 1:
+                    raise RuntimeError("CUDA failed with error out of memory")
+                info = MagicMock(); info.language = "pt"; info.duration = 1.0
+                return (iter([]), info)
+            m.transcribe.side_effect = flaky
+        else:
+            def ok(*a, **k):
+                calls.append("cpu")
+                info = MagicMock(); info.language = "pt"; info.duration = 1.0
+                return (iter([]), info)
+            m.transcribe.side_effect = ok
+        return m
+
+    with patch("transcriber.WhisperModel", side_effect=model_factory), \
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch.object(Transcriber, "_scan_gpu", return_value=(True, "RTX", 4096)):
+        t = Transcriber("medium", "auto", "auto", tmp_path)
+        wav = tmp_path / "rec.wav"
+        wav.write_bytes(b"fake")
+
+        r1 = t.transcribe(wav)   # cuda falha -> cpu
+        r2 = t.transcribe(wav)   # retenta cuda -> sucesso
+
+    assert r1.device == "cpu"
+    assert r2.device == "cuda"
+    assert calls == ["cuda", "cpu", "cuda"]
+
+
+def test_scan_exposed_on_attributes(tmp_path):
+    with patch("transcriber.WhisperModel", return_value=MagicMock()), \
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch.object(Transcriber, "_scan_gpu", return_value=(True, "NVIDIA GeForce RTX 2050", 4096)):
+        t = Transcriber("medium", "auto", "auto", tmp_path)
+    assert t.gpu_available is True
+    assert t.gpu_name == "NVIDIA GeForce RTX 2050"
+    assert t.gpu_vram_mb == 4096
+    assert t.device == "cuda"
+
+
 def test_transcribe_cuda_dll_error_falls_back_to_cpu(tmp_path):
     """When CUDA inference fails with a DLL error (lazy generator), model reloads on CPU and retries."""
-    cpu_seg = MagicMock()
-    cpu_seg.text = "fallback"
-    cpu_info = MagicMock()
-    cpu_info.language = "pt"
-    cpu_info.duration = 3.0
-
-    cpu_model = MagicMock()
-    cpu_model.transcribe.return_value = (iter([cpu_seg]), cpu_info)
-
-    def bad_segments():
-        raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
-        yield  # make it a generator
-
-    gpu_info = MagicMock()
-    gpu_model = MagicMock()
-    gpu_model.transcribe.return_value = (bad_segments(), gpu_info)
+    def model_factory(name, device, compute_type):
+        m = MagicMock()
+        if device == "cuda":
+            def bad_segments():
+                raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+                yield  # make it a generator
+            info = MagicMock()
+            m.transcribe.return_value = (bad_segments(), info)
+        else:
+            seg = MagicMock()
+            seg.text = "fallback"
+            info = MagicMock(); info.language = "pt"; info.duration = 3.0
+            m.transcribe.return_value = (iter([seg]), info)
+        return m
 
     wav = tmp_path / "rec.wav"
     wav.write_bytes(b"fake")
 
-    with patch("transcriber.WhisperModel", side_effect=[gpu_model, cpu_model]) as mock_cls, \
+    with patch("transcriber.WhisperModel", side_effect=model_factory) as mock_cls, \
          patch.object(Transcriber, "_setup_dll_paths"), \
-         patch.object(Transcriber, "_resolve_device_compute", return_value=("cuda", "int8_float16")):
+         patch.object(Transcriber, "_scan_gpu", return_value=(True, "RTX", 4096)):
         t = Transcriber("medium", "cuda", "int8_float16", tmp_path)
-        t._model = gpu_model
 
         result = t.transcribe(wav)
 
     assert result.transcript == "fallback"
+    assert result.device == "cpu"
     assert t.device == "cpu"
     assert mock_cls.call_count == 2
     mock_cls.assert_called_with("medium", device="cpu", compute_type="int8")
@@ -190,27 +264,26 @@ def test_transcribe_cuda_dll_error_falls_back_to_cpu(tmp_path):
 
 def test_transcribe_cuda_oom_falls_back_to_cpu(tmp_path, caplog):
     """Falta de VRAM na GPU recarrega em CPU e transcreve, em vez de falhar a reunião."""
-    cpu_seg = MagicMock()
-    cpu_seg.text = "fallback"
-    cpu_info = MagicMock()
-    cpu_info.language = "pt"
-    cpu_info.duration = 3.0
-
-    cpu_model = MagicMock()
-    cpu_model.transcribe.return_value = (iter([cpu_seg]), cpu_info)
-
     oom_message = "CUDA failed with error out of memory"
-    gpu_model = MagicMock()
-    gpu_model.transcribe.side_effect = RuntimeError(oom_message)
+
+    def model_factory(name, device, compute_type):
+        m = MagicMock()
+        if device == "cuda":
+            m.transcribe.side_effect = RuntimeError(oom_message)
+        else:
+            seg = MagicMock()
+            seg.text = "fallback"
+            info = MagicMock(); info.language = "pt"; info.duration = 3.0
+            m.transcribe.return_value = (iter([seg]), info)
+        return m
 
     wav = tmp_path / "rec.wav"
     wav.write_bytes(b"fake")
 
-    with patch("transcriber.WhisperModel", side_effect=[gpu_model, cpu_model]) as mock_cls, \
+    with patch("transcriber.WhisperModel", side_effect=model_factory) as mock_cls, \
          patch.object(Transcriber, "_setup_dll_paths"), \
-         patch.object(Transcriber, "_resolve_device_compute", return_value=("cuda", "int8_float16")):
+         patch.object(Transcriber, "_scan_gpu", return_value=(True, "RTX", 4096)):
         t = Transcriber("medium", "cuda", "int8_float16", tmp_path)
-        t._model = gpu_model
 
         with caplog.at_level(logging.WARNING):
             result = t.transcribe(wav)
@@ -233,9 +306,8 @@ def test_transcribe_error_on_cpu_propagates(tmp_path):
 
     with patch("transcriber.WhisperModel", return_value=cpu_model) as mock_cls, \
          patch.object(Transcriber, "_setup_dll_paths"), \
-         patch.object(Transcriber, "_resolve_device_compute", return_value=("cpu", "int8")):
+         patch.object(Transcriber, "_scan_gpu", return_value=(False, None, None)):
         t = Transcriber("medium", "cpu", "int8", tmp_path)
-        t._model = cpu_model
 
         with pytest.raises(ValueError, match="invalid audio format"):
             t.transcribe(wav)
@@ -246,20 +318,21 @@ def test_transcribe_error_on_cpu_propagates(tmp_path):
 
 def test_transcribe_cpu_retry_failure_propagates(tmp_path):
     """Se a retentativa em CPU também falha, o erro sobe — nada é engolido."""
-    gpu_model = MagicMock()
-    gpu_model.transcribe.side_effect = RuntimeError("CUDA failed with error out of memory")
-
-    cpu_model = MagicMock()
-    cpu_model.transcribe.side_effect = ValueError("corrupt wav")
+    def model_factory(name, device, compute_type):
+        m = MagicMock()
+        if device == "cuda":
+            m.transcribe.side_effect = RuntimeError("CUDA failed with error out of memory")
+        else:
+            m.transcribe.side_effect = ValueError("corrupt wav")
+        return m
 
     wav = tmp_path / "rec.wav"
     wav.write_bytes(b"fake")
 
-    with patch("transcriber.WhisperModel", side_effect=[gpu_model, cpu_model]), \
+    with patch("transcriber.WhisperModel", side_effect=model_factory), \
          patch.object(Transcriber, "_setup_dll_paths"), \
-         patch.object(Transcriber, "_resolve_device_compute", return_value=("cuda", "int8_float16")):
+         patch.object(Transcriber, "_scan_gpu", return_value=(True, "RTX", 4096)):
         t = Transcriber("medium", "cuda", "int8_float16", tmp_path)
-        t._model = gpu_model
 
         with pytest.raises(ValueError, match="corrupt wav"):
             t.transcribe(wav)
