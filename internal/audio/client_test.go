@@ -111,7 +111,7 @@ func TestClient_Transcribe_OK(t *testing.T) {
 	defer srv.Close()
 
 	c := audio.NewHTTPClient(srv.URL)
-	got, err := c.Transcribe(context.Background(), "tmp/rec-1.wav", "pt")
+	got, err := c.Transcribe(context.Background(), "tmp/rec-1.wav", "pt", "auto")
 	if err != nil {
 		t.Fatalf("Transcribe: %v", err)
 	}
@@ -130,9 +130,44 @@ func TestClient_Transcribe_500(t *testing.T) {
 	defer srv.Close()
 
 	c := audio.NewHTTPClient(srv.URL)
-	_, err := c.Transcribe(context.Background(), "tmp/x.wav", "pt")
+	_, err := c.Transcribe(context.Background(), "tmp/x.wav", "pt", "auto")
 	if !errors.Is(err, audio.ErrAudioGenericError) {
 		t.Errorf("expected ErrAudioGenericError, got %v", err)
+	}
+}
+
+func TestTranscribe_SendsDeviceAndParsesEffective(t *testing.T) {
+	var receivedBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&receivedBody)
+		w.Write([]byte(`{"transcript":"olá","language":"pt","duration_seconds":1.0,"model":"medium","device":"cuda"}`))
+	}))
+	defer srv.Close()
+	c := audio.NewHTTPClient(srv.URL)
+	got, err := c.Transcribe(context.Background(), "tmp/rec-1.wav", "pt", "auto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receivedBody["device"] != "auto" {
+		t.Fatalf("device no request = %q, want auto", receivedBody["device"])
+	}
+	if got.Device != "cuda" {
+		t.Fatalf("Device = %q, want cuda", got.Device)
+	}
+}
+
+func TestHealth_ParsesGPUFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"status":"ok","state":"idle","loopback_available":true,"model_loaded":true,"model_name":"medium","device":"cuda","gpu_available":true,"gpu_name":"RTX 2050","gpu_vram_mb":4096}`))
+	}))
+	defer srv.Close()
+	c := audio.NewHTTPClient(srv.URL)
+	h, err := c.Health(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !h.GPUAvailable || h.GPUName != "RTX 2050" || h.GPUVRAMMB != 4096 {
+		t.Fatalf("gpu fields: %+v", h)
 	}
 }
 
@@ -162,7 +197,7 @@ func TestClient_Transcribe_BodyContentType(t *testing.T) {
 	defer srv.Close()
 
 	c := audio.NewHTTPClient(srv.URL)
-	if _, err := c.Transcribe(context.Background(), "tmp/x.wav", "pt"); err != nil {
+	if _, err := c.Transcribe(context.Background(), "tmp/x.wav", "pt", "auto"); err != nil {
 		t.Fatalf("Transcribe: %v", err)
 	}
 }

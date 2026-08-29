@@ -69,6 +69,6 @@ cd audio-service
 .venv\Scripts\python.exe -m PyInstaller build\pyinstaller\audio-service.spec --distpath build\dist --workpath build\work --noconfirm
 ```
 
-O bundle é **CPU-only** por decisão consciente (ver `.claude/DECISIONS.md`, 2026-08-21): dev roda em CUDA, produção em CPU. Atualizar `productVersion` em `cmd/desktop/wails.json` (ou passar `-Version`) antes de cada release.
+O bundle embarca CUDA desde 2026-08-29 (ver DECISIONS.md); o device é escolha do usuário nas Configurações (`whisper_device`), com fallback GPU→CPU por chamada. Atualizar `productVersion` em `cmd/desktop/wails.json` (ou passar `-Version`) antes de cada release.
 
 Release completa: bump de versão (via PR — `master` é protegido) → `build.ps1` → tag `vX.Y.Z` → GitHub Release com o `.exe` de `dist/`.

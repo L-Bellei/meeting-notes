@@ -37,6 +37,7 @@ app = FastAPI(lifespan=lifespan)
 class TranscribeRequest(BaseModel):
     path: str
     language: Optional[str] = None
+    device: Optional[str] = "auto"
 
 
 @app.get("/health")
@@ -48,6 +49,9 @@ def health():
         "model_loaded": transcriber.model_loaded,
         "model_name": transcriber.model_name,
         "device": transcriber.device,
+        "gpu_available": transcriber.gpu_available,
+        "gpu_name": transcriber.gpu_name,
+        "gpu_vram_mb": transcriber.gpu_vram_mb,
     }
 
 
@@ -89,7 +93,7 @@ def status():
 @app.post("/transcribe")
 def transcribe(req: TranscribeRequest):
     try:
-        result = transcriber.transcribe(Path(req.path), req.language)
+        result = transcriber.transcribe(Path(req.path), req.language, device=req.device or "auto")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -99,4 +103,5 @@ def transcribe(req: TranscribeRequest):
         "language": result.language,
         "duration_seconds": result.duration_seconds,
         "model": result.model,
+        "device": result.device,
     }

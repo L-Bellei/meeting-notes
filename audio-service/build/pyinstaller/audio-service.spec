@@ -38,13 +38,15 @@ hiddenimports += ["_portaudiowpatch"]
 # looks it up as a real sibling directory, so it falls outside collect_all("av").
 datas, binaries = collect_delvewheel_libs_directory("av", datas=datas, binaries=binaries)
 
-# The nvidia.cudnn / nvidia.cublas GPU DLLs (~1.6 GB) are deliberately NOT
-# collected here, to keep the installer small and match the size of prior
-# releases. transcriber.py._setup_dll_paths() still tries to import them at
-# startup; when that import fails (because they're absent from the bundle),
-# it skips silently, ctranslate2.get_cuda_device_count() reports 0, and the
-# service falls back to device="cpu" / compute_type="int8" - that fallback
-# is the intended production path for this release, not a bug.
+# GPU DLLs embarcadas por decisão de 2026-08-29 (revertendo 2026-08-21): o
+# usuário escolhe o device e o instalador é autossuficiente. collect_all
+# preserva nvidia/<pkg>/{bin,lib} como o _setup_dll_paths() do transcriber
+# espera encontrar via importlib.
+for pkg in ("nvidia.cudnn", "nvidia.cublas"):
+    pkg_datas, pkg_binaries, pkg_hiddenimports = collect_all(pkg)
+    datas += pkg_datas
+    binaries += pkg_binaries
+    hiddenimports += pkg_hiddenimports
 
 a = Analysis(
     [str(AUDIO_SERVICE_ROOT / "run.py")],
@@ -59,6 +61,17 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+
+# Medido em 2026-08-29: cudnn_engines_precompiled (562 MB) e cudnn_adv (230 MB)
+# não são exercitados pelo faster-whisper — validado com transcrição real em
+# device=cuda. O filtro é pós-Analysis porque os hooks do hooks-contrib para
+# nvidia.* re-coletam as DLLs durante a análise, por fora das listas de entrada.
+def _drop_pruned(toc):
+    return [entry for entry in toc
+            if "cudnn_engines_precompiled" not in str(entry[0]) and "cudnn_adv" not in str(entry[0])]
+
+a.binaries = _drop_pruned(a.binaries)
+a.datas = _drop_pruned(a.datas)
 
 pyz = PYZ(a.pure)
 

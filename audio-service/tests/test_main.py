@@ -26,6 +26,9 @@ def mock_transcriber(monkeypatch):
     m.model_loaded = True
     m.model_name = "medium"
     m.device = "cuda"
+    m.gpu_available = False
+    m.gpu_name = None
+    m.gpu_vram_mb = None
     monkeypatch.setattr(main, "transcriber", m)
     return m
 
@@ -45,6 +48,9 @@ def test_health_idle(mock_recorder, mock_transcriber, client):
         "model_loaded": True,
         "model_name": "medium",
         "device": "cuda",
+        "gpu_available": False,
+        "gpu_name": None,
+        "gpu_vram_mb": None,
     }
 
 
@@ -53,6 +59,17 @@ def test_health_loopback_unavailable(mock_recorder, mock_transcriber, client):
     r = client.get("/health")
     assert r.status_code == 200
     assert r.json()["loopback_available"] is False
+
+
+def test_health_includes_gpu_scan_fields(mock_recorder, mock_transcriber, client):
+    mock_transcriber.gpu_available = True
+    mock_transcriber.gpu_name = "NVIDIA GeForce RTX 2050"
+    mock_transcriber.gpu_vram_mb = 4096
+    r = client.get("/health")
+    body = r.json()
+    assert body["gpu_available"] is True
+    assert body["gpu_name"] == "NVIDIA GeForce RTX 2050"
+    assert body["gpu_vram_mb"] == 4096
 
 
 def test_start_idle(mock_recorder, mock_transcriber, client):
@@ -135,6 +152,7 @@ def test_transcribe_ok(mock_recorder, mock_transcriber, client):
         language="pt",
         duration_seconds=10.5,
         model="medium",
+        device="cpu",
     )
     r = client.post("/transcribe", json={"path": "tmp/rec-abc.wav"})
     assert r.status_code == 200
@@ -143,10 +161,12 @@ def test_transcribe_ok(mock_recorder, mock_transcriber, client):
         "language": "pt",
         "duration_seconds": 10.5,
         "model": "medium",
+        "device": "cpu",
     }
     args, kwargs = mock_transcriber.transcribe.call_args
     assert str(args[0]) == "tmp/rec-abc.wav" or str(args[0]).endswith("rec-abc.wav")
     assert args[1] is None
+    assert kwargs.get("device") == "auto"
 
 
 def test_transcribe_path_invalid(mock_recorder, mock_transcriber, client):
@@ -171,6 +191,27 @@ def test_transcribe_optional_language(mock_recorder, mock_transcriber, client):
     assert r.status_code == 200
     args, kwargs = mock_transcriber.transcribe.call_args
     assert args[1] == "en"
+
+
+def test_transcribe_passes_device_and_returns_effective(mock_recorder, mock_transcriber, client):
+    mock_transcriber.transcribe.return_value = TranscribeResult(
+        transcript="oi", language="pt", duration_seconds=1.0, model="medium", device="cuda"
+    )
+    r = client.post("/transcribe", json={"path": "tmp/rec.wav", "device": "cuda"})
+    assert r.status_code == 200
+    assert r.json()["device"] == "cuda"
+    args, kwargs = mock_transcriber.transcribe.call_args
+    assert kwargs.get("device") == "cuda" or (len(args) >= 3 and args[2] == "cuda")
+
+
+def test_transcribe_device_defaults_to_auto(mock_recorder, mock_transcriber, client):
+    mock_transcriber.transcribe.return_value = TranscribeResult(
+        transcript="oi", language="pt", duration_seconds=1.0, model="medium", device="cpu"
+    )
+    r = client.post("/transcribe", json={"path": "tmp/rec.wav"})
+    assert r.status_code == 200
+    args, kwargs = mock_transcriber.transcribe.call_args
+    assert kwargs.get("device") == "auto" or (len(args) >= 3 and args[2] == "auto")
 
 
 def test_transcribe_path_required(mock_recorder, mock_transcriber, client):

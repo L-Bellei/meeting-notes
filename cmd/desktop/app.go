@@ -141,16 +141,24 @@ func (a *App) OnStartup(ctx context.Context) {
 	}))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		modelLoaded := false
+		resp := map[string]any{
+			"status":        "ok",
+			"model_loaded":  false,
+			"gpu_available": false,
+			"gpu_name":      nil,
+			"gpu_vram_mb":   nil,
+			"device":        "",
+		}
 		if h, err := audioClient.Health(r.Context()); err == nil {
-			modelLoaded = h.ModelLoaded
+			resp["model_loaded"] = h.ModelLoaded
+			resp["gpu_available"] = h.GPUAvailable
+			resp["gpu_name"] = h.GPUName
+			resp["gpu_vram_mb"] = h.GPUVRAMMB
+			resp["device"] = h.Device
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{
-			"status":       "ok",
-			"model_loaded": modelLoaded,
-		})
+		json.NewEncoder(w).Encode(resp)
 	})
 
 	r.Route("/api/themes", func(r chi.Router) {
@@ -321,6 +329,22 @@ func (a *App) startAudioService(ctx context.Context, audioURL string) {
 			c := exec.Command(bundled, "--port", "8765")
 			c.Env = append(os.Environ(), "RECORDINGS_DIR="+recordingsDir)
 			c.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000} // CREATE_NO_WINDOW: no console for process tree
+
+			// O bundle é console app (v2.7.1): sem redirect, warnings do fallback
+			// de GPU evaporam no app empacotado — ver DECISIONS 2026-08-28/29.
+			if cacheDir, err := os.UserCacheDir(); err == nil {
+				logPath := filepath.Join(cacheDir, "meeting-notes", "audio-service.log")
+				if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err == nil {
+					if fi, statErr := os.Stat(logPath); statErr == nil && fi.Size() > 5*1024*1024 {
+						os.Remove(logPath)
+					}
+					if f, openErr := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); openErr == nil {
+						c.Stdout = f
+						c.Stderr = f
+					}
+				}
+			}
+
 			cmd = c
 			log.Printf("starting bundled audio service from %s", bundled)
 		}

@@ -202,10 +202,14 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 	}
 
 	whisperLang := ""
+	whisperDevice := "auto"
 	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
 		whisperLang = s["whisper_language"]
+		if d := s["whisper_device"]; d != "" {
+			whisperDevice = d
+		}
 	}
-	trResp, err := o.audio.Transcribe(ctx, stopResp.Path, whisperLang)
+	trResp, err := o.audio.Transcribe(ctx, stopResp.Path, whisperLang, whisperDevice)
 	if err != nil {
 		o.markFailed(ctx, m, fmt.Sprintf("transcrição falhou: %v", err))
 		return err
@@ -407,10 +411,14 @@ func (o *Orchestrator) RunRetranscribePipeline(ctx context.Context, meetingID st
 	}
 
 	whisperLang := ""
+	whisperDevice := "auto"
 	if s, err2 := o.settings.GetAll(ctx); err2 == nil {
 		whisperLang = s["whisper_language"]
+		if d := s["whisper_device"]; d != "" {
+			whisperDevice = d
+		}
 	}
-	trResp, err := o.audio.Transcribe(ctx, audioPath, whisperLang)
+	trResp, err := o.audio.Transcribe(ctx, audioPath, whisperLang, whisperDevice)
 	if err != nil {
 		o.markFailed(ctx, m, fmt.Sprintf("transcrição falhou: %v", err))
 		return err

@@ -8,6 +8,7 @@ export interface Settings {
   auto_generate: string
   whisper_language: string
   whisper_model: string
+  whisper_device: string
   keep_audio: string
   recording_hotkey: string
   meeting_name_template: string
@@ -23,6 +24,7 @@ export const WRITABLE_SETTINGS: (keyof Settings)[] = [
   "auto_generate",
   "whisper_language",
   "whisper_model",
+  "whisper_device",
   "keep_audio",
   "recording_hotkey",
   "meeting_name_template",
