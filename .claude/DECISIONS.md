@@ -4,6 +4,40 @@ Registro de decisões transversais ao projeto. Decisões específicas de cada fe
 
 ---
 
+## [2026-08-29] Instalador embarca CUDA; device de transcrição é escolha do usuário (reverte 2026-08-21)
+
+**Contexto:** A decisão de 2026-08-21 mantinha o instalador CPU-only para preservar o tamanho das
+releases anteriores. As medições daquele item (3,2× de ganho, gravação real de 146s numa RTX 2050
+4 GB: `medium` GPU 35,5s vs CPU 112,6s) e o pedido explícito do usuário — que quer escolher o
+device, com o app escaneando a máquina — motivaram reabrir a decisão. O experimento de corte do
+bundle (Task 8 do plano) validou com transcrição real em CUDA: 240s de fala, 23–24s, mesmos
+caracteres, sem fallback.
+
+**Escolha:** Instalador único, sem download sob demanda nem instalador dual. `whisper_device`
+(`auto` | `cuda` | `cpu`, default `auto`) viaja por chamada no `POST /transcribe` — não é fixado no
+boot do serviço. Fallback GPU→CPU é **por chamada, sem estado pegajoso**: uma falha na GPU cai para
+CPU naquela transcrição, mas a chamada seguinte retenta CUDA (ao contrário do singleton antigo, que
+travava em CPU até reiniciar o processo). O log do processo filho (stdout/stderr do
+`audio-service.exe`, antes descartado no app empacotado) passa a ter destino:
+`%LOCALAPPDATA%\meeting-notes\audio-service.log`, com rotação simples. O timeout do `/transcribe`
+em `internal/audio/client.go` sobe de 60 min para **4 horas**, para cobrir a pior combinação
+medida — tentativa GPU queimada a meio da transcrição seguida de reprocesso inteiro em CPU numa
+reunião longa.
+
+**Justificativa e trade-offs explícitos:**
+- **Tamanho do instalador:** o bundle de CUDA saiu de 1,85 GB para **1,07 GB** depois da poda
+  validada na Task 8 (`cudnn_engines_precompiled64_9.dll` e `cudnn_adv64_9.dll` removidos, sem
+  regressão de qualidade ou performance na transcrição real).
+- **Custo aceito:** máquinas sem GPU NVIDIA carregam DLLs sem uso — estimativa de ~465 MB inúteis
+  no instalador, preço do instalador único e autossuficiente (sem download sob demanda).
+- **Timeout de 4h é estático** — o client não conhece a duração da gravação; dinâmico seria YAGNI
+  neste app single-user.
+- Fecha os dois débitos abertos do item "Instalador transcreve em CPU — empacotar GPU" no
+  BACKLOG: o downgrade permanente do device (resolvido pelo fallback sem estado pegajoso) e o log
+  do fallback sem destino (resolvido pelo `audio-service.log`).
+
+---
+
 ## [2026-08-29] Assets-fonte nunca vivem em paths gitignorados
 
 **Contexto:** Terceira perda pelo mesmo padrão: o spec do PyInstaller (perdido, recriado em

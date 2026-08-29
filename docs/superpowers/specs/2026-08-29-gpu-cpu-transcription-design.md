@@ -25,10 +25,13 @@ necessário do mesmo jeito) e dois modelos sempre quentes (~2 GB de RAM permanen
 - O `.spec` do PyInstaller passa a coletar `nvidia.cudnn` e `nvidia.cublas` (o
   `_setup_dll_paths()` do `transcriber.py` já os pré-carrega — decisão 2026-05-01, sem mudança de
   código para o load). Instalador estimado: **~610 MB** (LZMA razão 0,27 já medida).
-- **Experimento de corte (task própria, com critério de aceite):** remover
-  `cudnn_engines_precompiled` (562 MB) e `cudnn_adv` (230 MB) e validar com **uma transcrição real
-  em `device: cuda`**. Passou → instalador ~390 MB; falhou → bundle completo. O resultado é
-  registrado neste spec ao final da execução.
+- **Experimento de corte — RESULTADO (2026-08-29): PASSOU.** Bundle podado
+  (`cudnn_engines_precompiled64_9.dll` 562 MB + `cudnn_adv64_9.dll` 230 MB removidos) transcreveu
+  240s de fala real em `device: cuda` em 23s, mesmos 2876 caracteres da baseline com bundle
+  completo (24s), zero warnings de fallback no stderr. Bundle: 1,85 GB → **1,07 GB**. A poda está
+  codificada no `.spec` (filtro de `binaries`). Baseline e validação rodadas na RTX 2050 4 GB com
+  áudio TTS gerado localmente (nenhuma gravação real disponível na máquina; fala sintética
+  exercita os mesmos kernels).
 - O smoke test do `build.ps1` não muda (o boot do serviço não depende de CUDA).
 - A decisão CPU-only de 2026-08-21 é formalmente revertida por entrada nova no DECISIONS.md
   referenciando este spec.
