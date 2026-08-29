@@ -1,57 +1,49 @@
-# Estado do Projeto — 2026-08-29
+# Estado do Projeto — 2026-08-29 (fim de sessão)
 
 ## Sessão
-- **Data:** 2026-08-28/29
-- **`master` (`40c997e`) = v2.8.1 publicada.** Três releases nesta sessão: **v2.7.1** (hotfix — o
-  audio-service empacotado das v2.6.0/v2.7.0 morria no boot; bundle regenerado do venv pinado e
-  smoke test obrigatório no `build.ps1`), **v2.8.0** (IA passa a consumir a **assinatura Claude**
-  via Claude Code headless; providers por API key removidos) e **v2.8.1** (ícones do produto
-  restaurados e rastreados no git). Detalhes por release no CHANGELOG desta data.
+- **Data:** 2026-08-28/29 (sessão longa — quatro releases)
+- **`master` (`7d5d872`) = v2.9.0 publicada.** Nesta sessão: **v2.7.1** (hotfix — audio-service
+  empacotado morria no boot; smoke test obrigatório no `build.ps1`), **v2.8.0** (IA pela
+  **assinatura Claude** via Claude Code headless; API keys removidas), **v2.8.1** (ícones do
+  produto restaurados e rastreados) e **v2.9.0** (transcrição em **GPU** com scan da máquina e
+  seletor Auto/GPU/CPU). Detalhes por release no CHANGELOG desta data.
 - **Worktree:** nenhum ativo.
 
 ## Fase Superpowers
 
-**Brainstorming (iniciando)** — próxima feature: **GPU/CPU na transcrição** (o app escaneia a
-máquina e o usuário escolhe o device). O brainstorm foi aberto em 2026-08-28 e pausado no primeiro
-passo; contexto de partida: decisão CPU-only de 2026-08-21 em DECISIONS.md e o item medido
-"Instalador transcreve em CPU — empacotar GPU" no BACKLOG (ganho 3,2×, +465 MB de DLLs, timeout de
-60 min em `internal/audio/client.go`, fallback GPU→CPU permanente até restart). Primeira decisão de
-design em aberto: como entregar as DLLs de CUDA (instalador único ~610 MB vs download sob demanda
-vs dois instaladores).
-
-O ciclo anterior (`docs/superpowers/plans/2026-08-29-claude-code-provider.md`, spec em
-`docs/superpowers/specs/2026-08-29-claude-code-provider-design.md`) foi completo: brainstorm → spec
-→ plano → 7 tasks via Subagent-Driven Development (com spike de TTY que mudou o design do login) →
-revisão final → merge PR #50 → release v2.8.0. Workspace do SDD apagado; o registro é o git.
+**Nenhum ciclo em andamento.** O último (`docs/superpowers/plans/2026-08-29-gpu-cpu-transcription.md`,
+spec `docs/superpowers/specs/2026-08-29-gpu-cpu-transcription-design.md`) foi completo: 9 tasks via
+Subagent-Driven Development, experimento de corte das DLLs validado com transcrição real em CUDA,
+homologação do usuário na janela nativa, merge (PRs #53/#54) e release v2.9.0. Workspaces do SDD
+apagados; o registro é o git.
 
 ## Próximo passo imediato
 
-Retomar o brainstorm da feature GPU/CPU (`/superpowers:brainstorming`), começando pela decisão de
-empacotamento das DLLs. Depois dela, o BACKLOG ainda guarda **Notificações de pipeline** e
-**Export** como features acordadas/futuras.
+Nenhum acordado. Candidatas no BACKLOG (Features futuras): **Notificações de pipeline** e
+**Export** — ambas começam por `/superpowers:brainstorming`. O argumento antigo do backlog
+(**vitest no frontend**) segue válido.
 
 ## Estado de release
 
-- **v2.8.1** publicada: https://github.com/L-Bellei/meeting-notes/releases/tag/v2.8.1
-  (instalador 138,4 MB; smoke test do bundle OK em 38s no build).
+- **v2.9.0** publicada: https://github.com/L-Bellei/meeting-notes/releases/tag/v2.9.0
+  — instalador de **631,3 MB** (CUDA embarcada; bundle podado de 1,85→1,07 GB). A estimativa
+  intermediária de ~390 MB era otimista: a razão de compressão medida numa amostra de cudnn
+  (0,27) não representa a cublas, que comprime mal. 631 MB está dentro do envelope (~610 MB)
+  aprovado na decisão do instalador único.
 - **`master` está em paridade com a última release.**
-- **Upgrade da v2.7.x exige reconectar a IA**: a migration 018 apaga as chaves de API do banco
-  (irreversível — downgrade não funciona) e o usuário cola o token do `claude setup-token` nas
-  Configurações.
-- O `build.ps1` agora **falha o build** se o audio-service empacotado não responder `/health` em
-  120s — a trava que faltou nas v2.6.0/v2.7.0. NSIS precisa estar no PATH
-  (`C:\Program Files (x86)\NSIS`).
-- **PR #48** (docs da v2.7.0) foi superado: sua única contribuição (entrada de release do CHANGELOG)
-  foi portada para o master neste commit. Fechar sem merge.
+- Upgrade da v2.8.x: migration 019 só adiciona `whisper_device` (default auto) — sem quebra;
+  quem vem da v2.7.x ainda precisa reconectar a IA (migration 018, irreversível).
+- Armadilha nova de release: a corrida entre `git push` do bump e `gh pr merge --delete-branch`
+  deixou o bump fora do merge do PR #53 (corrigido via PR #54). Nas próximas: commitar o bump
+  ANTES de abrir o PR, ou conferir `git show HEAD:cmd/desktop/wails.json` pós-merge.
 
 ## Armadilhas de ambiente
 
-Todas no `CLAUDE.md`, seção "Rodando em dev". Novas desta sessão:
-- **O bundle do PyInstaller DEVE ser gerado com o Python do `.venv`** — o global tinha uvicorn de
-  outra versão sem os extras, e o bundle saiu morto (duas releases). O `.venv` foi recriado em
-  2026-08-28 a partir do `requirements.txt` corrigido (pins `websockets==13.1`,
-  `huggingface_hub<1.0`).
-- **App instalado aberto segura o `SingleInstanceLock`** — o `wails dev` sai com exit 0 em
-  silêncio; e instalar por cima com o app aberto produz instalação híbrida (débito NSIS no BACKLOG).
-- Testes/gerações do provider claude-code nunca tocam o CLI real (fakes de `commandRunner`); a
-  validação de verdade é o botão "Testar conexão" ou uma geração real.
+Todas no `CLAUDE.md` ("Rodando em dev") e nas entradas de 2026-08-28/29 do DECISIONS. Extras:
+- Bundle do PyInstaller SEMPRE com o Python do `.venv`; a poda das DLLs de cuDNN é **pós-Analysis**
+  no `.spec` (hooks do hooks-contrib re-coletam nvidia.* por fora das listas de entrada).
+- Ícone "W" aparecendo em atalho/barra com o produto correto no exe = **cache de ícones do
+  Windows** (limpar `iconcache_*.db` + reiniciar Explorer; atalho fixado guarda cópia própria).
+  Não é bug do app — episódio de 2026-08-29 diagnosticado com o ícone extraído do binário.
+- Testes Python nunca carregam WhisperModel real (suíte em ~2s); provider claude-code nunca toca
+  o CLI real em teste.
