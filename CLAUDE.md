@@ -7,7 +7,7 @@ Aplicação desktop local (Wails v2) que grava reuniões, transcreve com Whisper
 - **Backend:** Go 1.22+, chi v5, modernc/sqlite (sem CGO), uuid
 - **Desktop:** Wails v2 (WebView2 no Windows)
 - **Frontend:** React 19 + TypeScript, Tailwind CSS, React Query v5, @dnd-kit
-- **AI:** Anthropic Claude Sonnet 4.6 (via `internal/ai/anthropic_client.go`)
+- **AI:** Claude via subscription — Claude Code headless (`internal/ai/claude_code_client.go`)
 - **Áudio:** componente Python separado (Whisper + loopback de sistema)
 
 ## Arquitetura
@@ -16,7 +16,7 @@ cmd/
   api/          → servidor HTTP standalone
   desktop/      → entry point Wails
 internal/
-  ai/           → clientes Anthropic/OpenAI
+  ai/           → cliente Claude Code (subscription)
   audio/        → cliente para o serviço Python de áudio
   database/     → abertura do SQLite + migrations automáticas
   handlers/     → handlers HTTP (chi)

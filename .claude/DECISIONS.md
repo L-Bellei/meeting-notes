@@ -4,6 +4,20 @@ Registro de decisões transversais ao projeto. Decisões específicas de cada fe
 
 ---
 
+## [2026-08-29] IA via subscription (Claude Code CLI), provider único — API keys removidas
+
+**Contexto:** O app gerava resumo, pontos-chave e tasks pela Anthropic Messages API com API key, cobrando créditos de API. O usuário tem assinatura Claude (Pro/Max) e quer que esse consumo saia da assinatura em vez de API — mas a Messages API não aceita credencial de assinatura (é explicitamente não-programática). O único caminho oficial para gerar a partir da assinatura é o **Claude Code em modo headless** (`claude -p`), autenticado por token OAuth de longa duração emitido por `claude setup-token`.
+
+**Escolha:** `ClaudeCodeClient` (`internal/ai/claude_code_client.go`) spawna `claude -p <prompt> --output-format json [--model <m>]` por chamada (stateless — sem processo quente, sem sidecar Agent SDK), com `CLAUDE_CODE_OAUTH_TOKEN` no ambiente. Este passa a ser o **único** provider de IA: `anthropic_client.go` e `openai_client.go` (e os SDKs correspondentes) saem do `go.mod`; `DynamicAIClient.resolve()` só resolve `claude-code`. Login é iniciado pelo próprio app: o botão "Conectar com Claude" spawna `claude setup-token`, que abre um **console visível** (não headless/oculto) — um spike (Task 1 do plano) provou que o comando exige TTY e recusa rodar com stdout apenas capturado em background. O usuário autoriza no browser, o token aparece no console, e a colagem no campo das Configurações é manual (a captura automática de stdout foi descartada pelo mesmo motivo). `claude_code_model` é campo de **texto livre** no seletor (aliases padrão/haiku/sonnet/opus + campo "Outro…"): não há listagem dinâmica de modelos com credencial de subscription — `claude models list` não existe e `GET /v1/models` recusa token de subscription por ToS. A migration `018_claude_code_provider.sql` marca `ai_provider = 'claude-code'` e apaga as chaves de API antigas; a linha `ai_provider` **permanece no banco** só como registro de estado — fora da whitelist de escrita do `SettingsService`, e o frontend filtra o `PUT` via `pickWritable` para nunca reenviá-la.
+
+**Justificativa e trade-offs explícitos:**
+- **Dependência do binário `claude` instalado** na máquina do usuário — sem ele, `ai.Configured` e o health tratam como não configurado.
+- **Rate limits da assinatura** (não de billing por token): estourar a cota do plano Pro/Max passa a limitar o app; sem retry automático, para não queimar quota sozinho em cima de um erro transitório.
+- **Migration 018 é irreversível** (mesmo padrão da migration 016 de 2026-08-20): downgrade para uma v2.7.x anterior não funciona mais, e as chaves de API apagadas não são recuperáveis — quem migrar precisa recolar credenciais se voltar a usar API key no futuro.
+- **Restrição de distribuição:** a Anthropic não permite que produtos de terceiros ofereçam login claude.ai a seus usuários sem aprovação prévia. Este fluxo pressupõe app pessoal, rodando na máquina do próprio assinante — distribuir o app com esse fluxo de login para terceiros exigiria aprovação da Anthropic antes.
+
+---
+
 ## [2026-08-22] Descrição de card é anotação do usuário, não cópia do resumo
 
 **Contexto:** `BoardCardService.Create` copiava `summary.Content` para a descrição do card. A
