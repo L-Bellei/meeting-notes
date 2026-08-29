@@ -39,7 +39,11 @@ func IsAuthError(err error) bool {
 	return strings.Contains(s, "authentication") ||
 		strings.Contains(s, "invalid x-api-key") ||
 		strings.Contains(s, "invalid api key") ||
-		strings.Contains(s, "incorrect api key")
+		strings.Contains(s, "incorrect api key") ||
+		strings.Contains(s, "oauth token") ||
+		strings.Contains(s, "token expired") ||
+		strings.Contains(s, "please run /login") ||
+		strings.Contains(s, "invalid bearer")
 }
 
 // Ping verifica se o provedor de IA configurado tem uma chave válida.

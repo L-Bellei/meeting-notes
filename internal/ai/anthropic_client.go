@@ -4,23 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
-
-type TaskSuggestion struct {
-	Description string `json:"description"`
-	Assignee    string `json:"assignee"`
-	Priority    string `json:"priority"`
-}
-
-type AIClient interface {
-	GenerateSummary(ctx context.Context, transcript, notes, customPrompt string) (content string, inputTokens, outputTokens int, err error)
-	GenerateKeyPoints(ctx context.Context, transcript, notes, customPrompt string) (points []string, inputTokens, outputTokens int, err error)
-	GenerateTasks(ctx context.Context, transcript, notes, customPrompt string) (tasks []TaskSuggestion, inputTokens, outputTokens int, err error)
-}
 
 type AnthropicClient struct {
 	client anthropic.Client
@@ -33,20 +20,6 @@ func NewAnthropicClient(apiKey, model string) *AnthropicClient {
 }
 
 func (c *AnthropicClient) Model() string { return c.model }
-
-func buildInstruction(defaultInstruction, customPrompt string) string {
-	if customPrompt != "" {
-		return customPrompt
-	}
-	return defaultInstruction
-}
-
-func buildContext(transcript, notes string) string {
-	if notes == "" {
-		return transcript
-	}
-	return "Transcript:\n" + transcript + "\n\nMeeting Notes (added by the user):\n" + notes
-}
 
 func (c *AnthropicClient) GenerateSummary(ctx context.Context, transcript, notes, customPrompt string) (string, int, int, error) {
 	const jsonFmt = `Return ONLY a JSON object with the shape {"summary":"..."} and no extra text.`
@@ -117,16 +90,4 @@ func (c *AnthropicClient) callJSON(ctx context.Context, prompt string, maxTokens
 		return "", 0, 0, fmt.Errorf("anthropic returned no content")
 	}
 	return msg.Content[0].Text, int(msg.Usage.InputTokens), int(msg.Usage.OutputTokens), nil
-}
-
-// stripJSONFence removes leading/trailing whitespace and ```json fences if present.
-func stripJSONFence(s string) string {
-	s = strings.TrimSpace(s)
-	if strings.HasPrefix(s, "```") {
-		s = strings.TrimPrefix(s, "```json")
-		s = strings.TrimPrefix(s, "```")
-		s = strings.TrimSuffix(s, "```")
-		s = strings.TrimSpace(s)
-	}
-	return s
 }
