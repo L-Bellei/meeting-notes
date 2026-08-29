@@ -25,6 +25,9 @@ type HealthResponse struct {
 	ModelLoaded       bool   `json:"model_loaded"`
 	ModelName         string `json:"model_name"`
 	Device            string `json:"device"`
+	GPUAvailable      bool   `json:"gpu_available"`
+	GPUName           string `json:"gpu_name"`
+	GPUVRAMMB         int    `json:"gpu_vram_mb"`
 }
 
 type StartResponse struct {
@@ -45,13 +48,14 @@ type TranscribeResponse struct {
 	Language        string  `json:"language"`
 	DurationSeconds float64 `json:"duration_seconds"`
 	Model           string  `json:"model"`
+	Device          string  `json:"device"`
 }
 
 type Client interface {
 	Health(ctx context.Context) (*HealthResponse, error)
 	StartRecording(ctx context.Context) (*StartResponse, error)
 	StopRecording(ctx context.Context) (*StopResponse, error)
-	Transcribe(ctx context.Context, path, language string) (*TranscribeResponse, error)
+	Transcribe(ctx context.Context, path, language, device string) (*TranscribeResponse, error)
 }
 
 type httpClient struct {
@@ -63,8 +67,10 @@ type httpClient struct {
 func NewHTTPClient(baseURL string) *httpClient {
 	return &httpClient{
 		baseURL:          strings.TrimRight(baseURL, "/"),
-		defaultClient:    &http.Client{Timeout: 30 * time.Second},
-		transcribeClient: &http.Client{Timeout: 60 * time.Minute},
+		defaultClient: &http.Client{Timeout: 30 * time.Second},
+		// 4h: cobre tentativa de GPU queimada a meio da transcrição + reprocesso
+		// inteiro em CPU (1,3× tempo real) em reuniões longas — ver spec 2026-08-29.
+		transcribeClient: &http.Client{Timeout: 4 * time.Hour},
 	}
 }
 
@@ -92,8 +98,8 @@ func (c *httpClient) StopRecording(ctx context.Context) (*StopResponse, error) {
 	return &out, nil
 }
 
-func (c *httpClient) Transcribe(ctx context.Context, path, language string) (*TranscribeResponse, error) {
-	body, err := json.Marshal(map[string]string{"path": path, "language": language})
+func (c *httpClient) Transcribe(ctx context.Context, path, language, device string) (*TranscribeResponse, error) {
+	body, err := json.Marshal(map[string]string{"path": path, "language": language, "device": device})
 	if err != nil {
 		return nil, fmt.Errorf("marshal transcribe request: %w", err)
 	}

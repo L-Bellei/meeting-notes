@@ -22,7 +22,7 @@ func (s *stubAudioClient) Health(ctx context.Context) (*audio.HealthResponse, er
 }
 func (s *stubAudioClient) StartRecording(ctx context.Context) (*audio.StartResponse, error) { return nil, nil }
 func (s *stubAudioClient) StopRecording(ctx context.Context) (*audio.StopResponse, error)   { return nil, nil }
-func (s *stubAudioClient) Transcribe(ctx context.Context, path, lang string) (*audio.TranscribeResponse, error) {
+func (s *stubAudioClient) Transcribe(ctx context.Context, path, lang, device string) (*audio.TranscribeResponse, error) {
 	return nil, nil
 }
 

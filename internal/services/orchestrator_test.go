@@ -59,7 +59,7 @@ func (f *fakeAudioClient) StopRecording(ctx context.Context) (*audio.StopRespons
 	f.stopCalls++
 	return f.stopResp, f.stopErr
 }
-func (f *fakeAudioClient) Transcribe(ctx context.Context, path, language string) (*audio.TranscribeResponse, error) {
+func (f *fakeAudioClient) Transcribe(ctx context.Context, path, language, device string) (*audio.TranscribeResponse, error) {
 	f.transcribeCalls++
 	f.lastLanguage = language
 	return f.transcribeResp, f.transcribeErr
