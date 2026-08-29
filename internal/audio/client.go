@@ -66,7 +66,7 @@ type httpClient struct {
 
 func NewHTTPClient(baseURL string) *httpClient {
 	return &httpClient{
-		baseURL:          strings.TrimRight(baseURL, "/"),
+		baseURL:       strings.TrimRight(baseURL, "/"),
 		defaultClient: &http.Client{Timeout: 30 * time.Second},
 		// 4h: cobre tentativa de GPU queimada a meio da transcrição + reprocesso
 		// inteiro em CPU (1,3× tempo real) em reuniões longas — ver spec 2026-08-29.

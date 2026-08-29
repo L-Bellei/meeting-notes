@@ -160,6 +160,7 @@ class Transcriber:
             import logging
             logging.warning("GPU inference failed (%s), retrying this call on CPU", e)
             effective = "cpu"
+            # Atribuído antes da retentativa: se o CPU também falhar, /health reporta a tentativa.
             self.device = effective
             model = self._get_model("cpu")
             segments, info = model.transcribe(str(resolved), **transcribe_kwargs)
