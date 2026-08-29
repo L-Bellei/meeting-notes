@@ -4,6 +4,42 @@ Registro de decisões transversais ao projeto. Decisões específicas de cada fe
 
 ---
 
+## [2026-08-29] Assets-fonte nunca vivem em paths gitignorados
+
+**Contexto:** Terceira perda pelo mesmo padrão: o spec do PyInstaller (perdido, recriado em
+2026-08-21), e agora `cmd/desktop/build/appicon.png` + `build/windows/icon.ico` — gitignorados como
+"artefatos de build", perdidos na limpeza de ~2026-08-20, e regenerados pelo `wails build` com o
+logo default do Wails, que embarcou silenciosamente no exe/instalador das v2.6.0–v2.8.0. O tray
+sobreviveu porque `cmd/desktop/assets/tray.ico` era rastreado.
+
+**Escolha:** Todo arquivo que o build **consome** (spec, ícones, templates) é asset-fonte e deve
+ser rastreado no git — mesmo quando mora dentro de um diretório de build gitignorado (usar negação
+ou remover a entrada, com comentário no `.gitignore` explicando o porquê). Só o que o build
+**produz** é artefato.
+
+**Justificativa:** O sintoma da perda é silencioso: builds continuam verdes e o placeholder embarca
+em release. O critério "consumido vs produzido" é verificável na revisão de qualquer mudança de
+`.gitignore`.
+
+---
+
+## [2026-08-28] Release só sai com smoke test do artefato empacotado
+
+**Contexto:** As v2.6.0 e v2.7.0 foram publicadas com o audio-service **morto no boot** — a
+verificação de release era o tamanho do instalador, que não distingue um bundle que sobe de um que
+crasha. O defeito só apareceu quando o usuário instalou numa segunda máquina.
+
+**Escolha:** O `build.ps1` sobe o `audio-service.exe` empacotado e exige HTTP 200 em `/health`
+(orçamento de 120s reais — o modelo Whisper carrega no lifespan, antes do servidor aceitar
+conexões) **antes** do NSIS; sem isso o build falha. Checagens por tamanho continuam como sanidade,
+não como gate.
+
+**Justificativa:** O smoke exercita exatamente o modo de falha que escapou duas vezes (ambiente de
+build ≠ ambiente pinado). Custa ~40s por build. Corolário: qualquer futuro componente empacotado
+ganha o mesmo tratamento — o gate é "o artefato sobe", não "o artefato existe".
+
+---
+
 ## [2026-08-29] IA via subscription (Claude Code CLI), provider único — API keys removidas
 
 **Contexto:** O app gerava resumo, pontos-chave e tasks pela Anthropic Messages API com API key, cobrando créditos de API. O usuário tem assinatura Claude (Pro/Max) e quer que esse consumo saia da assinatura em vez de API — mas a Messages API não aceita credencial de assinatura (é explicitamente não-programática). O único caminho oficial para gerar a partir da assinatura é o **Claude Code em modo headless** (`claude -p`), autenticado por token OAuth de longa duração emitido por `claude setup-token`.

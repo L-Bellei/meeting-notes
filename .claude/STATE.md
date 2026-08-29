@@ -1,57 +1,57 @@
-# Estado do Projeto — 2026-08-22
+# Estado do Projeto — 2026-08-29
 
 ## Sessão
-- **Data:** 2026-08-22
-- **`master` (`5d44982`):** já carrega PR #45 (fallback GPU→CPU amplo no `audio-service`, quatro
-  correções de frontend, e o checkbox de tasks do board que nunca gravava) e PR #46 (rascunho de
-  descrição persistindo em cards manuais). Nenhuma release desde a v2.6.0 — ver "Estado de
-  release". Este resumo descreve `master`; para o que uma branch específica mudou, ver o
-  CHANGELOG na data correspondente.
-- **Em andamento:** branch `feat/card-detail-modal-ux`, com as 9 tasks do plano
-  `docs/superpowers/plans/2026-08-22-card-detail-modal-ux.md` completas (ver CHANGELOG
-  [2026-08-22] "CardDetailModal — UI/UX..." para o que ela entrega). Ainda não tem PR aberta.
-- **Worktree:** nenhum ativo
+- **Data:** 2026-08-28/29
+- **`master` (`40c997e`) = v2.8.1 publicada.** Três releases nesta sessão: **v2.7.1** (hotfix — o
+  audio-service empacotado das v2.6.0/v2.7.0 morria no boot; bundle regenerado do venv pinado e
+  smoke test obrigatório no `build.ps1`), **v2.8.0** (IA passa a consumir a **assinatura Claude**
+  via Claude Code headless; providers por API key removidos) e **v2.8.1** (ícones do produto
+  restaurados e rastreados no git). Detalhes por release no CHANGELOG desta data.
+- **Worktree:** nenhum ativo.
 
 ## Fase Superpowers
 
-Plano `2026-08-22-card-detail-modal-ux` com as 9 tasks implementadas via Subagent-Driven
-Development. Falta a etapa de finishing: abrir o PR e decidir se há uma review final de branch
-inteira antes do merge (as reviews até aqui foram por task). Detalhes de execução —
-rulings, achados e o que foi parqueado — estão em
-`.superpowers/sdd/2026-08-22-card-detail-modal-ux/progress.md`, não duplicados aqui.
+**Brainstorming (iniciando)** — próxima feature: **GPU/CPU na transcrição** (o app escaneia a
+máquina e o usuário escolhe o device). O brainstorm foi aberto em 2026-08-28 e pausado no primeiro
+passo; contexto de partida: decisão CPU-only de 2026-08-21 em DECISIONS.md e o item medido
+"Instalador transcreve em CPU — empacotar GPU" no BACKLOG (ganho 3,2×, +465 MB de DLLs, timeout de
+60 min em `internal/audio/client.go`, fallback GPU→CPU permanente até restart). Primeira decisão de
+design em aberto: como entregar as DLLs de CUDA (instalador único ~610 MB vs download sob demanda
+vs dois instaladores).
+
+O ciclo anterior (`docs/superpowers/plans/2026-08-29-claude-code-provider.md`, spec em
+`docs/superpowers/specs/2026-08-29-claude-code-provider-design.md`) foi completo: brainstorm → spec
+→ plano → 7 tasks via Subagent-Driven Development (com spike de TTY que mudou o design do login) →
+revisão final → merge PR #50 → release v2.8.0. Workspace do SDD apagado; o registro é o git.
 
 ## Próximo passo imediato
 
-Decidir o finishing de `feat/card-detail-modal-ux`: abrir o PR (possivelmente com uma review
-final whole-branch antes, como as branches anteriores tiveram) e integrar em `master`. A
-migration 017 roda no banco do usuário no próximo launch depois do merge — ver "Riscos" na spec.
-Antes de fechar essa decisão, falta decidir se os quatro hooks irmãos de `useMeeting.ts` com o
-defeito de invalidação de cache (`useGenerateSummary`, `useGenerateKeyPoints`, `useReprocess`,
-`useRetranscribe` — ver BACKLOG, "Débitos técnicos") entram nesta branch ou ficam para depois; a
-review final da branch é quem decide.
-
-Depois disso, dois itens no BACKLOG aguardando decisão do usuário:
-- **Notificações de pipeline** — feature acordada antes, ainda não brainstormada.
-- **Export** — exportar reunião/card em PDF, Markdown ou Notion.
-
-## Worktrees paralelos
-
-Nenhum.
+Retomar o brainstorm da feature GPU/CPU (`/superpowers:brainstorming`), começando pela decisão de
+empacotamento das DLLs. Depois dela, o BACKLOG ainda guarda **Notificações de pipeline** e
+**Export** como features acordadas/futuras.
 
 ## Estado de release
 
-- **v2.6.0** publicada: https://github.com/L-Bellei/meeting-notes/releases/tag/v2.6.0
-- Installer: `dist/meeting-notes-2.6.0-windows-amd64-installer.exe` (144 MB, audio-service embutido)
-- Build canônico: `build.ps1` (não `wails build -nsis` direto).
-- O `.spec` do PyInstaller é rastreado no git (`audio-service/build/pyinstaller/audio-service.spec`, com negação no `.gitignore`).
-- **`master` está à frente da v2.6.0** com as correções de PR #45 e PR #46 ainda não lançadas, e
-  `feat/card-detail-modal-ux` soma mais uma rodada de mudanças quando integrar.
+- **v2.8.1** publicada: https://github.com/L-Bellei/meeting-notes/releases/tag/v2.8.1
+  (instalador 138,4 MB; smoke test do bundle OK em 38s no build).
+- **`master` está em paridade com a última release.**
+- **Upgrade da v2.7.x exige reconectar a IA**: a migration 018 apaga as chaves de API do banco
+  (irreversível — downgrade não funciona) e o usuário cola o token do `claude setup-token` nas
+  Configurações.
+- O `build.ps1` agora **falha o build** se o audio-service empacotado não responder `/health` em
+  120s — a trava que faltou nas v2.6.0/v2.7.0. NSIS precisa estar no PATH
+  (`C:\Program Files (x86)\NSIS`).
+- **PR #48** (docs da v2.7.0) foi superado: sua única contribuição (entrada de release do CHANGELOG)
+  foi portada para o master neste commit. Fechar sem merge.
 
 ## Armadilhas de ambiente
 
-Todas no `CLAUDE.md`, seção "Rodando em dev". A que mais custou tempo:
-
-- **O HMR do vite não chega à janela nativa** do `wails dev` — só ao navegador em `localhost:34115`. Reinicie o `wails dev` depois de mexer no frontend, não só no backend. O `hmr update` no log é o vite emitindo, não o webview aplicando: **não** use como prova de que a janela nativa atualizou. Isso fez uma correção correta ser reportada como "não funcionou".
-- **O watcher só observa `cmd/desktop`** — mudança em `internal/**` não rebuilda o Go.
-- **`SingleInstanceLock`** — um segundo `wails dev` sai com exit 0 em silêncio.
-- Dev roda CUDA, produção roda CPU — ver DECISIONS de 2026-08-21.
+Todas no `CLAUDE.md`, seção "Rodando em dev". Novas desta sessão:
+- **O bundle do PyInstaller DEVE ser gerado com o Python do `.venv`** — o global tinha uvicorn de
+  outra versão sem os extras, e o bundle saiu morto (duas releases). O `.venv` foi recriado em
+  2026-08-28 a partir do `requirements.txt` corrigido (pins `websockets==13.1`,
+  `huggingface_hub<1.0`).
+- **App instalado aberto segura o `SingleInstanceLock`** — o `wails dev` sai com exit 0 em
+  silêncio; e instalar por cima com o app aberto produz instalação híbrida (débito NSIS no BACKLOG).
+- Testes/gerações do provider claude-code nunca tocam o CLI real (fakes de `commandRunner`); a
+  validação de verdade é o botão "Testar conexão" ou uma geração real.

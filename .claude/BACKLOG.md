@@ -12,7 +12,8 @@ Itens fora do escopo das features já implementadas. Para features com plano ati
 
 ## Features futuras (não brainstormadas)
 
-- **Notificações de pipeline** — notificação nativa do Windows quando o processamento de uma reunião termina. **Próxima feature acordada com o usuário**; começar por `/superpowers:brainstorming`. `git.sr.ht/~jackmordaunt/go-toast/v2` já está no `go.mod` como dependência indireta, sem uso direto.
+- **GPU/CPU na transcrição** — o app escaneia a máquina (GPU NVIDIA disponível?) e o usuário escolhe o device. **Próxima feature acordada; brainstorm iniciado em 2026-08-28 e pausado no primeiro passo** (ver STATE.md). Base técnica já medida no item "Instalador transcreve em CPU — empacotar GPU" dos Débitos abaixo; a primeira decisão de design é a entrega das DLLs de CUDA (instalador ~610 MB vs download sob demanda vs dois instaladores).
+- **Notificações de pipeline** — notificação nativa do Windows quando o processamento de uma reunião termina. Acordada, ainda não brainstormada. `git.sr.ht/~jackmordaunt/go-toast/v2` já está no `go.mod` como dependência indireta, sem uso direto.
 - **Export** — exportar reunião (ou card do board) em PDF, Markdown ou Notion.
 
 ---
