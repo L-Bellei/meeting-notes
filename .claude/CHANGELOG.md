@@ -2,6 +2,105 @@
 
 ---
 
+## [2026-08-29] Release v2.8.1 — ícones do produto restaurados
+
+**Tag:** https://github.com/L-Bellei/meeting-notes/releases/tag/v2.8.1 · **Merge:** PR #51 (`40c997e`)
+**Instalador:** `meeting-notes-2.8.1-windows-amd64-installer.exe`, 138,4 MB.
+
+Desde a v2.6.0 o exe, a barra de tarefas e o instalador exibiam o logo default do Wails ("W"):
+`appicon.png` e `windows/icon.ico` estavam **gitignorados como artefatos**, foram perdidos na
+limpeza de ~2026-08-20 (a mesma do spec do PyInstaller) e o `wails build` os regenerou como
+placeholder. Só o tray sobreviveu (usa `cmd/desktop/assets/tray.ico`, rastreado). Ícones
+regenerados do `frontend/src/assets/iconv2.png` (500px): appicon 512px e `icon.ico`
+multirresolução (16–256px, entradas PNG). Os dois agora são **rastreados**, com o porquê comentado
+no `.gitignore` (ver DECISIONS 2026-08-29). Verificação: ícone extraído do exe compilado e
+conferido visualmente antes do PR.
+
+---
+
+## [2026-08-29] Release v2.8.0 — IA pela assinatura Claude (provider único)
+
+**Tag:** https://github.com/L-Bellei/meeting-notes/releases/tag/v2.8.0 · **Merge:** PR #50 (`24f4e38`)
+**Instalador:** `meeting-notes-2.8.0-windows-amd64-installer.exe`, 138,3 MB (menor: SDKs de API fora do binário).
+**Plano Superpowers:** `docs/superpowers/plans/2026-08-29-claude-code-provider.md` (7 tasks, Subagent-Driven Development)
+**Spec:** `docs/superpowers/specs/2026-08-29-claude-code-provider-design.md`
+
+Resumo/pontos-chave/tasks passam a sair da **assinatura Claude (Pro/Max)** via Claude Code
+headless (`claude -p --output-format json`, prompt via stdin, token de `claude setup-token`);
+os providers anthropic/openai por API key foram **removidos** (decisão do usuário: "substituir
+tudo"). Migration 018 apaga as chaves antigas (irreversível). Detalhes de arquitetura no plano/spec
+— não duplicados aqui.
+
+**O que a execução mudou em relação ao plano (rulings do controller, todos no git):**
+- **Spike de TTY (Task 1) reformulou o login:** `claude setup-token` trava sem TTY (nem abre o
+  browser com stdio redirecionado), então a captura automática do token foi descartada — o botão
+  "Conectar com Claude" abre um console visível e o usuário cola o token no app.
+- **Modelos "direto do Claude" não têm caminho oficial** com credencial de subscription (sem
+  `claude models list`; `/v1/models` recusa o token por ToS) — pedido do usuário resolvido com
+  aliases (padrão/haiku/sonnet/opus) + campo livre "Outro…"; `claude_code_model` é texto livre.
+- Ordem T5↔T4 invertida (whitelist antes do handler de login); `pickWritable` no frontend filtra o
+  PUT porque a linha legada `ai_provider` fica no banco como registro, fora da whitelist.
+- Defeito de rota achado ao validar o venv: `faster-whisper` importa `requests` sem declarar e o
+  `huggingface_hub` 1.x não o traz mais → pin `huggingface_hub<1.0`.
+
+**Verificação:** `go vet` + `go test ./...` verdes (runner fake — nenhum teste toca o CLI real);
+`tsc` + `npm run build` limpos; **teste manual do usuário na janela nativa** (conectar → autorizar
+→ colar token → testar conexão → gerar resumo) aprovado antes do merge. Reviews por task com fix
+rounds (T5: regressão de default em testes de outros pacotes; T6: invalidações órfãs) e revisão
+final whole-branch pelo controlador.
+
+---
+
+## [2026-08-28] Release v2.7.1 — hotfix: audio-service morto no boot
+
+**Tag:** https://github.com/L-Bellei/meeting-notes/releases/tag/v2.7.1 · **Merge:** PR #49 (`9b88f15`)
+**Instalador:** `meeting-notes-2.7.1-windows-amd64-installer.exe`, 141 MB.
+
+O `audio-service.exe` empacotado das **v2.6.0 e v2.7.0 nunca subiu** — gravação morta em toda
+instalação dessas versões, sem ninguém notar porque a verificação de release era por tamanho de
+instalador. Dois defeitos independentes na receita do bundle, diagnosticados por systematic
+debugging (reprodução local + inspeção do archive congelado):
+1. Bundle gerado com o **Python global** (uvicorn 0.46, sem extras de `uvicorn[standard]`) em vez
+   do `.venv` pinado — com `console=False` no spec recriado, `sys.stdout` é `None` e o uvicorn
+   morre em `isatty()` ("Unable to configure formatter 'default'").
+2. **Pins podres**: `uvicorn[standard]==0.32.0` sem teto de `websockets` → o atual removeu
+   `websockets.legacy` ("No module named 'websockets.legacy'", o crash visto na outra máquina do
+   usuário).
+
+Correções: pins `websockets==13.1` (+ depois `huggingface_hub<1.0`), `console=True` no spec (o Go
+lança com `CREATE_NO_WINDOW`) + `use_colors=False` no `run.py`, CLAUDE.md mandando buildar com o
+Python do `.venv`, e **smoke test obrigatório no `build.ps1`**: o instalador só é gerado se o exe
+empacotado responder `/health` (orçamento de 120s — o modelo Whisper carrega antes do servidor
+aceitar conexões; medido 40s nesta máquina). Débito registrado: o NSIS não detecta o app aberto
+(instalação híbrida observada em 2026-08-28). Execução distribuída (sonnet/opus) com review por
+task e revisão final pelo controlador.
+
+---
+
+## [2026-08-22] Release v2.7.0
+
+**Tag:** https://github.com/L-Bellei/meeting-notes/releases/tag/v2.7.0 · **Merge:** PR #47 (`75baa22`)
+**Instalador:** `meeting-notes-2.7.0-windows-amd64-installer.exe`, 143,3 MB, audio-service embutido.
+
+Lança o overhaul do `CardDetailModal` mais as oito correções que estavam acumuladas em `master`
+desde a v2.6.0 (PRs #45 e #46). Detalhe do que entrou: as entradas abaixo desta.
+
+**Verificação antes de publicar:** suíte completa no resultado mergeado (`go vet`, `go test ./...`
+nos 7 pacotes, `pytest` 41/41, `tsc --noEmit`, `npm run build`), e conferência de que o bundle de
+344 MB do audio-service mais o binário de 31 MB estavam em `cmd/desktop/build/bin` antes do NSIS —
+o instalador saiu em 143,3 MB contra 143,3 MB da v2.6.0, delta consistente com as mudanças de
+código. Essa checagem existe porque a v2.0.0 quase publicou instalador sem o audio-service.
+
+**Duas mudanças visíveis que o usuário validou na janela nativa antes do merge:** cards de reunião
+no board ficam só com título (a `description` que servia de preview agora é vazia), e a migration
+017 roda no primeiro launch. Ambas registradas em `BACKLOG.md` com o raciocínio de por que não
+foram revertidas nem alargadas.
+
+---
+
+
+---
+
 ## [2026-08-22] CardDetailModal — UI/UX, descrição como anotação do usuário — Release pendente
 
 **Plano Superpowers:** `docs/superpowers/plans/2026-08-22-card-detail-modal-ux.md` (9 tasks, Subagent-Driven Development)
