@@ -31,21 +31,42 @@ func TestSettingsService_GetAll_ReturnsMap(t *testing.T) {
 	}
 }
 
-func TestSettingsService_Update_ValidProvider(t *testing.T) {
+func TestSettingsService_Update_ClaudeCodeTokenAccepted(t *testing.T) {
 	svc := newSettingsSvc(t)
-	err := svc.Update(context.Background(), map[string]string{"ai_provider": "openai"})
+	err := svc.Update(context.Background(), map[string]string{"claude_code_token": "sk-ant-oat-abc123"})
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
 	m, _ := svc.GetAll(context.Background())
-	if m["ai_provider"] != "openai" {
-		t.Errorf("ai_provider = %q, want openai", m["ai_provider"])
+	if m["claude_code_token"] != "sk-ant-oat-abc123" {
+		t.Errorf("claude_code_token = %q, want sk-ant-oat-abc123", m["claude_code_token"])
 	}
 }
 
-func TestSettingsService_Update_InvalidProvider(t *testing.T) {
+func TestSettingsService_Update_AnthropicApiKeyRejected(t *testing.T) {
 	svc := newSettingsSvc(t)
-	err := svc.Update(context.Background(), map[string]string{"ai_provider": "gemini"})
+	err := svc.Update(context.Background(), map[string]string{"anthropic_api_key": "sk-ant-123"})
+	var ve *services.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)
+	}
+}
+
+func TestSettingsService_Update_ClaudeCodeModel_ValidValue(t *testing.T) {
+	svc := newSettingsSvc(t)
+	err := svc.Update(context.Background(), map[string]string{"claude_code_model": "opus"})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	m, _ := svc.GetAll(context.Background())
+	if m["claude_code_model"] != "opus" {
+		t.Errorf("claude_code_model = %q, want opus", m["claude_code_model"])
+	}
+}
+
+func TestSettingsService_Update_ClaudeCodeModel_InvalidValue(t *testing.T) {
+	svc := newSettingsSvc(t)
+	err := svc.Update(context.Background(), map[string]string{"claude_code_model": "gpt-4o"})
 	var ve *services.ValidationError
 	if !errors.As(err, &ve) {
 		t.Fatalf("expected *services.ValidationError, got %T: %v", err, err)

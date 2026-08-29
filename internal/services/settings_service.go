@@ -8,19 +8,16 @@ import (
 )
 
 var validSettings = map[string]func(string) error{
-	"user_name":         func(string) error { return nil },
-	"ai_provider":       validateEnum("anthropic", "openai"),
-	"anthropic_api_key": func(string) error { return nil },
-	"anthropic_model":   validateEnum("claude-sonnet-4-6", "claude-opus-4-7", "claude-haiku-4-5"),
-	"openai_api_key":    func(string) error { return nil },
-	"openai_model":      validateEnum("gpt-4o", "gpt-4o-mini", "gpt-4-turbo"),
-	"auto_generate":          validateEnum("true", "false"),
-	"whisper_language":       validateEnum("pt", "en", "es", "auto"),
-	"whisper_model":          validateEnum("tiny", "base", "small", "medium", "large"),
-	"keep_audio":             validateEnum("true", "false"),
-	"recording_hotkey":       func(string) error { return nil },
-	"meeting_name_template":  func(string) error { return nil },
-	"sidebar_pinned":         validateEnum("true", "false"),
+	"user_name":             func(string) error { return nil },
+	"claude_code_token":     func(string) error { return nil },
+	"claude_code_model":     validateEnum("", "haiku", "sonnet", "opus"),
+	"auto_generate":         validateEnum("true", "false"),
+	"whisper_language":      validateEnum("pt", "en", "es", "auto"),
+	"whisper_model":         validateEnum("tiny", "base", "small", "medium", "large"),
+	"keep_audio":            validateEnum("true", "false"),
+	"recording_hotkey":      func(string) error { return nil },
+	"meeting_name_template": func(string) error { return nil },
+	"sidebar_pinned":        validateEnum("true", "false"),
 }
 
 func validateEnum(allowed ...string) func(string) error {

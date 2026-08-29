@@ -10,8 +10,6 @@ import (
 type Config struct {
 	HTTPPort           string
 	DatabasePath       string
-	AnthropicAPIKey    string
-	AnthropicModel     string
 	AudioServiceURL    string
 	MaxTokens          string
 	WhisperModel       string
@@ -26,8 +24,6 @@ func Load() *Config {
 	return &Config{
 		HTTPPort:           getEnv("HTTP_PORT", "8080"),
 		DatabasePath:       getEnv("DATABASE_PATH", defaultDatabasePath()),
-		AnthropicAPIKey:    getEnv("ANTHROPIC_API_KEY", ""),
-		AnthropicModel:     getEnv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
 		AudioServiceURL:    getEnv("AUDIO_SERVICE_URL", "http://localhost:8765"),
 		MaxTokens:          getEnv("MAX_TOKENS", "4096"),
 		WhisperModel:       getEnv("WHISPER_MODEL", "medium"),
