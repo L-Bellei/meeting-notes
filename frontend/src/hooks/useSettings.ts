@@ -3,17 +3,39 @@ import { api, useApiReady } from "./useApi"
 
 export interface Settings {
   user_name: string
-  ai_provider: "anthropic" | "openai"
-  anthropic_api_key: string
-  anthropic_model: string
-  openai_api_key: string
-  openai_model: string
+  claude_code_token: string
+  claude_code_model: string
   auto_generate: string
   whisper_language: string
   whisper_model: string
+  keep_audio: string
   recording_hotkey: string
   meeting_name_template: string
   sidebar_pinned: string
+}
+
+// O GET devolve todas as linhas da tabela, inclusive chaves legadas que o PUT
+// recusa (ai_provider). Enviar só o que o backend aceita.
+export const WRITABLE_SETTINGS: (keyof Settings)[] = [
+  "user_name",
+  "claude_code_token",
+  "claude_code_model",
+  "auto_generate",
+  "whisper_language",
+  "whisper_model",
+  "keep_audio",
+  "recording_hotkey",
+  "meeting_name_template",
+  "sidebar_pinned",
+]
+
+export function pickWritable(form: Partial<Settings>): Partial<Settings> {
+  const out: Partial<Settings> = {}
+  for (const key of WRITABLE_SETTINGS) {
+    const value = form[key]
+    if (value !== undefined) out[key] = value
+  }
+  return out
 }
 
 export function useSettings() {
