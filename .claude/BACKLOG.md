@@ -52,6 +52,7 @@ Itens fora do escopo das features já implementadas. Para features com plano ati
 - **Silero VAD no PyInstaller** — `vad_filter=True` foi removido por falhar no bundle. Para reativar, os dados do modelo Silero precisam entrar explicitamente no `.spec`.
 - **Validação de chave OpenAI é só existência** — `ai.Ping`/`Configured` para `openai` apenas checa se a chave não é vazia. `/api/ai/health` retorna `valid:true` sem validar de fato (TODO em `internal/ai/validate.go`).
 - **Foot-gun no test harness de `audio-service/tests/test_transcriber.py`** — o helper `_make_transcriber` sai do `patch("transcriber.WhisperModel", ...)` antes de retornar, e a fixture `transcriber` usa `device="cuda"` por padrão. Com o `except` mais amplo em `transcribe()`, um futuro teste baseado nessa fixture cujo mock lance dentro do `try` vai acabar chamando o `WhisperModel` **real** — um download do HuggingFace ou um load de vários GB em vez de uma falha rápida e legível. Nada dispara isso hoje. Direção: manter o patch ativo durante o corpo do teste, ou um patch de módulo com `autouse`.
+- **Instalador NSIS não detecta o app aberto** — instalar por cima com o Meeting Notes rodando falha ao sobrescrever `Meeting Notes.exe` e aborta no meio: os arquivos do `audio-service/` e o `uninstall.exe` ficam novos, o exe principal e o registro (DisplayVersion) ficam velhos — instalação híbrida silenciosa (observado em 2026-08-28 ao instalar a v2.7.0 sobre a v2.6.0). O template NSIS do Wails precisa de um check de processo em execução (fechar ou abortar antes de extrair).
 
 ---
 
