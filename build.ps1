@@ -133,9 +133,11 @@ if (-not $NoNSIS) {
     # Step 3: smoke test — o exe empacotado precisa subir e responder /health
     Write-Step "Smoke test do audio-service empacotado"
 
-    $SmokePort    = 8877
-    $SmokeExe     = Join-Path $AudioServiceDest "audio-service.exe"
-    $SmokeTimeout = 30
+    $SmokePort = 8877
+    $SmokeExe  = Join-Path $AudioServiceDest "audio-service.exe"
+    # Orçamento alto de propósito: o /health só responde depois do load do modelo Whisper
+    # (criado no lifespan do FastAPI, antes do servidor aceitar conexões) — lento em CPU fria.
+    $SmokeTimeoutSec = 120
 
     if (-not (Test-Path $SmokeExe)) {
         Write-Fail "Executável do audio-service não encontrado em: $SmokeExe"
@@ -153,26 +155,28 @@ if (-not $NoNSIS) {
         exit 1
     }
 
-    $smokeProc = $null
-    $smokeOk   = $false
-    $smokeSecs = 0
+    $smokeProc     = $null
+    $smokeOk       = $false
+    $smokeExited   = $false
+    $smokeExitCode = 0
+    $smokeWatch    = [System.Diagnostics.Stopwatch]::StartNew()
 
     try {
         $smokeProc = Start-Process -FilePath $SmokeExe `
                                    -ArgumentList "--port", "$SmokePort" `
                                    -WindowStyle Hidden -PassThru
 
-        for ($i = 1; $i -le $SmokeTimeout; $i++) {
+        while ($smokeWatch.Elapsed.TotalSeconds -lt $SmokeTimeoutSec) {
             if ($smokeProc.HasExited) {
-                Write-Fail "audio-service encerrou sozinho (código $($smokeProc.ExitCode)) antes de responder."
+                $smokeExited   = $true
+                $smokeExitCode = $smokeProc.ExitCode
                 break
             }
 
             try {
                 $resp = Invoke-WebRequest -Uri "http://127.0.0.1:$SmokePort/health" -UseBasicParsing -TimeoutSec 2
                 if ($resp.StatusCode -eq 200) {
-                    $smokeOk   = $true
-                    $smokeSecs = $i
+                    $smokeOk = $true
                     break
                 }
             } catch {
@@ -182,14 +186,21 @@ if (-not $NoNSIS) {
             Start-Sleep -Seconds 1
         }
     } finally {
+        $smokeWatch.Stop()
         if ($smokeProc) {
             & taskkill /F /T /PID $smokeProc.Id 2>&1 | Out-Null
             Stop-Process -Id $smokeProc.Id -Force -ErrorAction SilentlyContinue
         }
     }
 
+    $smokeSecs = [math]::Round($smokeWatch.Elapsed.TotalSeconds)
+
     if (-not $smokeOk) {
-        Write-Fail "audio-service smoke test: FALHOU (sem HTTP 200 em /health após ${SmokeTimeout}s)"
+        if ($smokeExited) {
+            Write-Fail "audio-service smoke test: FALHOU (processo encerrou sozinho com código $smokeExitCode após ${smokeSecs}s)"
+        } else {
+            Write-Fail "audio-service smoke test: FALHOU (sem HTTP 200 em /health após ${smokeSecs}s, orçamento de ${SmokeTimeoutSec}s)"
+        }
         Write-Host "  O exe empacotado não subiu — o instalador sairia com o serviço morto no boot." -ForegroundColor Yellow
         Write-Host "  Regenere o bundle com o Python do .venv (ver CLAUDE.md):" -ForegroundColor Yellow
         Write-Host "    cd audio-service" -ForegroundColor Yellow
