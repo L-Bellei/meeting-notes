@@ -57,7 +57,7 @@ O overhead de boot do CLI (~2–5s por chamada) é irrelevante no pipeline (a tr
 
 ## Modelo
 
-Seletor simples nas Configurações (`claude_code_model`) mapeado para `--model`; vazio = padrão da subscription (sem `--model`).
+Seletor nas Configurações (`claude_code_model`) mapeado para `--model`; vazio = padrão da subscription (sem `--model`). **Decisão 2026-08-29 (mid-implementação):** o usuário pediu modelos listados "direto do Claude"; verificado que não há listagem dinâmica oficial com credencial de subscription (sem `claude models list`; `GET /v1/models` recusa token de subscription por ToS). Resolução: seletor com os aliases documentados (padrão/haiku/sonnet/opus) mais opção "outro…" com campo livre aceitando qualquer id de modelo — a whitelist do backend valida `claude_code_model` como texto livre, não enum. Modelos novos ficam usáveis sem atualizar o app.
 
 ## Testes
 
