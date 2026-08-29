@@ -2,6 +2,37 @@
 
 ---
 
+## [2026-08-29] Release v2.9.0 — transcrição em GPU (scan da máquina, device por chamada)
+
+**Tag:** https://github.com/L-Bellei/meeting-notes/releases/tag/v2.9.0 · **Merges:** PR #53 (`57cf273`) + PR #54 (`7d5d872`, bump)
+**Instalador:** `meeting-notes-2.9.0-windows-amd64-installer.exe`, **631,3 MB**.
+**Plano Superpowers:** `docs/superpowers/plans/2026-08-29-gpu-cpu-transcription.md` (9 tasks, Subagent-Driven Development)
+**Spec:** `docs/superpowers/specs/2026-08-29-gpu-cpu-transcription-design.md` (com o resultado do experimento de corte registrado)
+
+Seletor Auto/GPU/CPU nas Configurações com scan da máquina; `whisper_device` por transcrição;
+fallback GPU→CPU por chamada sem estado pegajoso; timeout do `/transcribe` 60min→4h; log do
+audio-service empacotado em `%LOCALAPPDATA%\meeting-notes\audio-service.log`; CUDA embarcada no
+instalador com poda validada (bundle 1,85→1,07 GB). Detalhes de arquitetura no plano/spec.
+
+**O que a execução ensinou (registrado para não repetir):**
+- **Dois defeitos do plano no filtro de poda do `.spec`**: o `collect_all` devolve tuplas de 2 (não
+  o TOC de 3), e os hooks do `pyinstaller-hooks-contrib` re-coletam `nvidia.*` durante a Analysis —
+  o filtro só funciona **pós-Analysis** (`a.binaries`/`a.datas`). Custou dois rebuilds.
+- **Estimativa de instalador furada**: a razão de compressão 0,27 medida em amostra de cudnn
+  projetava ~390 MB; a cublas comprime muito pior e o real foi 631 MB (dentro do envelope de
+  ~610 MB da decisão original). Lição: projetar compressão por biblioteca, não por amostra única.
+- **Corrida push→merge**: o `gh pr merge --delete-branch` do PR #53 pegou o head anterior ao push
+  do bump; o bump entrou pelo PR #54. Conferir a versão em `HEAD` pós-merge.
+- **Experimento de corte com áudio TTS** (nenhuma gravação real na máquina): 240s de fala sintética,
+  baseline 24s vs podado 23s em CUDA, mesmos 2876 chars, zero fallback.
+- **Episódio pós-release (não-bug):** ícone "W" no Menu Iniciar/barra com o exe correto — cache de
+  ícones do Windows; resolvido limpando `iconcache_*.db` + restart do Explorer.
+
+**Verificação:** `go vet`+`go test ./...` verdes; pytest 49/49 (~2s); `tsc`+build limpos; smoke do
+bundle CUDA no `build.ps1` OK (41s); homologação do usuário na janela nativa (GPU via Auto, CPU
+forçado, status do device efetivo).
+
+---
 ## [2026-08-29] Release v2.8.1 — ícones do produto restaurados
 
 **Tag:** https://github.com/L-Bellei/meeting-notes/releases/tag/v2.8.1 · **Merge:** PR #51 (`40c997e`)
