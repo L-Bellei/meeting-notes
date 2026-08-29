@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import { X, Eye, EyeOff } from "lucide-react"
 import { useSettings, useUpdateSettings, pickWritable, type Settings } from "../../hooks/useSettings"
 import { useAITest, useClaudeLogin } from "../../hooks/useAIConfigured"
+import { useAudioHealth } from "../../hooks/useAudioHealth"
 import { Button } from "../ui/button"
 import { cn } from "../../lib/utils"
 import { formatHotkey } from "../../lib/formatHotkey"
@@ -32,6 +33,12 @@ const WHISPER_MODELS = [
   { value: "small",  label: "small — boa precisão, rápido" },
   { value: "medium", label: "medium — alta precisão (padrão)" },
   { value: "large",  label: "large — máxima precisão, mais lento" },
+]
+
+const WHISPER_DEVICES = [
+  { value: "auto", label: "Auto (recomendado)" },
+  { value: "cuda", label: "GPU" },
+  { value: "cpu",  label: "CPU" },
 ]
 
 function HotkeyCapture({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -93,6 +100,7 @@ export function SettingsModal({ open, onClose }: Props) {
 
   const login = useClaudeLogin()
   const test = useAITest()
+  const { data: audioHealth } = useAudioHealth()
 
   const [form, setForm] = useState<Partial<Settings>>({})
   const [showKey, setShowKey] = useState(false)
@@ -154,6 +162,12 @@ export function SettingsModal({ open, onClose }: Props) {
   const aiDirty =
     (settings?.claude_code_token ?? "") !== (form.claude_code_token ?? "") ||
     (settings?.claude_code_model ?? "") !== model
+
+  const gpuVram = audioHealth?.gpu_vram_mb
+  const gpuScan = audioHealth?.gpu_available
+    ? `GPU detectada: ${audioHealth.gpu_name || "NVIDIA"}${gpuVram ? ` (${Math.round(gpuVram / 1024)} GB)` : ""}`
+    : "Nenhuma GPU NVIDIA — transcrição em CPU"
+  const effectiveDevice = audioHealth?.device ?? ""
 
   const content = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
@@ -378,6 +392,30 @@ export function SettingsModal({ open, onClose }: Props) {
                   ))}
                 </select>
                 <p className="text-[10px] text-muted-foreground/60 mt-1">Modelos maiores transcrevem melhor, mas demoram mais. Requer reinício do serviço de áudio para ter efeito.</p>
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground">Processamento</label>
+                <p className={cn("text-sm mt-1", audioHealth?.gpu_available ? "text-emerald-500" : "text-muted-foreground")}>
+                  {gpuScan}
+                </p>
+                <select
+                  value={form.whisper_device ?? "auto"}
+                  onChange={e => set("whisper_device", e.target.value)}
+                  className="w-full mt-2 text-sm rounded-xl px-3 py-2 focus:outline-none bg-[#111111] border border-border text-foreground"
+                >
+                  {WHISPER_DEVICES.map(d => (
+                    <option key={d.value} value={d.value}>{d.label}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-muted-foreground/60 mt-1">
+                  Em “Auto” a GPU é usada quando disponível, com retorno automático para CPU em caso de falha.
+                </p>
+                {effectiveDevice && (
+                  <p className="text-[10px] text-muted-foreground/60 mt-1">
+                    Última transcrição: {effectiveDevice === "cuda" ? "GPU" : "CPU"}
+                  </p>
+                )}
               </div>
 
             </div>
