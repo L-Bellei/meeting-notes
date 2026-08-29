@@ -23,31 +23,11 @@ func (d *DynamicAIClient) resolve(ctx context.Context) (AIClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read settings: %w", err)
 	}
-	provider := m["ai_provider"]
-	switch provider {
-	case "anthropic":
-		key := m["anthropic_api_key"]
-		if key == "" {
-			return nil, fmt.Errorf("%w (anthropic)", ErrNotConfigured)
-		}
-		model := m["anthropic_model"]
-		if model == "" {
-			model = "claude-sonnet-4-6"
-		}
-		return NewAnthropicClient(key, model), nil
-	case "openai":
-		key := m["openai_api_key"]
-		if key == "" {
-			return nil, fmt.Errorf("%w (openai)", ErrNotConfigured)
-		}
-		model := m["openai_model"]
-		if model == "" {
-			model = "gpt-4o"
-		}
-		return NewOpenAIClient(key, model), nil
-	default:
-		return nil, fmt.Errorf("%w (provider %q)", ErrNotConfigured, provider)
+	token := m["claude_code_token"]
+	if token == "" {
+		return nil, fmt.Errorf("%w (conecte com Claude nas Configurações)", ErrNotConfigured)
 	}
+	return NewClaudeCodeClient(token, m["claude_code_model"]), nil
 }
 
 func (d *DynamicAIClient) GenerateSummary(ctx context.Context, transcript, notes, customPrompt string) (string, int, int, error) {

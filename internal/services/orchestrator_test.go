@@ -68,7 +68,7 @@ func (f *fakeAudioClient) Transcribe(ctx context.Context, path, language string)
 // configuredAISettings reflects the production invariant: when a working AI
 // client is injected, the settings hold a usable provider + key.
 func configuredAISettings() map[string]string {
-	return map[string]string{"ai_provider": "anthropic", "anthropic_api_key": "sk-test"}
+	return map[string]string{"claude_code_token": "sk-test"}
 }
 
 func newOrchTest(t *testing.T, audioClient audio.Client, aiClient ai.AIClient) (*services.Orchestrator, *repository.MeetingRepository, string) {
@@ -292,7 +292,7 @@ func TestOrchestrator_RunCapturePipeline_AutoLanguageForwardedAndPersisted(t *te
 		transcribeResp: &audio.TranscribeResponse{Transcript: "hello world", Language: "en", DurationSeconds: 8.0, Model: "medium"},
 	}
 	fai := &fakeAI{summaryText: "s", keyPoints: []string{"k"}, tasks: []ai.TaskSuggestion{{Description: "d", Priority: "medium"}}}
-	settings := map[string]string{"ai_provider": "anthropic", "anthropic_api_key": "sk-test", "whisper_language": "auto"}
+	settings := map[string]string{"claude_code_token": "sk-test", "whisper_language": "auto"}
 	orch, mr, id := newOrchTestSettings(t, fa, fai, settings)
 
 	m, _ := mr.GetByID(context.Background(), id)
@@ -592,7 +592,7 @@ func TestOrchestrator_UsesThemeCustomPrompt(t *testing.T) {
 		stopResp:       &audio.StopResponse{Path: wavPath, DurationSeconds: 5.0},
 		transcribeResp: &audio.TranscribeResponse{Transcript: "x", Language: "pt", DurationSeconds: 5.0},
 	}
-	settings := map[string]string{"ai_provider": "anthropic", "anthropic_api_key": "sk-test"}
+	settings := map[string]string{"claude_code_token": "sk-test"}
 	orch := services.NewOrchestrator(mr, thr, summarySvc, keyPointSvc, taskSvc, fa, &fakeSettings{data: settings}, nil)
 
 	theme := &models.Theme{ID: "th-1", Name: "T", Color: "#111111", CustomPrompt: "GERAL"}

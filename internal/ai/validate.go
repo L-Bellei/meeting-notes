@@ -3,26 +3,17 @@ package ai
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
-
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
 // ErrNotConfigured is returned (wrapped) when no AI provider/key is configured.
 var ErrNotConfigured = errors.New("AI not configured")
 
-// Configured reports whether settings hold a usable AI provider + API key.
+// Configured reports whether settings hold a usable claude-code token.
 // It is a pure, network-free check suitable for hot paths (e.g. the pipeline).
 func Configured(m map[string]string) bool {
-	switch m["ai_provider"] {
-	case "anthropic":
-		return m["anthropic_api_key"] != ""
-	case "openai":
-		return m["openai_api_key"] != ""
-	default:
-		return false
-	}
+	return m["claude_code_token"] != ""
 }
 
 // IsAuthError reports whether err represents an API authentication failure
@@ -30,10 +21,6 @@ func Configured(m map[string]string) bool {
 func IsAuthError(err error) bool {
 	if err == nil {
 		return false
-	}
-	var apiErr *anthropic.Error
-	if errors.As(err, &apiErr) && (apiErr.StatusCode == 401 || apiErr.StatusCode == 403) {
-		return true
 	}
 	s := strings.ToLower(err.Error())
 	return strings.Contains(s, "authentication") ||
@@ -46,10 +33,10 @@ func IsAuthError(err error) bool {
 		strings.Contains(s, "invalid bearer")
 }
 
-// Ping verifica se o provedor de IA configurado tem uma chave válida.
-// Retorna (false, nil) quando nenhuma chave está configurada.
-// Retorna (true, nil) quando a chave é válida.
-// Retorna (true, err) quando a chave existe mas a validação falha.
+// Ping verifica se o token do claude-code está configurado e o binário funciona.
+// Retorna (false, nil) quando nenhum token está configurado.
+// Retorna (true, nil) quando `claude --version` roda com sucesso.
+// Retorna (true, err) quando o token existe mas o binário está ausente ou falha.
 func Ping(ctx context.Context, settings SettingsReader) (configured bool, err error) {
 	m, err := settings.GetAll(ctx)
 	if err != nil {
@@ -58,24 +45,13 @@ func Ping(ctx context.Context, settings SettingsReader) (configured bool, err er
 	if !Configured(m) {
 		return false, nil
 	}
-	switch m["ai_provider"] {
-	case "anthropic":
-		key := m["anthropic_api_key"]
-		model := m["anthropic_model"]
-		if model == "" {
-			model = "claude-sonnet-4-6"
-		}
-		c := anthropic.NewClient(option.WithAPIKey(key))
-		_, pingErr := c.Messages.New(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.Model(model),
-			MaxTokens: 1,
-			Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("hi"))},
-		})
-		return true, pingErr
-	case "openai":
-		// TODO: validate OpenAI key via API call (currently existence-check only)
-		return true, nil
-	default:
-		return false, nil
+	bin, err := findClaudeBinary()
+	if err != nil {
+		return true, err
 	}
+	_, stderr, err := execRunner{}.Run(ctx, bin, []string{"--version"}, "", nil)
+	if err != nil {
+		return true, fmt.Errorf("claude --version falhou: %w (stderr: %s)", err, stderr)
+	}
+	return true, nil
 }

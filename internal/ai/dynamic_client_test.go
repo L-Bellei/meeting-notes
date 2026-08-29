@@ -2,6 +2,7 @@ package ai_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"meeting-notes/internal/ai"
@@ -15,26 +16,23 @@ func (f *fakeSettingsRepo) GetAll(ctx context.Context) (map[string]string, error
 	return f.data, nil
 }
 
-func TestDynamicClient_NoAPIKey_ReturnsError(t *testing.T) {
-	repo := &fakeSettingsRepo{data: map[string]string{
-		"ai_provider":       "anthropic",
-		"anthropic_api_key": "",
-		"anthropic_model":   "claude-sonnet-4-6",
-	}}
+func TestDynamicClient_NoToken_ReturnsNotConfigured(t *testing.T) {
+	repo := &fakeSettingsRepo{data: map[string]string{"claude_code_token": ""}}
 	c := ai.NewDynamicAIClient(repo)
 	_, _, _, err := c.GenerateSummary(context.Background(), "transcript", "", "")
-	if err == nil {
-		t.Fatal("expected error when API key is empty, got nil")
+	if !errors.Is(err, ai.ErrNotConfigured) {
+		t.Fatalf("esperava ErrNotConfigured, veio %v", err)
 	}
 }
 
-func TestDynamicClient_UnknownProvider_ReturnsError(t *testing.T) {
+func TestDynamicClient_WithToken_ResolvesClient(t *testing.T) {
 	repo := &fakeSettingsRepo{data: map[string]string{
-		"ai_provider": "gemini",
+		"claude_code_token": "sk-token",
+		"claude_code_model": "sonnet",
 	}}
 	c := ai.NewDynamicAIClient(repo)
 	_, _, _, err := c.GenerateSummary(context.Background(), "transcript", "", "")
-	if err == nil {
-		t.Fatal("expected error for unknown provider, got nil")
+	if errors.Is(err, ai.ErrNotConfigured) {
+		t.Fatalf("nao esperava ErrNotConfigured, veio %v", err)
 	}
 }
