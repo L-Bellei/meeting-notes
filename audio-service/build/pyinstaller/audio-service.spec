@@ -48,6 +48,12 @@ for pkg in ("nvidia.cudnn", "nvidia.cublas"):
     binaries += pkg_binaries
     hiddenimports += pkg_hiddenimports
 
+# Medido em 2026-08-29: cudnn_engines_precompiled (562 MB) e cudnn_adv (230 MB)
+# não são exercitados pelo faster-whisper; cortá-los leva o instalador de
+# ~610 MB para ~390 MB. Validado com transcrição real em device=cuda.
+binaries = [(dest, src, kind) for (dest, src, kind) in binaries
+            if "cudnn_engines_precompiled" not in dest and "cudnn_adv" not in dest]
+
 a = Analysis(
     [str(AUDIO_SERVICE_ROOT / "run.py")],
     pathex=[str(AUDIO_SERVICE_ROOT)],
