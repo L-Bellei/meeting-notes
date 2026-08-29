@@ -8,10 +8,15 @@ import pytest
 from transcriber import Transcriber, TranscribeResult
 
 
+from contextlib import contextmanager
+
+
+@contextmanager
 def _make_transcriber(tmp_path, device="cuda", compute_type="int8_float16"):
-    """Build a Transcriber with WhisperModel, DLL setup, and device resolution mocked."""
+    """Patches ficam ativos durante o corpo do teste: um mock que lança dentro
+    de transcribe() jamais pode alcançar o WhisperModel real (download de GB)."""
     fake_model = MagicMock()
-    with patch("transcriber.WhisperModel", return_value=fake_model), \
+    with patch("transcriber.WhisperModel", return_value=fake_model) as mock_cls, \
          patch.object(Transcriber, "_setup_dll_paths"), \
          patch.object(Transcriber, "_resolve_device_compute", return_value=(device, compute_type)):
         t = Transcriber(
@@ -20,13 +25,28 @@ def _make_transcriber(tmp_path, device="cuda", compute_type="int8_float16"):
             compute_type=compute_type,
             recordings_dir=tmp_path,
         )
-    t._fake_model = fake_model
-    return t
+        t._fake_model = fake_model
+        t._mock_cls = mock_cls
+        yield t
 
 
 @pytest.fixture
 def transcriber(tmp_path):
-    return _make_transcriber(tmp_path)
+    with _make_transcriber(tmp_path) as t:
+        yield t
+
+
+def test_fixture_patch_active_during_test_body(transcriber, tmp_path):
+    """Regressão do harness: WhisperModel deve continuar mockado no corpo do teste."""
+    wav = tmp_path / "rec.wav"
+    wav.write_bytes(b"fake")
+    transcriber._fake_model.transcribe.side_effect = RuntimeError("boom cuda")
+    with pytest.raises(RuntimeError):
+        # device é cuda: o except tenta recarregar em CPU — que DEVE bater no mock,
+        # não no WhisperModel real. side_effect abaixo prova que bateu no mock.
+        transcriber._mock_cls.side_effect = RuntimeError("segundo load também falha")
+        transcriber.transcribe(wav)
+    assert transcriber._mock_cls.call_count >= 1
 
 
 def test_init_loads_model_and_sets_attributes(tmp_path):
