@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query"
-import { api } from "./useApi"
+import { useMutation, useQuery } from "@tanstack/react-query"
+import { api, getApiBase } from "./useApi"
 import { useSettings } from "./useSettings"
 
 interface AIHealth {
@@ -18,15 +18,12 @@ export function useAIHealth() {
 
 // useAIConfigured exposes whether the AI provider is usable.
 // `configured` is derived locally from settings (instant, gates the UI);
-// `valid` comes from the backend Ping (true=key works, false=key rejected).
+// `valid` comes from the backend Ping (true=token works, false=token rejected).
 export function useAIConfigured() {
   const { data: settings } = useSettings()
   const { data: health, isFetching } = useAIHealth()
 
-  const provider = settings?.ai_provider
-  const key =
-    provider === "openai" ? settings?.openai_api_key : settings?.anthropic_api_key
-  const configured = Boolean(provider && key)
+  const configured = Boolean(settings?.claude_code_token?.trim())
 
   return {
     configured,
@@ -34,4 +31,28 @@ export function useAIConfigured() {
     checkError: health?.error,
     checking: isFetching,
   }
+}
+
+export function useClaudeLogin() {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${getApiBase()}/api/ai/claude-login`, { method: "POST" })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: res.statusText }))
+        if (res.status === 503) {
+          throw new Error(
+            "Claude Code não encontrado. Instale o Claude Code (npm i -g @anthropic-ai/claude-code) e tente novamente."
+          )
+        }
+        throw new Error(body.error ?? "não foi possível abrir o login")
+      }
+      return (await res.json()) as { status: string }
+    },
+  })
+}
+
+export function useAITest() {
+  return useMutation({
+    mutationFn: () => api<{ ok: boolean }>("/api/ai/test", { method: "POST" }),
+  })
 }

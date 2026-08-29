@@ -24,8 +24,8 @@ func TestSettingsRepo_GetAll_ReturnsDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAll: %v", err)
 	}
-	if settings["ai_provider"] != "anthropic" {
-		t.Errorf("ai_provider = %q, want anthropic", settings["ai_provider"])
+	if settings["ai_provider"] != "claude-code" {
+		t.Errorf("ai_provider = %q, want claude-code", settings["ai_provider"])
 	}
 	if settings["auto_generate"] != "true" {
 		t.Errorf("auto_generate = %q, want true", settings["auto_generate"])

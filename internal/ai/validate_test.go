@@ -14,13 +14,9 @@ func TestConfigured(t *testing.T) {
 		m    map[string]string
 		want bool
 	}{
-		{"anthropic with key", map[string]string{"ai_provider": "anthropic", "anthropic_api_key": "sk-ant-x"}, true},
-		{"anthropic empty key", map[string]string{"ai_provider": "anthropic", "anthropic_api_key": ""}, false},
-		{"anthropic missing key", map[string]string{"ai_provider": "anthropic"}, false},
-		{"openai with key", map[string]string{"ai_provider": "openai", "openai_api_key": "sk-proj-x"}, true},
-		{"openai empty key", map[string]string{"ai_provider": "openai", "openai_api_key": ""}, false},
-		{"empty provider", map[string]string{}, false},
-		{"unknown provider", map[string]string{"ai_provider": "gemini", "anthropic_api_key": "x"}, false},
+		{"with token", map[string]string{"claude_code_token": "sk-x"}, true},
+		{"empty token", map[string]string{"claude_code_token": ""}, false},
+		{"missing token", map[string]string{}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -33,8 +29,7 @@ func TestConfigured(t *testing.T) {
 
 func TestErrNotConfiguredIsWrapped(t *testing.T) {
 	repo := &fakeSettingsRepo{data: map[string]string{
-		"ai_provider":       "anthropic",
-		"anthropic_api_key": "",
+		"claude_code_token": "",
 	}}
 	c := ai.NewDynamicAIClient(repo)
 	_, _, _, err := c.GenerateSummary(context.Background(), "transcript", "", "")
@@ -49,5 +44,8 @@ func TestIsAuthError(t *testing.T) {
 	}
 	if !ai.IsAuthError(errors.New("authentication_error: invalid x-api-key")) {
 		t.Fatal("substring fallback should detect auth error")
+	}
+	if !ai.IsAuthError(errors.New("OAuth token expired. Please run /login")) {
+		t.Fatal("oauth token expired message should be detected as auth error")
 	}
 }
