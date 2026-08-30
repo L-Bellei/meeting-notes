@@ -158,7 +158,7 @@ func TestTranscribe_SendsDeviceAndParsesEffective(t *testing.T) {
 
 func TestHealth_ParsesGPUFields(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"status":"ok","state":"idle","loopback_available":true,"model_loaded":true,"model_name":"medium","device":"cuda","gpu_available":true,"gpu_name":"RTX 2050","gpu_vram_mb":4096}`))
+		w.Write([]byte(`{"status":"ok","state":"idle","loopback_available":true,"model_loaded":true,"model_name":"medium","device":"vulkan","gpu_available":true,"gpu_name":"AMD Radeon RX 7600","gpu_vram_mb":8192,"gpu_vendor":"amd","gpu_backend":"vulkan","vulkan_model_ready":true}`))
 	}))
 	defer srv.Close()
 	c := audio.NewHTTPClient(srv.URL)
@@ -166,8 +166,25 @@ func TestHealth_ParsesGPUFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !h.GPUAvailable || h.GPUName != "RTX 2050" || h.GPUVRAMMB != 4096 {
+	if !h.GPUAvailable || h.GPUName != "AMD Radeon RX 7600" || h.GPUVRAMMB != 8192 {
 		t.Fatalf("gpu fields: %+v", h)
+	}
+	if h.GPUVendor != "amd" || h.GPUBackend != "vulkan" || !h.VulkanModelReady || h.Device != "vulkan" {
+		t.Fatalf("vulkan fields: %+v", h)
+	}
+}
+
+func TestHealth_MissingVulkanFieldsAreZero(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"status":"ok","gpu_available":true,"gpu_vendor":null,"gpu_backend":null}`))
+	}))
+	defer srv.Close()
+	h, err := audio.NewHTTPClient(srv.URL).Health(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.GPUVendor != "" || h.GPUBackend != "" || h.VulkanModelReady {
+		t.Fatalf("expected zero values, got %+v", h)
 	}
 }
 

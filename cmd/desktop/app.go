@@ -142,18 +142,24 @@ func (a *App) OnStartup(ctx context.Context) {
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
-			"status":        "ok",
-			"model_loaded":  false,
-			"gpu_available": false,
-			"gpu_name":      nil,
-			"gpu_vram_mb":   nil,
-			"device":        "",
+			"status":             "ok",
+			"model_loaded":       false,
+			"gpu_available":      false,
+			"gpu_name":           nil,
+			"gpu_vram_mb":        nil,
+			"gpu_vendor":         nil,
+			"gpu_backend":        nil,
+			"vulkan_model_ready": false,
+			"device":             "",
 		}
 		if h, err := audioClient.Health(r.Context()); err == nil {
 			resp["model_loaded"] = h.ModelLoaded
 			resp["gpu_available"] = h.GPUAvailable
 			resp["gpu_name"] = h.GPUName
 			resp["gpu_vram_mb"] = h.GPUVRAMMB
+			resp["gpu_vendor"] = h.GPUVendor
+			resp["gpu_backend"] = h.GPUBackend
+			resp["vulkan_model_ready"] = h.VulkanModelReady
 			resp["device"] = h.Device
 		}
 		w.Header().Set("Content-Type", "application/json")
