@@ -220,3 +220,175 @@ def test_chain_with_cuda(tmp_path):
     assert t._chain("gpu") == ["cuda", "cpu"]
     assert t._chain("cuda") == ["cuda", "cpu"]
     assert t._chain("cpu") == ["cpu"]
+
+
+class FakeVulkan:
+    def __init__(self, available=True, model_ready=False, side_effect=None, result=("vk text", "pt", 4.0)):
+        self.available = available
+        self.model_ready = model_ready
+        self.side_effect = side_effect
+        self.result = result
+        self.calls = []
+
+    def transcribe(self, path, lang):
+        self.calls.append((path, lang))
+        if self.side_effect:
+            raise self.side_effect
+        return self.result
+
+
+def _amd():
+    return GPUInfo(cuda_available=False, vulkan_available=True, vendor="amd", name="AMD Radeon RX 7600", vram_mb=8192)
+
+
+def _nvidia_both():
+    return GPUInfo(cuda_available=True, vulkan_available=True, vendor="nvidia", name="RTX", vram_mb=4096)
+
+
+def _make_with_vulkan(tmp_path, gpu, vulkan, device="auto", cpu_side_effect=None):
+    cpu_model = MagicMock()
+    cpu_model.transcribe.side_effect = cpu_side_effect or (lambda *a, **k: (iter([]), _info("pt", 1.0)))
+    patches = (
+        patch("backends.ct2.WhisperModel", return_value=cpu_model),
+        patch.object(Transcriber, "_setup_dll_paths"),
+        patch("transcriber.scan_gpu", return_value=gpu),
+    )
+    return patches, cpu_model
+
+
+def test_default_vulkan_backend_is_built_from_find_whispercli(tmp_path):
+    with patch("backends.ct2.WhisperModel", return_value=MagicMock()), \
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch("transcriber.scan_gpu", return_value=_gpu(False)) as scan, \
+         patch("transcriber.find_whispercli", return_value=None):
+        t = Transcriber("medium", "auto", "auto", tmp_path)
+    assert t._vulkan is not None
+    assert t._vulkan.available is False
+    assert scan.call_args.kwargs["whispercli_present"] is False
+
+
+def test_scan_receives_whispercli_presence(tmp_path):
+    with patch("backends.ct2.WhisperModel", return_value=MagicMock()), \
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch("transcriber.scan_gpu", return_value=_amd()) as scan:
+        Transcriber("medium", "auto", "auto", tmp_path, vulkan=FakeVulkan(available=True))
+    assert scan.call_args.kwargs["whispercli_present"] is True
+
+
+def test_amd_auto_uses_vulkan_and_reports_it(tmp_path):
+    vk = FakeVulkan(model_ready=True)
+    patches, cpu_model = _make_with_vulkan(tmp_path, _amd(), vk)
+    with patches[0], patches[1], patches[2]:
+        t = Transcriber("medium", "auto", "auto", tmp_path, vulkan=vk)
+        wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+        result = t.transcribe(wav, language="pt")
+
+    assert t.device == "vulkan"
+    assert t.gpu_backend == "vulkan"
+    assert t.gpu_vendor == "amd"
+    assert t.vulkan_model_ready is True
+    assert result == TranscribeResult("vk text", "pt", 4.0, "medium", "vulkan")
+    assert vk.calls == [(wav.resolve(), "pt")]
+    cpu_model.transcribe.assert_not_called()
+
+
+def test_amd_boot_does_not_preload_ct2_model(tmp_path):
+    with patch("backends.ct2.WhisperModel") as cls, \
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch("transcriber.scan_gpu", return_value=_amd()):
+        t = Transcriber("medium", "auto", "auto", tmp_path, vulkan=FakeVulkan())
+    cls.assert_not_called()
+    assert t.model_loaded is True
+    assert t.device == "vulkan"
+
+
+def test_amd_chains():
+    class _T(Transcriber):
+        def __init__(self): self.gpu = _amd()
+    t = _T()
+    assert t._chain("auto") == ["vulkan", "cpu"]
+    assert t._chain("gpu") == ["vulkan", "cpu"]
+    assert t._chain("cuda") == ["cpu"]
+    assert t._chain("cpu") == ["cpu"]
+
+
+def test_nvidia_with_both_chains_cuda_then_vulkan(monkeypatch):
+    monkeypatch.delenv("WHISPER_FORCE_BACKEND", raising=False)
+    class _T(Transcriber):
+        def __init__(self): self.gpu = _nvidia_both()
+    t = _T()
+    assert t._chain("auto") == ["cuda", "vulkan", "cpu"]
+    assert t._chain("cuda") == ["cuda", "vulkan", "cpu"]
+
+
+def test_force_backend_vulkan_env(monkeypatch):
+    monkeypatch.setenv("WHISPER_FORCE_BACKEND", "vulkan")
+    class _T(Transcriber):
+        def __init__(self): self.gpu = _nvidia_both()
+    t = _T()
+    assert t._chain("auto") == ["vulkan", "cpu"]
+    assert t._chain("gpu") == ["vulkan", "cpu"]
+    assert t._chain("cuda") == ["cuda", "vulkan", "cpu"]
+    assert t._chain("cpu") == ["cpu"]
+
+
+def test_force_backend_ignored_when_vulkan_unavailable(monkeypatch):
+    monkeypatch.setenv("WHISPER_FORCE_BACKEND", "vulkan")
+    class _T(Transcriber):
+        def __init__(self): self.gpu = _gpu(True)
+    assert _T()._chain("auto") == ["cuda", "cpu"]
+
+
+def test_vulkan_failure_falls_back_to_cpu_in_same_call(tmp_path, caplog):
+    vk = FakeVulkan(side_effect=RuntimeError("whisper-cli exited 1: device lost"))
+    patches, cpu_model = _make_with_vulkan(tmp_path, _amd(), vk)
+    with patches[0], patches[1], patches[2]:
+        t = Transcriber("medium", "auto", "auto", tmp_path, vulkan=vk)
+        wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+        with caplog.at_level(logging.WARNING):
+            result = t.transcribe(wav)
+
+    assert result.device == "cpu"
+    assert t.device == "cpu"
+    cpu_model.transcribe.assert_called_once()
+    assert any("vulkan inference failed" in r.getMessage() for r in caplog.records)
+
+
+def test_vulkan_failure_does_not_stick(tmp_path):
+    vk = FakeVulkan()
+    vk.side_effect = RuntimeError("first fails")
+    patches, cpu_model = _make_with_vulkan(tmp_path, _amd(), vk)
+    with patches[0], patches[1], patches[2]:
+        t = Transcriber("medium", "auto", "auto", tmp_path, vulkan=vk)
+        wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+        r1 = t.transcribe(wav)
+        vk.side_effect = None
+        r2 = t.transcribe(wav)
+    assert (r1.device, r2.device) == ("cpu", "vulkan")
+    assert len(vk.calls) == 2
+
+
+def test_cuda_failure_tries_vulkan_before_cpu(tmp_path):
+    vk = FakeVulkan()
+    cuda_model = MagicMock(); cuda_model.transcribe.side_effect = RuntimeError("CUDA out of memory")
+    def factory(name, device, compute_type):
+        return cuda_model
+    with patch("backends.ct2.WhisperModel", side_effect=factory), \
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch("transcriber.scan_gpu", return_value=_nvidia_both()):
+        t = Transcriber("medium", "auto", "auto", tmp_path, vulkan=vk)
+        wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+        result = t.transcribe(wav)
+    assert result.device == "vulkan"
+    assert len(vk.calls) == 1
+
+
+def test_vulkan_then_cpu_both_fail_propagates_cpu_error(tmp_path):
+    vk = FakeVulkan(side_effect=RuntimeError("vk down"))
+    patches, cpu_model = _make_with_vulkan(tmp_path, _amd(), vk, cpu_side_effect=ValueError("corrupt wav"))
+    with patches[0], patches[1], patches[2]:
+        t = Transcriber("medium", "auto", "auto", tmp_path, vulkan=vk)
+        wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+        with pytest.raises(ValueError, match="corrupt wav"):
+            t.transcribe(wav)
+    assert t.device == "cpu"

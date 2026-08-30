@@ -5,10 +5,9 @@ from pathlib import Path
 from typing import Optional, Protocol
 
 from backends.ct2 import CT2Backend
+from backends.whispercpp import WhisperCppBackend, find_whispercli
 from gpuscan import GPUInfo
 from gpuscan import scan as scan_gpu
-
-GPU_ALIASES = ("auto", "gpu", None, "")
 
 
 @dataclass
@@ -43,7 +42,9 @@ class Transcriber:
         self.compute_type = compute_type
         self.recordings_dir = Path(recordings_dir).resolve()
         self._ct2 = ct2 or CT2Backend(model_name, compute_type)
-        self._vulkan = vulkan
+        self._vulkan = vulkan if vulkan is not None else WhisperCppBackend(model_name, find_whispercli())
+        if not self._vulkan.available:
+            logging.info("whisper-cli not found; Vulkan backend disabled (GPU non-NVIDIA falls back to CPU)")
         self._setup_dll_paths()
         self.gpu: GPUInfo = self._scan()
         first = self._chain(device)[0]
