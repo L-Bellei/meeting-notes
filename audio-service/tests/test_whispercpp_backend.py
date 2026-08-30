@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from backends.whispercpp import GGML_FILES, HF_REPO, WhisperCppBackend, find_whispercli
+from backends.whispercpp import GGML_FILES, HF_REPO, TRANSCRIBE_TIMEOUT_SECONDS, WhisperCppBackend, find_whispercli
 
 
 def _json(text_parts, language="pt", last_to_ms=12500):
@@ -119,6 +119,7 @@ def test_transcribe_parses_json(exe, model_file, tmp_path):
     assert kwargs["capture_output"] is True
     assert kwargs["text"] is True
     assert kwargs.get("creationflags", 0) == 0x08000000
+    assert kwargs["timeout"] == TRANSCRIBE_TIMEOUT_SECONDS
 
 
 def test_transcribe_raises_on_nonzero_exit_with_stderr(exe, model_file, tmp_path):

@@ -27,7 +27,7 @@ func Load() *Config {
 		AudioServiceURL:    getEnv("AUDIO_SERVICE_URL", "http://localhost:8765"),
 		MaxTokens:          getEnv("MAX_TOKENS", "4096"),
 		WhisperModel:       getEnv("WHISPER_MODEL", "medium"),
-		WhisperDevice:      getEnv("WHISPER_DEVICE", "cuda"),
+		WhisperDevice:      getEnv("WHISPER_DEVICE", "auto"),
 		WhisperComputeType: getEnv("WHISPER_COMPUTE_TYPE", "int8_float16"),
 		WhisperLanguage:    getEnv("WHISPER_LANGUAGE", "pt"),
 	}

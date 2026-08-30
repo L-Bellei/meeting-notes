@@ -89,6 +89,9 @@ via `huggingface_hub` para o mesmo diretório de cache do faster-whisper, na pri
 Vulkan. Mapeamento `whisper_model` → GGML é 1:1 (tiny, base, small, medium, large-v3). `/health`
 expõe `vulkan_model_ready`.
 
+O repo HF só publica **q5_1** para tiny/base/small; medium e large-v3 usam **q5_0**. `GGML_FILES`
+no código reflete essa diferença por modelo — não é um sufixo único.
+
 ## Contrato da API
 
 `/health` — campos novos, atuais preservados:

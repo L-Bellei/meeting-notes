@@ -19,8 +19,9 @@ Itens fora do escopo das features já implementadas. Para features com plano ati
 
 ## Débitos técnicos
 
-- **Vulkan não homologado em GPU AMD real** — a feature de 2026-08-30 foi validada forçando Vulkan na RTX 2050 (`WHISPER_FORCE_BACKEND=vulkan`). Primeira máquina AMD disponível: instalar, conferir `gpu_vendor: amd` e `gpu_backend: vulkan` no `/health`, transcrever e comparar tempo com CPU. Se falhar, o fallback por chamada cai em CPU — não trava a reunião.
+- **Vulkan não homologado em GPU AMD real** — a feature de 2026-08-30 foi validada forçando Vulkan na RTX 2050 (`WHISPER_FORCE_BACKEND=vulkan`). Primeira máquina AMD disponível: instalar, conferir `gpu_vendor: amd` e `gpu_backend: vulkan` no `/health`, transcrever e comparar tempo com CPU. Se falhar, o fallback por chamada cai em CPU — não trava a reunião; verificar também um modelo não-medium (só o GGML do medium foi provado no smoke).
 - **Modelo GGML baixado sob demanda na primeira transcrição Vulkan** — sem barra de progresso; ~540 MB (medium q5_0). Se incomodar, pré-baixar ao salvar o seletor em GPU ou expor progresso via `/health`.
+- **Drift de tipo nos campos Vulkan do health** — Python emite `gpu_vendor/gpu_backend: null`, o Go decodifica em `string` zero-value e os mirrors reemitem `""`, mas `useAudioHealth.ts` tipa `| null`; sem bug em runtime (comparações estritas contra valores reais), corrigir eventualmente com `*string` no `HealthResponse` ou `"" |` no union TS.
 
 - **Instalador de 631 MB — investigar redução** — a cublas (~700 MB brutos) comprime mal no LZMA e domina o tamanho; a poda de cuDNN já foi feita (1,85→1,07 GB). Direções possíveis: poda adicional dentro da cublas (kernels por arquitetura), compressão sólida/7z como container, ou pacote GPU baixado sob demanda (rejeitado em 2026-08-29 pelo requisito de instalação autossuficiente — reabrir só se o tamanho incomodar na prática).
 

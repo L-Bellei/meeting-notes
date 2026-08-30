@@ -19,6 +19,9 @@ GGML_FILES = {
 }
 EXE_NAME = "whisper-cli.exe"
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
+# Alinhado ao teto de 4h do cliente Go; um hang no driver Vulkan/CUDA trava o processo
+# filho indefinidamente sem isso, e o timeout mata o filho e vira fallback para CPU.
+TRANSCRIBE_TIMEOUT_SECONDS = 4 * 60 * 60
 
 
 def _search_roots() -> list[Path]:
@@ -99,6 +102,7 @@ class WhisperCppBackend:
             proc = self._runner(
                 self.build_command(model, path, lang, out_prefix),
                 capture_output=True, text=True, creationflags=CREATE_NO_WINDOW,
+                timeout=TRANSCRIBE_TIMEOUT_SECONDS,
             )
             if proc.returncode != 0:
                 raise RuntimeError(f"whisper-cli exited {proc.returncode}: {proc.stderr.strip()[-2000:]}")
