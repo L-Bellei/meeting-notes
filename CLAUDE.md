@@ -69,6 +69,8 @@ cd audio-service
 .venv\Scripts\python.exe -m PyInstaller build\pyinstaller\audio-service.spec --distpath build\dist --workpath build\work --noconfirm
 ```
 
-O bundle embarca CUDA desde 2026-08-29 (ver DECISIONS.md); o device é escolha do usuário nas Configurações (`whisper_device`), com fallback GPU→CPU por chamada. Atualizar `productVersion` em `cmd/desktop/wails.json` (ou passar `-Version`) antes de cada release.
+O bundle embarca CUDA desde 2026-08-29 (ver DECISIONS.md); o device é escolha do usuário nas Configurações (`whisper_device`), com fallback GPU→CPU por chamada. GPU não-NVIDIA usa whisper.cpp/Vulkan (DECISIONS 2026-08-30). Atualizar `productVersion` em `cmd/desktop/wails.json` (ou passar `-Version`) antes de cada release.
+
+Segundo pré-requisito desde 2026-08-30: o binário do whisper.cpp (Vulkan) em `audio-service/vendor/whispercpp/` — compilado com `.\audio-service\build\fetch-whispercpp.ps1` (versão pinada em `audio-service/build/whispercpp.version`; exige CMake, VS Build Tools 2022 C++ e Vulkan SDK). O `.spec` e o `build.ps1` abortam sem ele.
 
 Release completa: bump de versão (via PR — `master` é protegido) → `build.ps1` → tag `vX.Y.Z` → GitHub Release com o `.exe` de `dist/`.
