@@ -134,9 +134,15 @@ expõe `vulkan_model_ready`.
 
 - Versão do whisper.cpp pinada em `audio-service/build/whispercpp.version`.
 - `audio-service/build/fetch-whispercpp.ps1` obtém o binário para `audio-service/vendor/whispercpp/`
-  (gitignorado). Fonte preferencial: asset de release do GitHub com Vulkan para Windows x64. **Se a
-  release oficial não publicar build Vulkan**, o script compila via CMake (`-DGGML_VULKAN=1`, exige
-  Vulkan SDK na máquina de build). A Task 1 do plano é um spike que decide qual dos dois.
+  (gitignorado). **Resultado do spike (2026-08-30):** a release oficial (`ggml-org/whisper.cpp`,
+  tag `b4938` = v1.9.3) NÃO publica build Vulkan para Windows (assets: bin/blas/cublas apenas), então
+  o script **compila via CMake** (`-DGGML_VULKAN=1 -DBUILD_SHARED_LIBS=ON`, alvo `whisper-cli`) —
+  exige git, CMake, VS Build Tools 2022 (workload C++) e Vulkan SDK (`VULKAN_SDK`) na máquina de
+  build; toolchain instalada via winget em 2026-08-30. Pasta resultante: ~55 MB (`whisper-cli.exe`
+  0,5 MB + `ggml-vulkan.dll` 51,8 MB + demais DLLs ggml/whisper). Prova real na RTX 2050: wav de
+  169s transcrito em 34,8s via Vulkan (`ggml_vulkan: Found 2 Vulkan devices`), JSON com
+  `result.language` e `transcription[].{text,offsets.{from,to}}` em ms — o contrato assumido pelo
+  backend confere.
 - `.spec` do PyInstaller inclui `vendor/whispercpp/*` em `_internal/whispercpp/`.
 - `build.ps1` falha cedo se `vendor/whispercpp/whisper-cli.exe` não existir (mesmo padrão do
   smoke test). Smoke continua só `/health`.
