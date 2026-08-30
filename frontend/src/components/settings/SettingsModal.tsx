@@ -37,7 +37,7 @@ const WHISPER_MODELS = [
 
 const WHISPER_DEVICES = [
   { value: "auto", label: "Auto (recomendado)" },
-  { value: "cuda", label: "GPU" },
+  { value: "gpu",  label: "GPU" },
   { value: "cpu",  label: "CPU" },
 ]
 
@@ -164,10 +164,14 @@ export function SettingsModal({ open, onClose }: Props) {
     (settings?.claude_code_model ?? "") !== model
 
   const gpuVram = audioHealth?.gpu_vram_mb
+  const backendLabel = audioHealth?.gpu_backend === "cuda" ? "CUDA" : audioHealth?.gpu_backend === "vulkan" ? "Vulkan" : null
   const gpuScan = audioHealth?.gpu_available
-    ? `GPU detectada: ${audioHealth.gpu_name || "NVIDIA"}${gpuVram ? ` (${Math.round(gpuVram / 1024)} GB)` : ""}`
-    : "Nenhuma GPU NVIDIA — transcrição em CPU"
+    ? `GPU detectada: ${audioHealth.gpu_name || "GPU"}${gpuVram ? ` (${Math.round(gpuVram / 1024)} GB)` : ""}${backendLabel ? ` · ${backendLabel}` : ""}`
+    : audioHealth?.gpu_name
+      ? `${audioHealth.gpu_name} sem suporte de GPU — transcrição em CPU`
+      : "Nenhuma GPU compatível — transcrição em CPU"
   const effectiveDevice = audioHealth?.device ?? ""
+  const showGgmlDownloadNote = audioHealth?.gpu_backend === "vulkan" && !audioHealth?.vulkan_model_ready
 
   const content = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
@@ -411,9 +415,14 @@ export function SettingsModal({ open, onClose }: Props) {
                 <p className="text-[10px] text-muted-foreground/60 mt-1">
                   Em “Auto” a GPU é usada quando disponível, com retorno automático para CPU em caso de falha.
                 </p>
+                {showGgmlDownloadNote && (
+                  <p className="text-[10px] text-amber-500/80 mt-1">
+                    O modelo para esta GPU será baixado na primeira transcrição (~540 MB para “medium”).
+                  </p>
+                )}
                 {effectiveDevice && (
                   <p className="text-[10px] text-muted-foreground/60 mt-1">
-                    Última transcrição: {effectiveDevice === "cuda" ? "GPU" : "CPU"}
+                    Última transcrição: {effectiveDevice === "cpu" ? "CPU" : `GPU (${effectiveDevice === "vulkan" ? "Vulkan" : "CUDA"})`}
                   </p>
                 )}
               </div>

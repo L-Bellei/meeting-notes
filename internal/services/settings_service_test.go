@@ -117,12 +117,14 @@ func TestSettingsService_Update_InvalidSidebarPinned(t *testing.T) {
 
 func TestSettingsService_Update_WhisperDeviceValidValues(t *testing.T) {
 	svc := newSettingsSvc(t)
-	for _, v := range []string{"auto", "cuda", "cpu"} {
+	for _, v := range []string{"auto", "gpu", "cpu"} {
 		if err := svc.Update(context.Background(), map[string]string{"whisper_device": v}); err != nil {
 			t.Fatalf("%s: %v", v, err)
 		}
 	}
-	if err := svc.Update(context.Background(), map[string]string{"whisper_device": "tpu"}); err == nil {
-		t.Fatal("tpu deveria ser rejeitado")
+	for _, v := range []string{"cuda", "vulkan", "tpu"} {
+		if err := svc.Update(context.Background(), map[string]string{"whisper_device": v}); err == nil {
+			t.Fatalf("%s deveria ser rejeitado: o backend é escolha interna, a UI só conhece auto/gpu/cpu", v)
+		}
 	}
 }

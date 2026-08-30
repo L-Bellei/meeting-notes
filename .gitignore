@@ -44,6 +44,12 @@ desktop.exe
 !/audio-service/build/pyinstaller/*.spec
 /audio-service/dist/
 
+# Binário do whisper.cpp (Vulkan) compilado por build/fetch-whispercpp.ps1 — não
+# rastreado, como o bundle. O pin e o script que o reproduzem SÃO rastreados.
+/audio-service/vendor/
+!/audio-service/build/whispercpp.version
+!/audio-service/build/fetch-whispercpp.ps1
+
 # Stray files
 /docs/estado-da-conversa-*.md
 /migrations/

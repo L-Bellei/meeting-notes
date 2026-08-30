@@ -28,6 +28,9 @@ type HealthResponse struct {
 	GPUAvailable      bool   `json:"gpu_available"`
 	GPUName           string `json:"gpu_name"`
 	GPUVRAMMB         int    `json:"gpu_vram_mb"`
+	GPUVendor         string `json:"gpu_vendor"`
+	GPUBackend        string `json:"gpu_backend"`
+	VulkanModelReady  bool   `json:"vulkan_model_ready"`
 }
 
 type StartResponse struct {

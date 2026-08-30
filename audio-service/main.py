@@ -52,6 +52,9 @@ def health():
         "gpu_available": transcriber.gpu_available,
         "gpu_name": transcriber.gpu_name,
         "gpu_vram_mb": transcriber.gpu_vram_mb,
+        "gpu_vendor": transcriber.gpu_vendor,
+        "gpu_backend": transcriber.gpu_backend,
+        "vulkan_model_ready": transcriber.vulkan_model_ready,
     }
 
 

@@ -29,6 +29,9 @@ def mock_transcriber(monkeypatch):
     m.gpu_available = False
     m.gpu_name = None
     m.gpu_vram_mb = None
+    m.gpu_vendor = None
+    m.gpu_backend = None
+    m.vulkan_model_ready = False
     monkeypatch.setattr(main, "transcriber", m)
     return m
 
@@ -51,6 +54,9 @@ def test_health_idle(mock_recorder, mock_transcriber, client):
         "gpu_available": False,
         "gpu_name": None,
         "gpu_vram_mb": None,
+        "gpu_vendor": None,
+        "gpu_backend": None,
+        "vulkan_model_ready": False,
     }
 
 
@@ -217,3 +223,29 @@ def test_transcribe_device_defaults_to_auto(mock_recorder, mock_transcriber, cli
 def test_transcribe_path_required(mock_recorder, mock_transcriber, client):
     r = client.post("/transcribe", json={})
     assert r.status_code == 422
+
+
+def test_health_reports_vulkan_backend(mock_recorder, mock_transcriber, client):
+    mock_transcriber.gpu_available = True
+    mock_transcriber.gpu_name = "AMD Radeon RX 7600"
+    mock_transcriber.gpu_vram_mb = 8192
+    mock_transcriber.gpu_vendor = "amd"
+    mock_transcriber.gpu_backend = "vulkan"
+    mock_transcriber.vulkan_model_ready = True
+    mock_transcriber.device = "vulkan"
+    body = client.get("/health").json()
+    assert body["gpu_vendor"] == "amd"
+    assert body["gpu_backend"] == "vulkan"
+    assert body["vulkan_model_ready"] is True
+    assert body["device"] == "vulkan"
+
+
+def test_transcribe_accepts_gpu_device(mock_recorder, mock_transcriber, client):
+    mock_transcriber.transcribe.return_value = TranscribeResult(
+        transcript="oi", language="pt", duration_seconds=1.0, model="medium", device="vulkan"
+    )
+    r = client.post("/transcribe", json={"path": "tmp/rec.wav", "device": "gpu"})
+    assert r.status_code == 200
+    assert r.json()["device"] == "vulkan"
+    args, kwargs = mock_transcriber.transcribe.call_args
+    assert kwargs.get("device") == "gpu"

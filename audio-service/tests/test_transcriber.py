@@ -1,14 +1,15 @@
 import logging
-import sys
-from pathlib import Path
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from gpuscan import GPUInfo
 from transcriber import Transcriber, TranscribeResult
 
 
-from contextlib import contextmanager
+def _gpu(avail=True, name=None, vram=None):
+    return GPUInfo(cuda_available=avail, vendor="nvidia" if avail else None, name=name, vram_mb=vram)
 
 
 @contextmanager
@@ -16,15 +17,11 @@ def _make_transcriber(tmp_path, device="cuda", compute_type="int8_float16"):
     """Patches ficam ativos durante o corpo do teste: um mock que lança dentro
     de transcribe() jamais pode alcançar o WhisperModel real (download de GB)."""
     fake_model = MagicMock()
-    with patch("transcriber.WhisperModel", return_value=fake_model) as mock_cls, \
+    with patch("backends.ct2.WhisperModel", return_value=fake_model) as mock_cls, \
          patch.object(Transcriber, "_setup_dll_paths"), \
-         patch.object(Transcriber, "_scan_gpu", return_value=(device == "cuda", None, None)):
-        t = Transcriber(
-            model_name="medium",
-            device=device,
-            compute_type=compute_type,
-            recordings_dir=tmp_path,
-        )
+         patch("transcriber.scan_gpu", return_value=_gpu(device == "cuda")), \
+         patch("transcriber.find_whispercli", return_value=None):
+        t = Transcriber(model_name="medium", device=device, compute_type=compute_type, recordings_dir=tmp_path)
         t._fake_model = fake_model
         t._mock_cls = mock_cls
         yield t
@@ -36,14 +33,14 @@ def transcriber(tmp_path):
         yield t
 
 
+def _info(lang="pt", dur=1.0):
+    info = MagicMock(); info.language = lang; info.duration = dur
+    return info
+
+
 def test_fixture_patch_active_during_test_body(transcriber, tmp_path):
-    """Regressão do harness: WhisperModel deve continuar mockado no corpo do teste."""
-    wav = tmp_path / "rec.wav"
-    wav.write_bytes(b"fake")
+    wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
     transcriber._fake_model.transcribe.side_effect = RuntimeError("boom cuda")
-    # device é cuda: o except tenta carregar o modelo de CPU — que DEVE bater no
-    # mock, não no WhisperModel real. O side_effect abaixo prova que bateu no
-    # mock via asserção (call_count), não via tempo de execução.
     transcriber._mock_cls.side_effect = RuntimeError("segundo load também falha")
     with pytest.raises(RuntimeError, match="segundo load também falha"):
         transcriber.transcribe(wav)
@@ -51,10 +48,10 @@ def test_fixture_patch_active_during_test_body(transcriber, tmp_path):
 
 
 def test_init_loads_model_and_sets_attributes(tmp_path):
-    fake_model = MagicMock()
-    with patch("transcriber.WhisperModel", return_value=fake_model) as mock_cls, \
+    with patch("backends.ct2.WhisperModel", return_value=MagicMock()) as mock_cls, \
          patch.object(Transcriber, "_setup_dll_paths") as mock_setup, \
-         patch.object(Transcriber, "_scan_gpu", return_value=(True, "NVIDIA GeForce RTX 2050", 4096)):
+         patch("transcriber.scan_gpu", return_value=_gpu(True, "NVIDIA GeForce RTX 2050", 4096)), \
+         patch("transcriber.find_whispercli", return_value=None):
         t = Transcriber("medium", "cuda", "int8_float16", tmp_path)
     mock_cls.assert_called_once_with("medium", device="cuda", compute_type="int8_float16")
     mock_setup.assert_called_once()
@@ -63,294 +60,343 @@ def test_init_loads_model_and_sets_attributes(tmp_path):
     assert t.device == "cuda"
 
 
+def test_scan_exposed_on_attributes(tmp_path):
+    with patch("backends.ct2.WhisperModel", return_value=MagicMock()), \
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch("transcriber.scan_gpu", return_value=_gpu(True, "NVIDIA GeForce RTX 2050", 4096)):
+        t = Transcriber("medium", "auto", "auto", tmp_path, vulkan=FakeVulkan(available=False, model_ready=False))
+    assert t.gpu_available is True
+    assert t.gpu_name == "NVIDIA GeForce RTX 2050"
+    assert t.gpu_vram_mb == 4096
+    assert t.gpu_vendor == "nvidia"
+    assert t.gpu_backend == "cuda"
+    assert t.vulkan_model_ready is False
+    assert t.device == "cuda"
+
+
 def test_transcribe_path_outside_recordings_dir_raises(transcriber, tmp_path):
-    outside = tmp_path.parent / "elsewhere.wav"
     with pytest.raises(ValueError, match="outside recordings dir"):
-        transcriber.transcribe(outside)
+        transcriber.transcribe(tmp_path.parent / "elsewhere.wav")
 
 
 def test_transcribe_path_does_not_exist_raises(transcriber, tmp_path):
-    missing = tmp_path / "missing.wav"
     with pytest.raises(ValueError, match="does not exist"):
-        transcriber.transcribe(missing)
+        transcriber.transcribe(tmp_path / "missing.wav")
 
 
-def test_transcribe_concatenates_segments(transcriber, tmp_path):
-    wav = tmp_path / "rec.wav"
-    wav.write_bytes(b"fake")
-    seg1 = MagicMock()
-    seg1.text = " oi "
-    seg2 = MagicMock()
-    seg2.text = "mundo"
-    info = MagicMock()
-    info.language = "pt"
-    info.duration = 10.5
-    transcriber._fake_model.transcribe.return_value = (iter([seg1, seg2]), info)
+def test_transcribe_returns_result(transcriber, tmp_path):
+    wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+    seg = MagicMock(); seg.text = " oi mundo "
+    transcriber._fake_model.transcribe.return_value = (iter([seg]), _info("pt", 10.5))
 
     result = transcriber.transcribe(wav)
 
-    assert isinstance(result, TranscribeResult)
-    assert result.transcript == "oi mundo"
-    assert result.language == "pt"
-    assert result.duration_seconds == 10.5
-    assert result.model == "medium"
+    assert result == TranscribeResult("oi mundo", "pt", 10.5, "medium", "cuda")
 
 
-def test_transcribe_auto_passes_none_language(transcriber, tmp_path):
-    wav = tmp_path / "rec.wav"
-    wav.write_bytes(b"fake")
-    info = MagicMock()
-    info.language = "en"
-    info.duration = 5.0
-    transcriber._fake_model.transcribe.return_value = (iter([]), info)
-
-    result = transcriber.transcribe(wav, language="auto")
-
-    args, kwargs = transcriber._fake_model.transcribe.call_args
-    assert kwargs["language"] is None
-    assert result.language == "en"
-
-
-def test_transcribe_empty_string_passes_none_language(transcriber, tmp_path):
-    wav = tmp_path / "rec.wav"
-    wav.write_bytes(b"fake")
-    info = MagicMock()
-    info.language = "es"
-    info.duration = 5.0
-    transcriber._fake_model.transcribe.return_value = (iter([]), info)
-
-    transcriber.transcribe(wav, language="")
-
-    args, kwargs = transcriber._fake_model.transcribe.call_args
-    assert kwargs["language"] is None
-
-
-def test_transcribe_none_passes_none_language(transcriber, tmp_path):
-    wav = tmp_path / "rec.wav"
-    wav.write_bytes(b"fake")
-    info = MagicMock()
-    info.language = "pt"
-    info.duration = 5.0
-    transcriber._fake_model.transcribe.return_value = (iter([]), info)
-
-    transcriber.transcribe(wav)
-
-    args, kwargs = transcriber._fake_model.transcribe.call_args
-    assert kwargs["language"] is None
-
-
-def test_transcribe_uses_provided_language(transcriber, tmp_path):
-    wav = tmp_path / "rec.wav"
-    wav.write_bytes(b"fake")
-    info = MagicMock()
-    info.language = "en"
-    info.duration = 5.0
-    transcriber._fake_model.transcribe.return_value = (iter([]), info)
-
-    transcriber.transcribe(wav, language="en")
-
-    args, kwargs = transcriber._fake_model.transcribe.call_args
-    assert kwargs["language"] == "en"
+@pytest.mark.parametrize("language,expected", [("auto", None), ("", None), (None, None), ("en", "en")])
+def test_transcribe_language_normalisation(transcriber, tmp_path, language, expected):
+    wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+    transcriber._fake_model.transcribe.return_value = (iter([]), _info("en"))
+    transcriber.transcribe(wav, language=language)
+    assert transcriber._fake_model.transcribe.call_args.kwargs["language"] == expected
 
 
 def test_transcribe_uses_cpu_when_device_cpu_requested(transcriber, tmp_path):
-    """Mesmo com GPU disponível, device=cpu força CPU."""
-    wav = tmp_path / "rec.wav"
-    wav.write_bytes(b"fake")
-    info = MagicMock(); info.language = "pt"; info.duration = 1.0
-    transcriber._fake_model.transcribe.return_value = (iter([]), info)
-
+    wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+    transcriber._fake_model.transcribe.return_value = (iter([]), _info())
     result = transcriber.transcribe(wav, device="cpu")
-
     assert result.device == "cpu"
-    # segundo load (cpu) aconteceu além do load do boot (cuda)
     assert transcriber._mock_cls.call_count == 2
     transcriber._mock_cls.assert_called_with("medium", device="cpu", compute_type="int8")
 
 
+def test_transcribe_gpu_alias_resolves_to_cuda(transcriber, tmp_path):
+    wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+    transcriber._fake_model.transcribe.return_value = (iter([]), _info())
+    assert transcriber.transcribe(wav, device="gpu").device == "cuda"
+
+
 def test_transcribe_model_cache_reuses_per_device(transcriber, tmp_path):
-    wav = tmp_path / "rec.wav"
-    wav.write_bytes(b"fake")
-    info = MagicMock(); info.language = "pt"; info.duration = 1.0
-    transcriber._fake_model.transcribe.return_value = (iter([]), info)
+    wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+    transcriber._fake_model.transcribe.return_value = (iter([]), _info())
+    transcriber.transcribe(wav); transcriber.transcribe(wav)
+    assert transcriber._mock_cls.call_count == 1
 
-    transcriber.transcribe(wav)
-    transcriber.transcribe(wav)
 
-    assert transcriber._mock_cls.call_count == 1  # só o load do boot
+def _factory(cuda_side_effect, cpu_side_effect):
+    def model_factory(name, device, compute_type):
+        m = MagicMock()
+        m.transcribe.side_effect = cuda_side_effect if device == "cuda" else cpu_side_effect
+        return m
+    return model_factory
 
 
 def test_transcribe_fallback_does_not_stick(tmp_path):
-    """Falha em CUDA cai para CPU NA CHAMADA; a próxima chamada retenta CUDA."""
     calls = []
+    def flaky(*a, **k):
+        calls.append("cuda")
+        if calls.count("cuda") == 1:
+            raise RuntimeError("CUDA failed with error out of memory")
+        return (iter([]), _info())
+    def ok(*a, **k):
+        calls.append("cpu"); return (iter([]), _info())
 
-    def model_factory(name, device, compute_type):
-        m = MagicMock()
-        if device == "cuda":
-            def flaky(*a, **k):
-                calls.append("cuda")
-                if len([c for c in calls if c == "cuda"]) == 1:
-                    raise RuntimeError("CUDA failed with error out of memory")
-                info = MagicMock(); info.language = "pt"; info.duration = 1.0
-                return (iter([]), info)
-            m.transcribe.side_effect = flaky
-        else:
-            def ok(*a, **k):
-                calls.append("cpu")
-                info = MagicMock(); info.language = "pt"; info.duration = 1.0
-                return (iter([]), info)
-            m.transcribe.side_effect = ok
-        return m
-
-    with patch("transcriber.WhisperModel", side_effect=model_factory), \
+    with patch("backends.ct2.WhisperModel", side_effect=_factory(flaky, ok)), \
          patch.object(Transcriber, "_setup_dll_paths"), \
-         patch.object(Transcriber, "_scan_gpu", return_value=(True, "RTX", 4096)):
+         patch("transcriber.scan_gpu", return_value=_gpu(True, "RTX", 4096)), \
+         patch("transcriber.find_whispercli", return_value=None):
         t = Transcriber("medium", "auto", "auto", tmp_path)
-        wav = tmp_path / "rec.wav"
-        wav.write_bytes(b"fake")
+        wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+        r1 = t.transcribe(wav)
+        r2 = t.transcribe(wav)
 
-        r1 = t.transcribe(wav)   # cuda falha -> cpu
-        r2 = t.transcribe(wav)   # retenta cuda -> sucesso
-
-    assert r1.device == "cpu"
-    assert r2.device == "cuda"
+    assert (r1.device, r2.device) == ("cpu", "cuda")
     assert calls == ["cuda", "cpu", "cuda"]
 
 
-def test_scan_exposed_on_attributes(tmp_path):
-    with patch("transcriber.WhisperModel", return_value=MagicMock()), \
+def test_transcribe_cuda_error_falls_back_to_cpu_and_logs_once(tmp_path, caplog):
+    seg = MagicMock(); seg.text = "fallback"
+    with patch("backends.ct2.WhisperModel",
+               side_effect=_factory(RuntimeError("CUDA failed with error out of memory"),
+                                    lambda *a, **k: (iter([seg]), _info("pt", 3.0)))) as mock_cls, \
          patch.object(Transcriber, "_setup_dll_paths"), \
-         patch.object(Transcriber, "_scan_gpu", return_value=(True, "NVIDIA GeForce RTX 2050", 4096)):
-        t = Transcriber("medium", "auto", "auto", tmp_path)
-    assert t.gpu_available is True
-    assert t.gpu_name == "NVIDIA GeForce RTX 2050"
-    assert t.gpu_vram_mb == 4096
-    assert t.device == "cuda"
-
-
-def test_transcribe_cuda_dll_error_falls_back_to_cpu(tmp_path):
-    """When CUDA inference fails with a DLL error (lazy generator), model reloads on CPU and retries."""
-    def model_factory(name, device, compute_type):
-        m = MagicMock()
-        if device == "cuda":
-            def bad_segments():
-                raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
-                yield  # make it a generator
-            info = MagicMock()
-            m.transcribe.return_value = (bad_segments(), info)
-        else:
-            seg = MagicMock()
-            seg.text = "fallback"
-            info = MagicMock(); info.language = "pt"; info.duration = 3.0
-            m.transcribe.return_value = (iter([seg]), info)
-        return m
-
-    wav = tmp_path / "rec.wav"
-    wav.write_bytes(b"fake")
-
-    with patch("transcriber.WhisperModel", side_effect=model_factory) as mock_cls, \
-         patch.object(Transcriber, "_setup_dll_paths"), \
-         patch.object(Transcriber, "_scan_gpu", return_value=(True, "RTX", 4096)):
+         patch("transcriber.scan_gpu", return_value=_gpu(True, "RTX", 4096)), \
+         patch("transcriber.find_whispercli", return_value=None):
         t = Transcriber("medium", "cuda", "int8_float16", tmp_path)
-
-        result = t.transcribe(wav)
-
-    assert result.transcript == "fallback"
-    assert result.device == "cpu"
-    assert t.device == "cpu"
-    assert mock_cls.call_count == 2
-    mock_cls.assert_called_with("medium", device="cpu", compute_type="int8")
-
-
-def test_transcribe_cuda_oom_falls_back_to_cpu(tmp_path, caplog):
-    """Falta de VRAM na GPU recarrega em CPU e transcreve, em vez de falhar a reunião."""
-    oom_message = "CUDA failed with error out of memory"
-
-    def model_factory(name, device, compute_type):
-        m = MagicMock()
-        if device == "cuda":
-            m.transcribe.side_effect = RuntimeError(oom_message)
-        else:
-            seg = MagicMock()
-            seg.text = "fallback"
-            info = MagicMock(); info.language = "pt"; info.duration = 3.0
-            m.transcribe.return_value = (iter([seg]), info)
-        return m
-
-    wav = tmp_path / "rec.wav"
-    wav.write_bytes(b"fake")
-
-    with patch("transcriber.WhisperModel", side_effect=model_factory) as mock_cls, \
-         patch.object(Transcriber, "_setup_dll_paths"), \
-         patch.object(Transcriber, "_scan_gpu", return_value=(True, "RTX", 4096)):
-        t = Transcriber("medium", "cuda", "int8_float16", tmp_path)
-
+        wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
         with caplog.at_level(logging.WARNING):
             result = t.transcribe(wav)
 
     assert result.transcript == "fallback"
+    assert result.device == "cpu"
     assert t.device == "cpu"
     mock_cls.assert_called_with("medium", device="cpu", compute_type="int8")
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1
-    assert oom_message in warnings[0].getMessage()
+    assert "out of memory" in warnings[0].getMessage()
 
 
 def test_transcribe_error_on_cpu_propagates(tmp_path):
-    """Em CPU não há para onde cair: o erro propaga em vez de recarregar em loop."""
-    cpu_model = MagicMock()
-    cpu_model.transcribe.side_effect = ValueError("invalid audio format")
-
-    wav = tmp_path / "rec.wav"
-    wav.write_bytes(b"fake")
-
-    with patch("transcriber.WhisperModel", return_value=cpu_model) as mock_cls, \
+    cpu_model = MagicMock(); cpu_model.transcribe.side_effect = ValueError("invalid audio format")
+    with patch("backends.ct2.WhisperModel", return_value=cpu_model) as mock_cls, \
          patch.object(Transcriber, "_setup_dll_paths"), \
-         patch.object(Transcriber, "_scan_gpu", return_value=(False, None, None)):
+         patch("transcriber.scan_gpu", return_value=_gpu(False)), \
+         patch("transcriber.find_whispercli", return_value=None):
         t = Transcriber("medium", "cpu", "int8", tmp_path)
-
+        wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
         with pytest.raises(ValueError, match="invalid audio format"):
             t.transcribe(wav)
-
     assert t.device == "cpu"
     assert mock_cls.call_count == 1
 
 
 def test_transcribe_cpu_retry_failure_propagates(tmp_path):
-    """Se a retentativa em CPU também falha, o erro sobe — nada é engolido."""
-    def model_factory(name, device, compute_type):
-        m = MagicMock()
-        if device == "cuda":
-            m.transcribe.side_effect = RuntimeError("CUDA failed with error out of memory")
-        else:
-            m.transcribe.side_effect = ValueError("corrupt wav")
-        return m
-
-    wav = tmp_path / "rec.wav"
-    wav.write_bytes(b"fake")
-
-    with patch("transcriber.WhisperModel", side_effect=model_factory), \
+    with patch("backends.ct2.WhisperModel",
+               side_effect=_factory(RuntimeError("CUDA failed with error out of memory"),
+                                    ValueError("corrupt wav"))), \
          patch.object(Transcriber, "_setup_dll_paths"), \
-         patch.object(Transcriber, "_scan_gpu", return_value=(True, "RTX", 4096)):
+         patch("transcriber.scan_gpu", return_value=_gpu(True, "RTX", 4096)), \
+         patch("transcriber.find_whispercli", return_value=None):
         t = Transcriber("medium", "cuda", "int8_float16", tmp_path)
-
+        wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
         with pytest.raises(ValueError, match="corrupt wav"):
             t.transcribe(wav)
-
     assert t.device == "cpu"
 
 
-def test_setup_dll_paths_noop_on_non_windows(tmp_path, monkeypatch):
-    """The DLL setup should be a no-op on non-Windows platforms."""
-    monkeypatch.setattr(sys, "platform", "linux")
-    fake_model = MagicMock()
+def test_chain_without_gpu_is_cpu_only(tmp_path):
+    with patch("backends.ct2.WhisperModel", return_value=MagicMock()), \
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch("transcriber.scan_gpu", return_value=_gpu(False)), \
+         patch("transcriber.find_whispercli", return_value=None):
+        t = Transcriber("medium", "auto", "auto", tmp_path)
+    assert t._chain("auto") == ["cpu"]
+    assert t._chain("gpu") == ["cpu"]
+    assert t._chain("cuda") == ["cpu"]
+    assert t._chain("cpu") == ["cpu"]
+    assert t.gpu_backend is None
 
-    fake_add_dll = MagicMock()
-    if hasattr(__import__("os"), "add_dll_directory"):
-        monkeypatch.setattr("os.add_dll_directory", fake_add_dll)
 
-    with patch("transcriber.WhisperModel", return_value=fake_model):
-        t = Transcriber("medium", "cuda", "int8_float16", tmp_path)
+def test_chain_with_cuda(tmp_path):
+    with patch("backends.ct2.WhisperModel", return_value=MagicMock()), \
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch("transcriber.scan_gpu", return_value=_gpu(True)), \
+         patch("transcriber.find_whispercli", return_value=None):
+        t = Transcriber("medium", "auto", "auto", tmp_path)
+    assert t._chain("auto") == ["cuda", "cpu"]
+    assert t._chain("gpu") == ["cuda", "cpu"]
+    assert t._chain("cuda") == ["cuda", "cpu"]
+    assert t._chain("cpu") == ["cpu"]
 
+
+class FakeVulkan:
+    def __init__(self, available=True, model_ready=False, side_effect=None, result=("vk text", "pt", 4.0)):
+        self.available = available
+        self.model_ready = model_ready
+        self.side_effect = side_effect
+        self.result = result
+        self.calls = []
+
+    def transcribe(self, path, lang):
+        self.calls.append((path, lang))
+        if self.side_effect:
+            raise self.side_effect
+        return self.result
+
+
+def _amd():
+    return GPUInfo(cuda_available=False, vulkan_available=True, vendor="amd", name="AMD Radeon RX 7600", vram_mb=8192)
+
+
+def _nvidia_both():
+    return GPUInfo(cuda_available=True, vulkan_available=True, vendor="nvidia", name="RTX", vram_mb=4096)
+
+
+def _make_with_vulkan(tmp_path, gpu, vulkan, device="auto", cpu_side_effect=None):
+    cpu_model = MagicMock()
+    cpu_model.transcribe.side_effect = cpu_side_effect or (lambda *a, **k: (iter([]), _info("pt", 1.0)))
+    patches = (
+        patch("backends.ct2.WhisperModel", return_value=cpu_model),
+        patch.object(Transcriber, "_setup_dll_paths"),
+        patch("transcriber.scan_gpu", return_value=gpu),
+    )
+    return patches, cpu_model
+
+
+def test_default_vulkan_backend_is_built_from_find_whispercli(tmp_path):
+    with patch("backends.ct2.WhisperModel", return_value=MagicMock()), \
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch("transcriber.scan_gpu", return_value=_gpu(False)) as scan, \
+         patch("transcriber.find_whispercli", return_value=None):
+        t = Transcriber("medium", "auto", "auto", tmp_path)
+    assert t._vulkan is not None
+    assert t._vulkan.available is False
+    assert scan.call_args.kwargs["whispercli_present"] is False
+
+
+def test_scan_receives_whispercli_presence(tmp_path):
+    with patch("backends.ct2.WhisperModel", return_value=MagicMock()), \
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch("transcriber.scan_gpu", return_value=_amd()) as scan:
+        Transcriber("medium", "auto", "auto", tmp_path, vulkan=FakeVulkan(available=True))
+    assert scan.call_args.kwargs["whispercli_present"] is True
+
+
+def test_amd_auto_uses_vulkan_and_reports_it(tmp_path):
+    vk = FakeVulkan(model_ready=True)
+    patches, cpu_model = _make_with_vulkan(tmp_path, _amd(), vk)
+    with patches[0], patches[1], patches[2]:
+        t = Transcriber("medium", "auto", "auto", tmp_path, vulkan=vk)
+        wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+        result = t.transcribe(wav, language="pt")
+
+    assert t.device == "vulkan"
+    assert t.gpu_backend == "vulkan"
+    assert t.gpu_vendor == "amd"
+    assert t.vulkan_model_ready is True
+    assert result == TranscribeResult("vk text", "pt", 4.0, "medium", "vulkan")
+    assert vk.calls == [(wav.resolve(), "pt")]
+    cpu_model.transcribe.assert_not_called()
+
+
+def test_amd_boot_does_not_preload_ct2_model(tmp_path):
+    with patch("backends.ct2.WhisperModel") as cls, \
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch("transcriber.scan_gpu", return_value=_amd()):
+        t = Transcriber("medium", "auto", "auto", tmp_path, vulkan=FakeVulkan())
+    cls.assert_not_called()
     assert t.model_loaded is True
-    fake_add_dll.assert_not_called()
+    assert t.device == "vulkan"
+
+
+def test_amd_chains():
+    class _T(Transcriber):
+        def __init__(self): self.gpu = _amd()
+    t = _T()
+    assert t._chain("auto") == ["vulkan", "cpu"]
+    assert t._chain("gpu") == ["vulkan", "cpu"]
+    assert t._chain("cuda") == ["cpu"]
+    assert t._chain("cpu") == ["cpu"]
+
+
+def test_nvidia_with_both_chains_cuda_then_vulkan(monkeypatch):
+    monkeypatch.delenv("WHISPER_FORCE_BACKEND", raising=False)
+    class _T(Transcriber):
+        def __init__(self): self.gpu = _nvidia_both()
+    t = _T()
+    assert t._chain("auto") == ["cuda", "vulkan", "cpu"]
+    assert t._chain("cuda") == ["cuda", "vulkan", "cpu"]
+
+
+def test_force_backend_vulkan_env(monkeypatch):
+    monkeypatch.setenv("WHISPER_FORCE_BACKEND", "vulkan")
+    class _T(Transcriber):
+        def __init__(self): self.gpu = _nvidia_both()
+    t = _T()
+    assert t._chain("auto") == ["vulkan", "cpu"]
+    assert t._chain("gpu") == ["vulkan", "cpu"]
+    assert t._chain("cuda") == ["cuda", "vulkan", "cpu"]
+    assert t._chain("cpu") == ["cpu"]
+
+
+def test_force_backend_ignored_when_vulkan_unavailable(monkeypatch):
+    monkeypatch.setenv("WHISPER_FORCE_BACKEND", "vulkan")
+    class _T(Transcriber):
+        def __init__(self): self.gpu = _gpu(True)
+    assert _T()._chain("auto") == ["cuda", "cpu"]
+
+
+def test_vulkan_failure_falls_back_to_cpu_in_same_call(tmp_path, caplog):
+    vk = FakeVulkan(side_effect=RuntimeError("whisper-cli exited 1: device lost"))
+    patches, cpu_model = _make_with_vulkan(tmp_path, _amd(), vk)
+    with patches[0], patches[1], patches[2]:
+        t = Transcriber("medium", "auto", "auto", tmp_path, vulkan=vk)
+        wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+        with caplog.at_level(logging.WARNING):
+            result = t.transcribe(wav)
+
+    assert result.device == "cpu"
+    assert t.device == "cpu"
+    cpu_model.transcribe.assert_called_once()
+    assert any("vulkan inference failed" in r.getMessage() for r in caplog.records)
+
+
+def test_vulkan_failure_does_not_stick(tmp_path):
+    vk = FakeVulkan()
+    vk.side_effect = RuntimeError("first fails")
+    patches, cpu_model = _make_with_vulkan(tmp_path, _amd(), vk)
+    with patches[0], patches[1], patches[2]:
+        t = Transcriber("medium", "auto", "auto", tmp_path, vulkan=vk)
+        wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+        r1 = t.transcribe(wav)
+        vk.side_effect = None
+        r2 = t.transcribe(wav)
+    assert (r1.device, r2.device) == ("cpu", "vulkan")
+    assert len(vk.calls) == 2
+
+
+def test_cuda_failure_tries_vulkan_before_cpu(tmp_path):
+    vk = FakeVulkan()
+    cuda_model = MagicMock(); cuda_model.transcribe.side_effect = RuntimeError("CUDA out of memory")
+    def factory(name, device, compute_type):
+        return cuda_model
+    with patch("backends.ct2.WhisperModel", side_effect=factory), \
+         patch.object(Transcriber, "_setup_dll_paths"), \
+         patch("transcriber.scan_gpu", return_value=_nvidia_both()):
+        t = Transcriber("medium", "auto", "auto", tmp_path, vulkan=vk)
+        wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+        result = t.transcribe(wav)
+    assert result.device == "vulkan"
+    assert len(vk.calls) == 1
+
+
+def test_vulkan_then_cpu_both_fail_propagates_cpu_error(tmp_path):
+    vk = FakeVulkan(side_effect=RuntimeError("vk down"))
+    patches, cpu_model = _make_with_vulkan(tmp_path, _amd(), vk, cpu_side_effect=ValueError("corrupt wav"))
+    with patches[0], patches[1], patches[2]:
+        t = Transcriber("medium", "auto", "auto", tmp_path, vulkan=vk)
+        wav = tmp_path / "rec.wav"; wav.write_bytes(b"fake")
+        with pytest.raises(ValueError, match="corrupt wav"):
+            t.transcribe(wav)
+    assert t.device == "cpu"

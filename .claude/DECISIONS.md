@@ -4,6 +4,33 @@ Registro de decisões transversais ao projeto. Decisões específicas de cada fe
 
 ---
 
+## [2026-08-30] GPU não-NVIDIA via whisper.cpp/Vulkan como segundo motor; CUDA permanece o caminho NVIDIA
+
+**Contexto:** A v2.9.0 só transcreve em GPU NVIDIA — faster-whisper/ctranslate2 não tem backend AMD no
+Windows (ROCm é Linux-only, sem wheel). Pedido do usuário: suporte a placas AMD.
+
+**Alternativas:** (a) um motor só, whisper.cpp/Vulkan para todas as GPUs — instalador cairia de 631 para
+~150 MB, mas descarta a homologação CUDA e perde 1,5–3× em NVIDIA; (b) ONNX Runtime + DirectML — sem
+pipeline Whisper pronto em Python, semanas de plumbing; (c) ROCm/torch-directml — imaturo no Windows.
+
+**Escolha:** Dois motores lado a lado. `backends/ct2.py` (faster-whisper) segue para CUDA e CPU;
+`backends/whispercpp.py` roda o binário `whisper-cli` (Vulkan) via subprocess para AMD/Intel e como
+fallback quando CUDA falha. Resolução por chamada em cadeia (`cuda → vulkan → cpu`), sem estado
+pegajoso. Backend é escolha interna: o setting `whisper_device` passa a `auto|gpu|cpu` (migration 020
+converte `cuda→gpu`); o usuário só vê Auto/GPU/CPU. Modelo GGML quantizado (q5) baixado sob demanda do
+HF na primeira transcrição Vulkan (~540 MB no medium), não embarcado. Binário whisper.cpp pinado em
+`audio-service/build/whispercpp.version` (b4938), **compilado** por `fetch-whispercpp.ps1` (a release
+oficial não publica build Vulkan p/ Windows — exige CMake + VS Build Tools + Vulkan SDK na máquina de
+build, instalados em 2026-08-30), embarcado em `_internal/whispercpp/` (+~55 MB no bundle).
+
+**Trade-offs aceitos:** dois formatos de modelo (quem usa Vulkan baixa um segundo modelo); subprocess
+em vez de wheel (isolamento de crash de driver vale um processo por transcrição); toolchain C++ vira
+pré-requisito da máquina de build; homologação em hardware AMD **em aberto** — validado nesta máquina
+forçando Vulkan na RTX 2050 (`WHISPER_FORCE_BACKEND=vulkan`: 169s de áudio em 34,8s no CLI; smoke do
+bundle empacotado transcreveu via Vulkan), decisão consciente do usuário sem máquina AMD disponível.
+
+---
+
 ## [2026-08-29] Instalador embarca CUDA; device de transcrição é escolha do usuário (reverte 2026-08-21)
 
 **Contexto:** A decisão de 2026-08-21 mantinha o instalador CPU-only para preservar o tamanho das

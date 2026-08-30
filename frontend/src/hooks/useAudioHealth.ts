@@ -7,6 +7,9 @@ export interface AudioHealth {
   gpu_available: boolean
   gpu_name: string | null
   gpu_vram_mb: number | null
+  gpu_vendor: "nvidia" | "amd" | "intel" | "other" | null
+  gpu_backend: "cuda" | "vulkan" | null
+  vulkan_model_ready: boolean
   device: string
 }
 
