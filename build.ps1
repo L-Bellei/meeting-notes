@@ -110,6 +110,21 @@ if (-not $NoNSIS) {
         Write-Host "    pyinstaller build\pyinstaller\audio-service.spec --distpath build\dist --workpath build\work --noconfirm" -ForegroundColor Yellow
         exit 1
     }
+
+    $WhisperCli = Join-Path $ProjectRoot "audio-service\vendor\whispercpp\whisper-cli.exe"
+    if (-not (Test-Path $WhisperCli)) {
+        Write-Fail "whisper-cli.exe (Vulkan) não encontrado em: $WhisperCli"
+        Write-Host "  Obtenha com:  .\audio-service\build\fetch-whispercpp.ps1" -ForegroundColor Yellow
+        exit 1
+    }
+    $BundledCli = Join-Path $AudioServiceSrc "_internal\whispercpp\whisper-cli.exe"
+    if (-not (Test-Path $BundledCli)) {
+        Write-Fail "O bundle do audio-service não contém _internal\whispercpp\whisper-cli.exe — está desatualizado."
+        Write-Host "  Rebuild com PyInstaller (Python do .venv):" -ForegroundColor Yellow
+        Write-Host "    cd audio-service" -ForegroundColor Yellow
+        Write-Host "    .venv\Scripts\python.exe -m PyInstaller build\pyinstaller\audio-service.spec --distpath build\dist --workpath build\work --noconfirm" -ForegroundColor Yellow
+        exit 1
+    }
 }
 
 Push-Location $WailsDir

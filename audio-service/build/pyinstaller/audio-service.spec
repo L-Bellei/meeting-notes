@@ -48,6 +48,18 @@ for pkg in ("nvidia.cudnn", "nvidia.cublas"):
     binaries += pkg_binaries
     hiddenimports += pkg_hiddenimports
 
+# whisper.cpp (Vulkan) é o segundo motor de inferência (GPU não-NVIDIA) — ver
+# DECISIONS 2026-08-30. O binário e as DLLs ggml vão para _internal/whispercpp/,
+# onde backends/whispercpp.find_whispercli() procura via sys._MEIPASS.
+WHISPERCPP_DIR = AUDIO_SERVICE_ROOT / "vendor" / "whispercpp"
+if not (WHISPERCPP_DIR / "whisper-cli.exe").exists():
+    raise SystemExit(
+        f"whisper-cli.exe ausente em {WHISPERCPP_DIR} — rode audio-service\\build\\fetch-whispercpp.ps1"
+    )
+for entry in WHISPERCPP_DIR.iterdir():
+    if entry.suffix.lower() in (".exe", ".dll"):
+        binaries.append((str(entry), "whispercpp"))
+
 a = Analysis(
     [str(AUDIO_SERVICE_ROOT / "run.py")],
     pathex=[str(AUDIO_SERVICE_ROOT)],
