@@ -2,6 +2,45 @@
 
 ---
 
+## [2026-08-30] Release v2.10.0 — transcrição em GPU AMD/Intel via whisper.cpp/Vulkan
+
+**Tag:** https://github.com/L-Bellei/meeting-notes/releases/tag/v2.10.0 · **Merge:** PR #56 (`455893c`)
+**Instalador:** `meeting-notes-2.10.0-windows-amd64-installer.exe`, **648 MB** (+17 MB vs v2.9.0).
+**Plano Superpowers:** `docs/superpowers/plans/2026-08-30-vulkan-transcription.md` (10 tasks, Subagent-Driven Development)
+**Spec:** `docs/superpowers/specs/2026-08-30-amd-gpu-vulkan-transcription-design.md` (com resultado do spike registrado)
+
+whisper.cpp/Vulkan entra como **segundo motor de inferência** para GPU não-NVIDIA (AMD/Intel);
+faster-whisper/CUDA permanece o caminho NVIDIA. Fachada com cadeia por chamada `cuda → vulkan →
+cpu` sem estado pegajoso; seletor segue Auto/GPU/CPU (backend é escolha interna); migration 020
+converte `cuda→gpu`; modelo GGML q5 baixado sob demanda. Detalhes de arquitetura no plano/spec —
+não duplicados aqui. Decisão transversal em DECISIONS 2026-08-30.
+
+**O que a execução ensinou (registrado para não repetir):**
+- **Release oficial do whisper.cpp não tem build Vulkan p/ Windows** — o binário é compilado
+  localmente (`fetch-whispercpp.ps1`, pin `b4938`); a máquina de build ganhou CMake + VS Build
+  Tools 2022 + Vulkan SDK via winget (escolha do usuário, em vez de GitHub Actions).
+- **Teste dependente do host**: com o binário em `vendor/` e o GGML no cache HF (efeitos
+  colaterais de tasks anteriores), testes que construíam `Transcriber` sem patch de
+  `find_whispercli` passaram a falhar — a suíte só é hermética se TODO site de construção
+  isolar o backend (`49f0d1d`, 9 sites). Pegadinha silenciosa: os testes passavam ANTES do
+  binário existir.
+- **Paralelismo de SDD com arquivos disjuntos funcionou** (Python ∥ Go ∥ frontend, reviews em
+  paralelo com implementers): nenhum conflito de índice; pacotes de review por range continuaram
+  válidos porque nenhum fix round intercalou de fato.
+- **`gofmt -l` é insatisfazível neste checkout** (CRLF repo-wide, pré-existente) — os gates reais
+  são `go vet`/`go build`/`go test`.
+- **Prova real do spike antes do resto** pagou: flags, JSON e sample rate confirmados no CLI real
+  (169s→34,8s na RTX 2050) antes de qualquer código depender do contrato.
+- Review final (Fable) achou 1 Important real: `subprocess.run` sem `timeout` no backend Vulkan
+  (driver hang penduraria a thread por 4h e vazaria o filho) — corrigido na fix wave (`e18a15a`).
+
+**Verificação:** pytest 95/95 (~2s); `go vet`+`go test ./...` verdes; `tsc`+build limpos; smoke
+do bundle empacotado transcrevendo via Vulkan de ponta a ponta; **homologação por tester externo**
+com o instalador 2.10.0 antes do merge. Débitos novos no BACKLOG: homologação em AMD real,
+download do GGML sem progresso, drift de tipo null→`""` no health.
+
+---
+
 ## [2026-08-29] Release v2.9.0 — transcrição em GPU (scan da máquina, device por chamada)
 
 **Tag:** https://github.com/L-Bellei/meeting-notes/releases/tag/v2.9.0 · **Merges:** PR #53 (`57cf273`) + PR #54 (`7d5d872`, bump)
