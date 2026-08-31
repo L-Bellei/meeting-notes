@@ -1,49 +1,46 @@
-# Estado do Projeto — 2026-08-29 (fim de sessão)
+# Estado do Projeto — 2026-08-30 (fim de sessão)
 
 ## Sessão
-- **Data:** 2026-08-28/29 (sessão longa — quatro releases)
-- **`master` (`7d5d872`) = v2.9.0 publicada.** Nesta sessão: **v2.7.1** (hotfix — audio-service
-  empacotado morria no boot; smoke test obrigatório no `build.ps1`), **v2.8.0** (IA pela
-  **assinatura Claude** via Claude Code headless; API keys removidas), **v2.8.1** (ícones do
-  produto restaurados e rastreados) e **v2.9.0** (transcrição em **GPU** com scan da máquina e
-  seletor Auto/GPU/CPU). Detalhes por release no CHANGELOG desta data.
-- **Worktree:** nenhum ativo.
+- **Data:** 2026-08-30
+- **`master` (`455893c`) = v2.10.0 publicada.** Feature da sessão: transcrição em **GPU AMD/Intel
+  via whisper.cpp/Vulkan** como segundo motor (CUDA intacto para NVIDIA). PR #56, tag `v2.10.0`,
+  instalador de 648 MB na Release. Homologado por tester externo antes do merge.
+- **Worktree:** nenhum ativo. Branch `feat/vulkan-transcription` apagada no merge.
 
 ## Fase Superpowers
 
-**Nenhum ciclo em andamento.** O último (`docs/superpowers/plans/2026-08-29-gpu-cpu-transcription.md`,
-spec `docs/superpowers/specs/2026-08-29-gpu-cpu-transcription-design.md`) foi completo: 9 tasks via
-Subagent-Driven Development, experimento de corte das DLLs validado com transcrição real em CUDA,
-homologação do usuário na janela nativa, merge (PRs #53/#54) e release v2.9.0. Workspaces do SDD
-apagados; o registro é o git.
+**Nenhum ciclo em andamento.** O último (`docs/superpowers/plans/2026-08-30-vulkan-transcription.md`,
+spec `docs/superpowers/specs/2026-08-30-amd-gpu-vulkan-transcription-design.md`) foi completo:
+10 tasks via Subagent-Driven Development (5 implementers + reviews por task em paralelo com
+arquivos disjuntos), spike interativo do binário Vulkan, review final whole-branch (Fable) com
+uma fix wave verificada. Workspace do SDD apagado; o registro é o git.
 
 ## Próximo passo imediato
 
 Nenhum acordado. Candidatas no BACKLOG (Features futuras): **Notificações de pipeline** e
-**Export** — ambas começam por `/superpowers:brainstorming`. O argumento antigo do backlog
-(**vitest no frontend**) segue válido.
+**Export** — ambas começam por `/superpowers:brainstorming`. Débito novo mais relevante:
+**homologação em GPU AMD real** (a feature foi validada forçando Vulkan na RTX 2050 +
+tester externo; ver BACKLOG).
 
 ## Estado de release
 
-- **v2.9.0** publicada: https://github.com/L-Bellei/meeting-notes/releases/tag/v2.9.0
-  — instalador de **631,3 MB** (CUDA embarcada; bundle podado de 1,85→1,07 GB). A estimativa
-  intermediária de ~390 MB era otimista: a razão de compressão medida numa amostra de cudnn
-  (0,27) não representa a cublas, que comprime mal. 631 MB está dentro do envelope (~610 MB)
-  aprovado na decisão do instalador único.
-- **`master` está em paridade com a última release.**
-- Upgrade da v2.8.x: migration 019 só adiciona `whisper_device` (default auto) — sem quebra;
-  quem vem da v2.7.x ainda precisa reconectar a IA (migration 018, irreversível).
-- Armadilha nova de release: a corrida entre `git push` do bump e `gh pr merge --delete-branch`
-  deixou o bump fora do merge do PR #53 (corrigido via PR #54). Nas próximas: commitar o bump
-  ANTES de abrir o PR, ou conferir `git show HEAD:cmd/desktop/wails.json` pós-merge.
+- **v2.10.0** publicada: https://github.com/L-Bellei/meeting-notes/releases/tag/v2.10.0
+  — instalador de **648 MB** (+17 MB vs v2.9.0: whisper-cli + DLLs ggml/Vulkan).
+- **`master` está em paridade com a última release** (docs de sessão pendentes neste commit).
+- Upgrade da v2.9.0: migration 020 converte `whisper_device` `cuda`→`gpu` — sem quebra.
+- A corrida push→merge da v2.9.0 não se repetiu: o bump foi commitado ANTES de abrir o PR #56
+  e conferido no HEAD pós-merge.
 
 ## Armadilhas de ambiente
 
-Todas no `CLAUDE.md` ("Rodando em dev") e nas entradas de 2026-08-28/29 do DECISIONS. Extras:
-- Bundle do PyInstaller SEMPRE com o Python do `.venv`; a poda das DLLs de cuDNN é **pós-Analysis**
-  no `.spec` (hooks do hooks-contrib re-coletam nvidia.* por fora das listas de entrada).
-- Ícone "W" aparecendo em atalho/barra com o produto correto no exe = **cache de ícones do
-  Windows** (limpar `iconcache_*.db` + reiniciar Explorer; atalho fixado guarda cópia própria).
-  Não é bug do app — episódio de 2026-08-29 diagnosticado com o ícone extraído do binário.
-- Testes Python nunca carregam WhisperModel real (suíte em ~2s); provider claude-code nunca toca
-  o CLI real em teste.
+Todas as anteriores no `CLAUDE.md` ("Rodando em dev") e DECISIONS. Novas desta sessão:
+- **Máquina de build ganhou toolchain C++** (2026-08-30, via winget): CMake 4.4.3, Vulkan SDK
+  1.4.357.0, VS Build Tools 2022 (VCTools). São pré-requisito do `fetch-whispercpp.ps1`.
+  `VULKAN_SDK` e o CMake podem não estar no PATH de shells antigas — abrir shell nova.
+- **NSIS não está no PATH** desta máquina: o `build.ps1` falha no pre-flight; prefixar
+  `$env:Path += ";C:\Program Files (x86)\NSIS"`.
+- **Testes Python são herméticos por construção**: com `whisper-cli.exe` em `vendor/` e o GGML
+  no cache HF, qualquer teste que construa `Transcriber` sem patch de `find_whispercli` (ou sem
+  `vulkan=` fake) volta a depender do host — foi um fix round real desta sessão (`49f0d1d`).
+- `WHISPER_FORCE_BACKEND=vulkan` é só para dev/homologação; deixá-la setada na shell quebra
+  testes de cadeia e muda o comportamento do app em dev.
