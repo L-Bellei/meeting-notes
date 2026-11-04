@@ -25,7 +25,7 @@ func TestApp_HTTPServerResponds(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/health", app.GetPort()))
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", app.GetPort()))
 	if err != nil {
 		t.Fatalf("GET /health: %v", err)
 	}

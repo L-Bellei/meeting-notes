@@ -8,7 +8,7 @@ export function getApiBase(): string {
 }
 
 export function initApi(port: number) {
-  const next = `http://localhost:${port}`
+  const next = `http://127.0.0.1:${port}`
   if (next === baseURL) return
   baseURL = next
   listeners.forEach(listener => listener())

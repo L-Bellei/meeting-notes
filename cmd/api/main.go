@@ -16,6 +16,7 @@ import (
 	"meeting-notes/internal/config"
 	"meeting-notes/internal/database"
 	"meeting-notes/internal/handlers"
+	"meeting-notes/internal/httpmiddleware"
 	"meeting-notes/internal/repository"
 	"meeting-notes/internal/services"
 )
@@ -74,8 +75,9 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(httpmiddleware.RejectUntrustedOrigins)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{"*"},
+		AllowedOrigins: httpmiddleware.AllowedLocalOrigins(),
 		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Accept", "Content-Type"},
 	}))
@@ -210,8 +212,8 @@ func main() {
 	r.Get("/api/meetings/{id}/audio", audioServeHandler.ServeAudio)
 	r.Post("/api/meetings/{id}/retranscribe", retranscribeHandler.Retranscribe)
 
-	log.Printf("server listening on :%s", cfg.HTTPPort)
-	if err := http.ListenAndServe(":"+cfg.HTTPPort, r); err != nil {
+	log.Printf("server listening on 127.0.0.1:%s", cfg.HTTPPort)
+	if err := http.ListenAndServe("127.0.0.1:"+cfg.HTTPPort, r); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
 }

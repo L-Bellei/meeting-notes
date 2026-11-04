@@ -589,7 +589,7 @@ func (o *OverlayWindow) confirmStop() {
 	ctx := o.ctx
 	o.mu.Unlock()
 
-	url := fmt.Sprintf("http://localhost:%d/api/meetings/%s/stop", port, meetingID)
+	url := fmt.Sprintf("http://127.0.0.1:%d/api/meetings/%s/stop", port, meetingID)
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Post(url, "application/json", nil)
 	if err != nil {

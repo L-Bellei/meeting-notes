@@ -66,7 +66,7 @@ function AppInner() {
       let serverOk = false
       while (Date.now() < serverDeadline) {
         try {
-          const res = await fetch(`http://localhost:${port}/health`)
+          const res = await fetch(`http://127.0.0.1:${port}/health`)
           if (res.ok) { serverOk = true; break }
         } catch { /* aguarda */ }
         await new Promise(r => setTimeout(r, 500))
@@ -84,7 +84,7 @@ function AppInner() {
       let modelOk = false
       while (Date.now() < modelDeadline) {
         try {
-          const res = await fetch(`http://localhost:${port}/health`)
+          const res = await fetch(`http://127.0.0.1:${port}/health`)
           if (res.ok) {
             const h = await res.json() as { model_loaded?: boolean }
             if (h.model_loaded) { modelOk = true; break }
@@ -101,7 +101,7 @@ function AppInner() {
 
       // Check 3 — Assistente de IA (condicional)
       try {
-        const aiHealth = await fetch(`http://localhost:${port}/api/ai/health`).then(r => r.json()) as
+        const aiHealth = await fetch(`http://127.0.0.1:${port}/api/ai/health`).then(r => r.json()) as
           { configured: boolean; valid?: boolean; error?: string }
 
         if (aiHealth.configured) {

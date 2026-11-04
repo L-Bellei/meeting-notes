@@ -27,7 +27,7 @@ func (h *SettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to get settings")
 		return
 	}
-	writeJSON(w, http.StatusOK, settings)
+	writeJSON(w, http.StatusOK, publicSettings(settings))
 }
 
 func (h *SettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -53,5 +53,17 @@ func (h *SettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if h.onUpdate != nil {
 		h.onUpdate(settings)
 	}
-	writeJSON(w, http.StatusOK, settings)
+	writeJSON(w, http.StatusOK, publicSettings(settings))
+}
+
+func publicSettings(settings map[string]string) map[string]any {
+	public := make(map[string]any, len(settings))
+	for key, value := range settings {
+		if key == "claude_code_token" {
+			continue
+		}
+		public[key] = value
+	}
+	public["claude_code_token_configured"] = settings["claude_code_token"] != ""
+	return public
 }

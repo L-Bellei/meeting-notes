@@ -31,13 +31,52 @@ func TestSettingsHandler_Get_OK(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
-	var m map[string]string
+	var m map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&m); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 	if m["ai_provider"] != "claude-code" {
 		t.Errorf("ai_provider = %q, want claude-code", m["ai_provider"])
 	}
+}
+
+func TestSettingsHandler_RedactsClaudeToken(t *testing.T) {
+	h := newSettingsHandler(t)
+	body, _ := json.Marshal(map[string]string{"claude_code_token": "sk-sensitive-token"})
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/settings", bytes.NewReader(body))
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateRec := httptest.NewRecorder()
+	h.Update(updateRec, updateReq)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("update status = %d, want 200", updateRec.Code)
+	}
+
+	assertRedacted := func(t *testing.T, body []byte) {
+		t.Helper()
+		if bytes.Contains(body, []byte("sk-sensitive-token")) {
+			t.Fatal("response exposed the Claude token")
+		}
+		var settings map[string]any
+		if err := json.Unmarshal(body, &settings); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if _, ok := settings["claude_code_token"]; ok {
+			t.Fatal("response included claude_code_token")
+		}
+		if settings["claude_code_token_configured"] != true {
+			t.Fatalf("claude_code_token_configured = %v, want true", settings["claude_code_token_configured"])
+		}
+	}
+
+	assertRedacted(t, updateRec.Body.Bytes())
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
+	getRec := httptest.NewRecorder()
+	h.Get(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("GET status = %d, want 200", getRec.Code)
+	}
+	assertRedacted(t, getRec.Body.Bytes())
 }
 
 func TestSettingsHandler_Update_OK(t *testing.T) {
@@ -50,7 +89,7 @@ func TestSettingsHandler_Update_OK(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (body: %s)", w.Code, w.Body.String())
 	}
-	var m map[string]string
+	var m map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&m); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
