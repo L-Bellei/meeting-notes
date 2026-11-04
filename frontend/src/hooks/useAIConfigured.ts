@@ -23,7 +23,7 @@ export function useAIConfigured() {
   const { data: settings } = useSettings()
   const { data: health, isFetching } = useAIHealth()
 
-  const configured = Boolean(settings?.claude_code_token?.trim())
+  const configured = settings?.claude_code_token_configured ?? false
 
   return {
     configured,

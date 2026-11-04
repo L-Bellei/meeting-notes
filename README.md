@@ -358,6 +358,8 @@ Copy-Item "build\bin\Meeting Notes-amd64-installer.exe" `
 
 ## API REST
 
+O servidor HTTP escuta somente em `127.0.0.1`; não fica acessível pela rede local. Requisições de navegador são aceitas apenas da origem do Wails e do Vite em desenvolvimento. A resposta de `GET /api/settings` não contém o token Claude; ela informa apenas `claude_code_token_configured`.
+
 ### Saúde
 
 | Método | Rota | Descrição |

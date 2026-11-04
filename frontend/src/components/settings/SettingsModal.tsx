@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import { X, Eye, EyeOff } from "lucide-react"
-import { useSettings, useUpdateSettings, pickWritable, type Settings } from "../../hooks/useSettings"
+import { useSettings, useUpdateSettings, pickWritable, type SettingsForm } from "../../hooks/useSettings"
 import { useAITest, useClaudeLogin } from "../../hooks/useAIConfigured"
 import { useAudioHealth } from "../../hooks/useAudioHealth"
 import { Button } from "../ui/button"
@@ -102,7 +102,7 @@ export function SettingsModal({ open, onClose }: Props) {
   const test = useAITest()
   const { data: audioHealth } = useAudioHealth()
 
-  const [form, setForm] = useState<Partial<Settings>>({})
+  const [form, setForm] = useState<SettingsForm>({})
   const [showKey, setShowKey] = useState(false)
   const [error, setError] = useState("")
   const [activeTab, setActiveTab] = useState<"geral" | "ia" | "transcricao" | "atalhos">("geral")
@@ -124,7 +124,7 @@ export function SettingsModal({ open, onClose }: Props) {
 
   if (!open) return null
 
-  function set<K extends keyof Settings>(key: K, value: Settings[K]) {
+  function set<K extends keyof SettingsForm>(key: K, value: SettingsForm[K]) {
     setForm(f => ({ ...f, [key]: value }))
   }
 
@@ -155,12 +155,10 @@ export function SettingsModal({ open, onClose }: Props) {
   }
 
   // Status e teste de conexão refletem o token PERSISTIDO — é o que o backend usa.
-  const savedToken = (settings?.claude_code_token ?? "").trim()
-  const hasToken = savedToken !== ""
-  const maskedToken = savedToken.slice(0, 10) + "…"
+  const hasToken = settings?.claude_code_token_configured ?? false
   const model = form.claude_code_model ?? ""
   const aiDirty =
-    (settings?.claude_code_token ?? "") !== (form.claude_code_token ?? "") ||
+    form.claude_code_token !== undefined ||
     (settings?.claude_code_model ?? "") !== model
 
   const gpuVram = audioHealth?.gpu_vram_mb
@@ -237,7 +235,7 @@ export function SettingsModal({ open, onClose }: Props) {
               <div>
                 <label className="text-xs text-muted-foreground">Conta Claude</label>
                 <p className={cn("text-sm mt-1", hasToken ? "text-emerald-500" : "text-amber-500")}>
-                  {hasToken ? `Conectado (${maskedToken})` : "Não conectado"}
+                  {hasToken ? "Conectado (token configurado)" : "Não conectado"}
                 </p>
                 <p className="text-[10px] text-muted-foreground/60 mt-1">
                   Os resumos usam sua assinatura do Claude Code — não há cobrança por API.
@@ -262,20 +260,36 @@ export function SettingsModal({ open, onClose }: Props) {
 
               {/* token */}
               <div>
-                <label className="text-xs text-muted-foreground">Token <span className="text-destructive">*</span></label>
+                <label className="text-xs text-muted-foreground">
+                  Token {!hasToken && <span className="text-destructive">*</span>}
+                </label>
                 <div className="flex gap-1 mt-1">
                   <input
                     ref={tokenInputRef}
                     type={showKey ? "text" : "password"}
                     value={form.claude_code_token ?? ""}
                     onChange={e => set("claude_code_token", e.target.value)}
-                    placeholder="sk-ant-oat01-..."
+                    placeholder={hasToken ? "Deixe em branco para manter o token atual" : "sk-ant-oat01-..."}
                     className="flex-1 text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary bg-[#111111] border border-border text-foreground font-mono placeholder:text-muted-foreground/60 placeholder:font-sans"
                   />
                   <Button variant="ghost" size="icon" onClick={() => setShowKey(v => !v)}>
                     {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
                   </Button>
                 </div>
+                {hasToken && (
+                  <p className="text-[10px] text-muted-foreground/60 mt-1">
+                    Informe um novo token para substituí-lo ou remova o token salvo.
+                  </p>
+                )}
+                {hasToken && (
+                  <button
+                    type="button"
+                    onClick={() => set("claude_code_token", "")}
+                    className="text-[10px] text-destructive hover:underline mt-1"
+                  >
+                    Remover token salvo
+                  </button>
+                )}
                 {!hasToken && (
                   <p className="text-[10px] text-amber-500 mt-1">Necessário para gerar resumos, pontos-chave e tarefas.</p>
                 )}
