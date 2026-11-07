@@ -2,6 +2,21 @@
 
 ---
 
+## [2026-11-07] Publicar a release v2.11.0
+
+PR #59 foi mergeado em `master` (`8d82b4a`), a tag `v2.11.0` criada e a release publicada com
+o instalador `meeting-notes-2.11.0-windows-amd64-installer.exe` (648,6 MB; SHA-256
+`65E4C7E03BF17922B6CA2938984F201A3B4ED87E0D56FEFD5A3BBAE3F3DDD541`).
+
+**Verificação:** `build.ps1` passou nos testes Go, no smoke test de `whisper-cli.exe` e no
+`/health` HTTP 200 do audio-service empacotado (43 s). O instalador reporta
+FileVersion/ProductVersion `2.11.0`. Também passaram 99 testes Python, lint, 11 testes e build
+frontend e `git diff --check`. Wails CLI 2.17.1 avisou que o runtime declarado é 2.12.0; a
+compilação foi bem-sucedida. A release está publicada em
+https://github.com/L-Bellei/meeting-notes/releases/tag/v2.11.0.
+
+---
+
 ## [2026-11-06] Reorganizar temas por teclado
 
 Temas movíveis na Sidebar agora têm um handle de arraste dedicado, acessível por teclado e

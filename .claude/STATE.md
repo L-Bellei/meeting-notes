@@ -1,13 +1,13 @@
-# Estado do Projeto — 2026-11-06
+# Estado do Projeto — 2026-11-07
 
 ## Sessão
-- **`master` (`e145e41`)** contém o PR #58 e a correção de segurança `70e17cf`.
+- **`master` (`8d82b4a`)** contém o PR #59 e as melhorias de engenharia.
 - **v2.10.1 publicada** com o instalador `meeting-notes-2.10.1-windows-amd64-installer.exe`.
-- **v2.11.0 preparada** no `wails.json`; PR, build validado, tag e publicação ainda pendentes.
-- Etapas 1–5, proteção NSIS e reparent de temas por teclado implementados no checkout
-  principal compartilhado; alterações continuam sem commit.
-- Os quatro arquivos `stackql_mcp_server_*.log` não rastreados são anteriores a esta
-  etapa e foram preservados.
+- **v2.11.0 publicada** com o instalador `meeting-notes-2.11.0-windows-amd64-installer.exe`
+  (648,6 MB; SHA-256 `65E4C7E03BF17922B6CA2938984F201A3B4ED87E0D56FEFD5A3BBAE3F3DDD541`).
+- Etapas 1–5, proteção NSIS e reparent de temas por teclado estão mergeados em `master`
+  pelo PR #59.
+- Os logs locais vazios do StackQL foram preservados fora do repositório, em `files/stackql-logs/`.
 
 ## Fase Superpowers
 
@@ -15,7 +15,18 @@
 
 ## Próximo passo imediato
 
-Reparent de temas por teclado concluído. Não há outra melhoria priorizada; aguardar nova orientação.
+Iniciar o brainstorm da feature de notificações nativas do Windows quando o processamento de
+uma reunião termina; ela consta como acordada no backlog, mas ainda não foi especificada.
+
+## Release v2.11.0
+
+- PR #59 mergeado em `8d82b4a`; tag `v2.11.0` e release publicadas no GitHub.
+- Build canônico `build.ps1` passou; `whisper-cli.exe --help` e o `/health` HTTP 200 do
+  audio-service empacotado passaram (43 s). Instalador reporta FileVersion/ProductVersion 2.11.0.
+- Validação adicional: `go test ./...`, 99 testes Python, ESLint, 11 testes frontend,
+  build frontend e `git diff --check` passaram.
+- A build emitiu o aviso conhecido de diferença entre Wails CLI 2.17.1 e runtime 2.12.0;
+  a compilação e o smoke test concluíram com sucesso.
 
 ## Reorganização de temas por teclado
 
