@@ -98,9 +98,6 @@ func (s *TaskService) Generate(ctx context.Context, meeting *models.Meeting, cus
 	if err != nil {
 		return nil, mapAIError(err)
 	}
-	if err := s.repo.DeleteByMeetingID(ctx, meeting.ID); err != nil {
-		return nil, err
-	}
 	created := make([]models.Task, 0, len(suggestions))
 	for _, sug := range suggestions {
 		priority := sug.Priority
@@ -121,10 +118,10 @@ func (s *TaskService) Generate(ctx context.Context, meeting *models.Meeting, cus
 			Completed:   false,
 			CreatedAt:   time.Now().UTC(),
 		}
-		if err := s.repo.Create(ctx, &task); err != nil {
-			return nil, err
-		}
 		created = append(created, task)
+	}
+	if err := s.repo.ReplaceByMeetingID(ctx, meeting.ID, created); err != nil {
+		return nil, err
 	}
 	return created, nil
 }

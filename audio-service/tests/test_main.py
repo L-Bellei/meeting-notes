@@ -131,6 +131,35 @@ def test_stop_idle(mock_recorder, mock_transcriber, client):
     assert "not recording" in r.json()["detail"]
 
 
+def test_recover_recording_endpoint(mock_recorder, mock_transcriber, client):
+    mock_recorder.recover.return_value = StopResult(
+        recording_id="abc-123",
+        path=Path("./tmp/rec-abc-123.wav"),
+        duration_seconds=10,
+        size_bytes=320000,
+        partial=False,
+    )
+
+    r = client.post("/recording/recover/abc-123")
+
+    assert r.status_code == 200
+    assert r.json()["recording_id"] == "abc-123"
+    assert r.json()["path"].endswith("rec-abc-123.wav")
+    mock_recorder.recover.assert_called_once_with("abc-123")
+
+
+def test_lifespan_finalizes_active_recording_on_shutdown(monkeypatch, tmp_path):
+    recorder = MagicMock()
+    recorder.state = "recording"
+    monkeypatch.setattr(main, "Recorder", lambda _: recorder)
+    monkeypatch.setattr(main, "Transcriber", lambda **_: MagicMock())
+
+    with TestClient(main.app):
+        assert main.recorder is recorder
+
+    recorder.stop.assert_called_once_with()
+
+
 def test_status_idle(mock_recorder, mock_transcriber, client):
     r = client.get("/recording/status")
     assert r.status_code == 200

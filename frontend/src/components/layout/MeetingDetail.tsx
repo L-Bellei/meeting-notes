@@ -3,6 +3,8 @@ import { Play, Square, RefreshCw, Wand2, Trash2, Volume2 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import {
+  type MeetingDetail as MeetingDetailData,
+  type Task,
   useMeeting, useUpdateMeeting, useStartRecording, useStopRecording,
   useReprocess, useGenerateSummary, useGenerateKeyPoints, useGenerateTasks,
   useUpdateTask, useRetranscribe,
@@ -12,7 +14,7 @@ import { useDeleteMeeting } from "../../hooks/useMeetings"
 import { useSettings } from "../../hooks/useSettings"
 import { useAIConfigured } from "../../hooks/useAIConfigured"
 import { useCardForMeeting, useCreateCard } from "../../hooks/useBoard"
-import { Badge } from "../ui/badge"
+import { Badge, type BadgeProps } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Spinner } from "../ui/spinner"
 import { cn } from "../../lib/utils"
@@ -23,8 +25,15 @@ interface Props { meetingId: string | null; onDeleted?: () => void; highlightQue
 
 type Tab = "transcript" | "summary" | "keypoints" | "tasks" | "notes"
 
-function statusVariant(s: string) {
-  return s as any
+function useSyncedDraft(serverValue: string): [string, (value: string) => void] {
+  const [draft, setDraft] = useState<{ base: string; value: string } | null>(null)
+  const value = draft?.base === serverValue ? draft.value : serverValue
+  const update = (next: string) => setDraft({ base: serverValue, value: next })
+  return [value, update]
+}
+
+function statusVariant(s: MeetingDetailData["status"]): NonNullable<BadgeProps["variant"]> {
+  return s
 }
 
 export function MeetingDetail({ meetingId, onDeleted, highlightQuery, onOpenSettings }: Props) {
@@ -163,7 +172,7 @@ export function MeetingDetail({ meetingId, onDeleted, highlightQuery, onOpenSett
   )
 }
 
-function MeetingHeader({ meeting, onDeleted, highlightQuery, playerOpen, setPlayerOpen, retranscribe }: { meeting: any; onDeleted?: () => void; highlightQuery: string; playerOpen: boolean; setPlayerOpen: (fn: (o: boolean) => boolean) => void; retranscribe: { isPending: boolean; mutate: () => void } }) {
+function MeetingHeader({ meeting, onDeleted, highlightQuery, playerOpen, setPlayerOpen, retranscribe }: { meeting: MeetingDetailData; onDeleted?: () => void; highlightQuery: string; playerOpen: boolean; setPlayerOpen: (fn: (o: boolean) => boolean) => void; retranscribe: { isPending: boolean; mutate: () => void } }) {
   const start = useStartRecording(meeting.id)
   const stop = useStopRecording(meeting.id)
   const reprocess = useReprocess(meeting.id)
@@ -175,16 +184,16 @@ function MeetingHeader({ meeting, onDeleted, highlightQuery, playerOpen, setPlay
   const [keepAudio, setKeepAudio] = useState(false)
 
   async function handleStart() {
-    try { await start.mutateAsync() } catch (e: any) { setError(e.message) }
+    try { await start.mutateAsync() } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erro ao iniciar gravação") }
   }
   async function handleStop() {
     try {
       await stop.mutateAsync(keepAudio)
       setShowStopConfirm(false)
-    } catch (e: any) { setError(e.message) }
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erro ao encerrar gravação") }
   }
   async function handleReprocess() {
-    try { await reprocess.mutateAsync() } catch (e: any) { setError(e.message) }
+    try { await reprocess.mutateAsync() } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erro ao reprocessar reunião") }
   }
   async function handleDelete() {
     if (!confirmDelete) { setConfirmDelete(true); return }
@@ -297,12 +306,18 @@ function MeetingHeader({ meeting, onDeleted, highlightQuery, playerOpen, setPlay
   )
 }
 
-function TranscriptTab({ meeting }: { meeting: any }) {
+function TranscriptTab({ meeting }: { meeting: MeetingDetailData }) {
   const update = useUpdateMeeting(meeting.id)
-  const [value, setValue] = useState(meeting.transcript ?? "")
+  const [value, setValue] = useSyncedDraft(meeting.transcript ?? "")
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const locked = meeting.status === "recording" || meeting.status === "transcribing" || meeting.status === "processing"
 
-  useEffect(() => { setValue(meeting.transcript ?? "") }, [meeting.transcript])
+  useEffect(() => {
+    if (locked && timer.current) {
+      clearTimeout(timer.current)
+      timer.current = null
+    }
+  }, [locked])
 
   function handleChange(v: string) {
     setValue(v)
@@ -311,25 +326,31 @@ function TranscriptTab({ meeting }: { meeting: any }) {
   }
 
   return (
-    <textarea
-      value={value}
-      onChange={e => handleChange(e.target.value)}
-      placeholder="Nenhuma transcrição ainda..."
-      className="w-full h-full min-h-[300px] text-sm rounded-xl p-3 resize-none focus:outline-none focus:ring-1 focus:ring-primary bg-muted/40 border border-border"
-    />
+    <div className="h-full">
+      {locked && <p className="text-xs text-muted-foreground mb-2">A transcrição fica bloqueada enquanto a reunião está sendo processada.</p>}
+      <textarea
+        value={value}
+        onChange={e => handleChange(e.target.value)}
+        disabled={locked}
+        placeholder="Nenhuma transcrição ainda..."
+        className="w-full h-full min-h-[300px] text-sm rounded-xl p-3 resize-none focus:outline-none focus:ring-1 focus:ring-primary bg-muted/40 border border-border disabled:opacity-70"
+      />
+      {update.isError && <p className="text-xs text-destructive mt-2">{(update.error as Error).message}</p>}
+    </div>
   )
 }
 
-function SummaryTab({ meeting, highlightQuery }: { meeting: any; highlightQuery: string }) {
+function SummaryTab({ meeting, highlightQuery }: { meeting: MeetingDetailData; highlightQuery: string }) {
   const generate = useGenerateSummary(meeting.id)
   const { configured } = useAIConfigured()
+  const meetingBusy = meeting.status === "recording" || meeting.status === "transcribing" || meeting.status === "processing"
   return (
     <div>
       <div className="flex justify-end mb-3">
         <Button
           size="sm"
           onClick={() => generate.mutate()}
-          disabled={generate.isPending || !meeting.transcript || !configured}
+          disabled={meetingBusy || generate.isPending || !meeting.transcript || !configured}
           title={!configured ? "Configure a IA em Configurações → IA para gerar" : undefined}
         >
           {generate.isPending ? <Spinner size={14} className="mr-1.5" /> : <Wand2 size={14} className="mr-1" />}
@@ -346,16 +367,17 @@ function SummaryTab({ meeting, highlightQuery }: { meeting: any; highlightQuery:
   )
 }
 
-function KeyPointsTab({ meeting, highlightQuery }: { meeting: any; highlightQuery: string }) {
+function KeyPointsTab({ meeting, highlightQuery }: { meeting: MeetingDetailData; highlightQuery: string }) {
   const generate = useGenerateKeyPoints(meeting.id)
   const { configured } = useAIConfigured()
+  const meetingBusy = meeting.status === "recording" || meeting.status === "transcribing" || meeting.status === "processing"
   return (
     <div>
       <div className="flex justify-end mb-3">
         <Button
           size="sm"
           onClick={() => generate.mutate()}
-          disabled={generate.isPending || !meeting.transcript || !configured}
+          disabled={meetingBusy || generate.isPending || !meeting.transcript || !configured}
           title={!configured ? "Configure a IA em Configurações → IA para gerar" : undefined}
         >
           {generate.isPending ? <Spinner size={14} className="mr-1.5" /> : <Wand2 size={14} className="mr-1" />}
@@ -367,7 +389,7 @@ function KeyPointsTab({ meeting, highlightQuery }: { meeting: any; highlightQuer
         <p className="text-sm text-muted-foreground">Nenhum ponto-chave ainda.</p>
       ) : (
         <ol className="space-y-2">
-          {meeting.key_points.map((kp: any, i: number) => (
+          {meeting.key_points.map((kp, i) => (
             <li key={kp.id} className="flex gap-2 text-sm">
               <span className="text-muted-foreground w-5 flex-shrink-0">{i + 1}.</span>
               <span dangerouslySetInnerHTML={{ __html: highlightText(kp.content, highlightQuery) }} />
@@ -379,16 +401,17 @@ function KeyPointsTab({ meeting, highlightQuery }: { meeting: any; highlightQuer
   )
 }
 
-function TasksTab({ meeting, highlightQuery }: { meeting: any; highlightQuery: string }) {
+function TasksTab({ meeting, highlightQuery }: { meeting: MeetingDetailData; highlightQuery: string }) {
   const generate = useGenerateTasks(meeting.id)
   const { configured } = useAIConfigured()
+  const meetingBusy = meeting.status === "recording" || meeting.status === "transcribing" || meeting.status === "processing"
   return (
     <div>
       <div className="flex justify-end mb-3">
         <Button
           size="sm"
           onClick={() => generate.mutate()}
-          disabled={generate.isPending || !meeting.transcript || !configured}
+          disabled={meetingBusy || generate.isPending || !meeting.transcript || !configured}
           title={!configured ? "Configure a IA em Configurações → IA para gerar" : undefined}
         >
           {generate.isPending ? <Spinner size={14} className="mr-1.5" /> : <Wand2 size={14} className="mr-1" />}
@@ -400,8 +423,8 @@ function TasksTab({ meeting, highlightQuery }: { meeting: any; highlightQuery: s
         <p className="text-sm text-muted-foreground">Nenhuma tarefa ainda.</p>
       ) : (
         <ul className="space-y-2">
-          {meeting.tasks.map((task: any) => (
-            <TaskItem key={task.id} task={task} meetingId={meeting.id} highlightQuery={highlightQuery} />
+          {meeting.tasks.map(task => (
+            <TaskItem key={task.id} task={task} meetingId={meeting.id} highlightQuery={highlightQuery} locked={meetingBusy} />
           ))}
         </ul>
       )}
@@ -409,35 +432,45 @@ function TasksTab({ meeting, highlightQuery }: { meeting: any; highlightQuery: s
   )
 }
 
-function TaskItem({ task, meetingId, highlightQuery }: { task: any; meetingId: string; highlightQuery: string }) {
+function TaskItem({ task, meetingId, highlightQuery, locked }: { task: Task; meetingId: string; highlightQuery: string; locked: boolean }) {
   const update = useUpdateTask(meetingId, task.id)
   return (
-    <li className="flex items-start gap-2 text-sm">
-      <input
-        type="checkbox"
-        checked={task.completed}
-        onChange={e => update.mutate({ ...task, completed: e.target.checked })}
-        className="mt-0.5"
-      />
-      <div className={cn("flex-1", task.completed && "line-through text-muted-foreground")}>
-        <span dangerouslySetInnerHTML={{ __html: highlightText(task.description, highlightQuery) }} />
-        {task.assignee && <span className="ml-2 text-xs text-muted-foreground">@{task.assignee}</span>}
+    <li>
+      <div className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={task.completed}
+          onChange={e => update.mutate({ ...task, completed: e.target.checked })}
+          disabled={locked}
+          className="mt-0.5"
+        />
+        <div className={cn("flex-1", task.completed && "line-through text-muted-foreground")}>
+          <span dangerouslySetInnerHTML={{ __html: highlightText(task.description, highlightQuery) }} />
+          {task.assignee && <span className="ml-2 text-xs text-muted-foreground">@{task.assignee}</span>}
+        </div>
       </div>
+      {update.isError && <p className="ml-6 text-xs text-destructive">{(update.error as Error).message}</p>}
     </li>
   )
 }
 
 type NotesMode = "edit" | "preview"
 
-function NotesTab({ meeting }: { meeting: any }) {
+function NotesTab({ meeting }: { meeting: MeetingDetailData }) {
   const update = useUpdateMeeting(meeting.id)
-  const [value, setValue] = useState(meeting.notes ?? "")
+  const [value, setValue] = useSyncedDraft(meeting.notes ?? "")
   const [mode, setMode] = useState<NotesMode>("edit")
   const [showToolbar, setShowToolbar] = useState(true)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const locked = meeting.status === "transcribing" || meeting.status === "processing"
 
-  useEffect(() => { setValue(meeting.notes ?? "") }, [meeting.notes])
+  useEffect(() => {
+    if (locked && timer.current) {
+      clearTimeout(timer.current)
+      timer.current = null
+    }
+  }, [locked])
 
   function handleChange(v: string) {
     setValue(v)
@@ -458,18 +491,6 @@ function NotesTab({ meeting }: { meeting: any }) {
       el.setSelectionRange(start + before.length, start + before.length + selected.length)
     }, 0)
   }
-
-  const toolbarActions = [
-    { label: "B",   title: "Bold",         action: () => insertMarkdown("**", "**", "negrito") },
-    { label: "I",   title: "Italic",       action: () => insertMarkdown("*", "*", "itálico") },
-    { label: "H1",  title: "Heading 1",    action: () => insertMarkdown("# ", "", "Título") },
-    { label: "H2",  title: "Heading 2",    action: () => insertMarkdown("## ", "", "Subtítulo") },
-    { label: "|",   title: "",             action: () => {} },
-    { label: "•",   title: "Bullet list",  action: () => insertMarkdown("- ", "", "item") },
-    { label: "1.",  title: "Ordered list", action: () => insertMarkdown("1. ", "", "item") },
-    { label: "`",   title: "Inline code",  action: () => insertMarkdown("`", "`", "código") },
-    { label: "```", title: "Code block",   action: () => insertMarkdown("```\n", "\n```", "código") },
-  ]
 
   return (
     <div className="flex flex-col h-full gap-2">
@@ -498,20 +519,15 @@ function NotesTab({ meeting }: { meeting: any }) {
 
       {showToolbar && mode === "edit" && (
         <div className="flex gap-1 flex-wrap p-2 rounded-lg bg-muted/40 border border-border flex-shrink-0">
-          {toolbarActions.map((a, i) =>
-            a.label === "|" ? (
-              <span key={i} className="w-px h-5 bg-border mx-1 self-center" />
-            ) : (
-              <button
-                key={i}
-                title={a.title}
-                onClick={a.action}
-                className="px-2 py-1 text-xs font-mono rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {a.label}
-              </button>
-            )
-          )}
+          <button title="Bold" onClick={() => insertMarkdown("**", "**", "negrito")} disabled={locked} className="px-2 py-1 text-xs font-mono rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">B</button>
+          <button title="Italic" onClick={() => insertMarkdown("*", "*", "itálico")} disabled={locked} className="px-2 py-1 text-xs font-mono rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">I</button>
+          <button title="Heading 1" onClick={() => insertMarkdown("# ", "", "Título")} disabled={locked} className="px-2 py-1 text-xs font-mono rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">H1</button>
+          <button title="Heading 2" onClick={() => insertMarkdown("## ", "", "Subtítulo")} disabled={locked} className="px-2 py-1 text-xs font-mono rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">H2</button>
+          <span className="w-px h-5 bg-border mx-1 self-center" />
+          <button title="Bullet list" onClick={() => insertMarkdown("- ", "", "item")} disabled={locked} className="px-2 py-1 text-xs font-mono rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">•</button>
+          <button title="Ordered list" onClick={() => insertMarkdown("1. ", "", "item")} disabled={locked} className="px-2 py-1 text-xs font-mono rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">1.</button>
+          <button title="Inline code" onClick={() => insertMarkdown("`", "`", "código")} disabled={locked} className="px-2 py-1 text-xs font-mono rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">`</button>
+          <button title="Code block" onClick={() => insertMarkdown("```\n", "\n```", "código")} disabled={locked} className="px-2 py-1 text-xs font-mono rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">```</button>
         </div>
       )}
 
@@ -520,8 +536,9 @@ function NotesTab({ meeting }: { meeting: any }) {
           ref={textareaRef}
           value={value}
           onChange={e => handleChange(e.target.value)}
+          disabled={locked}
           placeholder="Escreva suas notas em Markdown..."
-          className="flex-1 min-h-[200px] text-sm rounded-xl p-3 resize-none focus:outline-none focus:ring-1 focus:ring-primary bg-muted/40 border border-border font-mono"
+          className="flex-1 min-h-[200px] text-sm rounded-xl p-3 resize-none focus:outline-none focus:ring-1 focus:ring-primary bg-muted/40 border border-border font-mono disabled:opacity-70"
         />
       ) : (
         <div className="flex-1 overflow-y-auto rounded-xl p-4 bg-muted/40 border border-border prose prose-invert prose-sm max-w-none">

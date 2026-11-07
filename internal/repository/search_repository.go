@@ -59,29 +59,3 @@ func (r *SearchRepository) Search(ctx context.Context, q string) ([]SearchResult
 	}
 	return results, rows.Err()
 }
-
-func (r *SearchRepository) UpsertMeeting(ctx context.Context, meetingID, title, transcript, summary, keyPoints, tasks string) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.ExecContext(ctx, `DELETE FROM meetings_fts WHERE meeting_id = ?`, meetingID); err != nil {
-		return fmt.Errorf("delete from fts: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO meetings_fts (meeting_id, title, transcript, summary, key_points, tasks)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		meetingID, title, transcript, summary, keyPoints, tasks,
-	); err != nil {
-		return fmt.Errorf("insert into fts: %w", err)
-	}
-	return tx.Commit()
-}
-
-func (r *SearchRepository) DeleteMeeting(ctx context.Context, meetingID string) error {
-	// Deleting a non-existent entry is a no-op; meetings may not be indexed yet.
-	_, err := r.db.ExecContext(ctx, `DELETE FROM meetings_fts WHERE meeting_id = ?`, meetingID)
-	return err
-}

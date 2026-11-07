@@ -58,6 +58,7 @@ type Client interface {
 	Health(ctx context.Context) (*HealthResponse, error)
 	StartRecording(ctx context.Context) (*StartResponse, error)
 	StopRecording(ctx context.Context) (*StopResponse, error)
+	RecoverRecording(ctx context.Context, recordingID string) (*StopResponse, error)
 	Transcribe(ctx context.Context, path, language, device string) (*TranscribeResponse, error)
 }
 
@@ -96,6 +97,15 @@ func (c *httpClient) StartRecording(ctx context.Context) (*StartResponse, error)
 func (c *httpClient) StopRecording(ctx context.Context) (*StopResponse, error) {
 	var out StopResponse
 	if err := c.do(ctx, c.defaultClient, http.MethodPost, "/recording/stop", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *httpClient) RecoverRecording(ctx context.Context, recordingID string) (*StopResponse, error) {
+	var out StopResponse
+	path := "/recording/recover/" + recordingID
+	if err := c.do(ctx, c.defaultClient, http.MethodPost, path, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

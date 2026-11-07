@@ -10,7 +10,10 @@
     Pula os testes Go antes de compilar.
 
 .PARAMETER NoNSIS
-    Gera apenas o .exe portátil, sem instalador NSIS.
+    Gera um ZIP portátil completo, sem instalador NSIS.
+
+.PARAMETER PreflightOnly
+    Verifica dependências e assets sem executar testes ou compilar.
 
 .EXAMPLE
     .\build.ps1
@@ -20,7 +23,8 @@
 param(
     [string]$Version = "",
     [switch]$SkipTests,
-    [switch]$NoNSIS
+    [switch]$NoNSIS,
+    [switch]$PreflightOnly
 )
 
 Set-StrictMode -Version Latest
@@ -30,6 +34,12 @@ $ProjectRoot = $PSScriptRoot
 $WailsDir    = Join-Path $ProjectRoot "cmd\desktop"
 $WailsJson   = Join-Path $WailsDir "wails.json"
 $DistDir     = Join-Path $ProjectRoot "dist"
+$AudioServiceSrc  = Join-Path $ProjectRoot "audio-service\build\dist\audio-service"
+$AudioServiceDest = Join-Path $WailsDir    "build\bin\audio-service"
+$AudioServiceExe  = Join-Path $AudioServiceSrc "audio-service.exe"
+$WhisperCli       = Join-Path $ProjectRoot "audio-service\vendor\whispercpp\whisper-cli.exe"
+$BundledCli       = Join-Path $AudioServiceSrc "_internal\whispercpp\whisper-cli.exe"
+$BundledCliDest   = Join-Path $AudioServiceDest "_internal\whispercpp\whisper-cli.exe"
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,22 +59,80 @@ function Write-Fail([string]$msg) {
 
 Write-Step "Verificando dependências"
 
-if (-not (Get-Command wails -ErrorAction SilentlyContinue)) {
-    Write-Fail "Wails não encontrado. Instale com: go install github.com/wailsapp/wails/v2/cmd/wails@latest"
-    exit 1
+$requiredCommands = @(
+    @{ Name = "wails"; Hint = "Instale o Wails CLI v2 e confirme que ele está no PATH." },
+    @{ Name = "go"; Hint = "Instale Go 1.22 ou posterior e confirme que está no PATH." },
+    @{ Name = "node"; Hint = "Instale Node.js 20 ou posterior e confirme que está no PATH." },
+    @{ Name = "npm"; Hint = "Instale npm e confirme que está no PATH." }
+)
+
+foreach ($tool in $requiredCommands) {
+    if (-not (Get-Command $tool.Name -ErrorAction SilentlyContinue)) {
+        Write-Fail "$($tool.Name) não encontrado. $($tool.Hint)"
+        exit 1
+    }
 }
 
 if (-not $NoNSIS) {
-    if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
-        Write-Fail "NSIS não encontrado."
-        Write-Host "  Instale com:  winget install NSIS.NSIS" -ForegroundColor Yellow
-        Write-Host "  Ou use:       .\build.ps1 -NoNSIS  (gera .exe portátil)" -ForegroundColor Yellow
+    $makensis = Get-Command makensis -ErrorAction SilentlyContinue
+    $makensisPath = if ($makensis) { $makensis.Source } else { $null }
+    if (-not $makensis) {
+        $programFilesRoots = @(
+            [Environment]::GetEnvironmentVariable("ProgramFiles(x86)"),
+            $env:ProgramFiles
+        ) | Where-Object { $_ }
+        $nsisCandidates = @(
+            $programFilesRoots |
+                ForEach-Object { Join-Path $_ "NSIS\makensis.exe" } |
+                Where-Object { Test-Path $_ -PathType Leaf }
+        )
+
+        if ($nsisCandidates) {
+            $makensisPath = $nsisCandidates[0]
+            $nsisDirectory = Split-Path $makensisPath -Parent
+            $env:PATH = "$nsisDirectory;$env:PATH"
+        }
+    }
+
+    if (-not $makensisPath) {
+        Write-Fail "NSIS não encontrado no PATH nem no diretório padrão de instalação."
+        Write-Host "  Instale NSIS ou use .\build.ps1 -NoNSIS para gerar um ZIP portátil completo." -ForegroundColor Yellow
         exit 1
     }
-    Write-Ok "NSIS encontrado"
+    Write-Ok "NSIS encontrado: $makensisPath"
 }
 
 Write-Ok "Wails $(wails version 2>&1 | Select-String 'v\d' | ForEach-Object { $_.Matches[0].Value })"
+
+if (-not (Test-Path $WailsJson -PathType Leaf)) {
+    Write-Fail "Configuração Wails não encontrada em: $WailsJson"
+    exit 1
+}
+
+if (-not (Test-Path $WhisperCli -PathType Leaf)) {
+    Write-Fail "whisper-cli.exe (Vulkan) não encontrado em: $WhisperCli"
+    Write-Host "  Obtenha a versão pinada com: .\audio-service\build\fetch-whispercpp.ps1" -ForegroundColor Yellow
+    exit 1
+}
+
+if (-not (Test-Path $AudioServiceExe -PathType Leaf)) {
+    Write-Fail "Executável do audio-service não encontrado em: $AudioServiceExe"
+    Write-Host "  Gere o bundle com o Python do venv:" -ForegroundColor Yellow
+    Write-Host "    cd audio-service" -ForegroundColor Yellow
+    Write-Host "    .venv\Scripts\python.exe -m PyInstaller build\pyinstaller\audio-service.spec --distpath build\dist --workpath build\work --noconfirm" -ForegroundColor Yellow
+    exit 1
+}
+
+if (-not (Test-Path $BundledCli -PathType Leaf)) {
+    Write-Fail "O bundle do audio-service não contém _internal\whispercpp\whisper-cli.exe."
+    Write-Host "  O bundle está desatualizado; regenere-o com o Python do venv (comando acima)." -ForegroundColor Yellow
+    exit 1
+}
+
+if ($PreflightOnly) {
+    Write-Ok "Preflight concluído; testes e build não foram executados."
+    exit 0
+}
 
 # ── version ───────────────────────────────────────────────────────────────────
 
@@ -98,35 +166,6 @@ if (-not $SkipTests) {
 
 Write-Step "Compilando aplicação (versão $Version)"
 
-$AudioServiceSrc  = Join-Path $ProjectRoot "audio-service\build\dist\audio-service"
-$AudioServiceDest = Join-Path $WailsDir    "build\bin\audio-service"
-
-if (-not $NoNSIS) {
-    if (-not (Test-Path $AudioServiceSrc)) {
-        Write-Fail "Bundle do audio-service não encontrado em: $AudioServiceSrc"
-        Write-Host "  Rebuild com PyInstaller:" -ForegroundColor Yellow
-        Write-Host "    cd audio-service" -ForegroundColor Yellow
-        Write-Host "    .venv\Scripts\activate" -ForegroundColor Yellow
-        Write-Host "    pyinstaller build\pyinstaller\audio-service.spec --distpath build\dist --workpath build\work --noconfirm" -ForegroundColor Yellow
-        exit 1
-    }
-
-    $WhisperCli = Join-Path $ProjectRoot "audio-service\vendor\whispercpp\whisper-cli.exe"
-    if (-not (Test-Path $WhisperCli)) {
-        Write-Fail "whisper-cli.exe (Vulkan) não encontrado em: $WhisperCli"
-        Write-Host "  Obtenha com:  .\audio-service\build\fetch-whispercpp.ps1" -ForegroundColor Yellow
-        exit 1
-    }
-    $BundledCli = Join-Path $AudioServiceSrc "_internal\whispercpp\whisper-cli.exe"
-    if (-not (Test-Path $BundledCli)) {
-        Write-Fail "O bundle do audio-service não contém _internal\whispercpp\whisper-cli.exe — está desatualizado."
-        Write-Host "  Rebuild com PyInstaller (Python do .venv):" -ForegroundColor Yellow
-        Write-Host "    cd audio-service" -ForegroundColor Yellow
-        Write-Host "    .venv\Scripts\python.exe -m PyInstaller build\pyinstaller\audio-service.spec --distpath build\dist --workpath build\work --noconfirm" -ForegroundColor Yellow
-        exit 1
-    }
-}
-
 Push-Location $WailsDir
 
 # Step 1: clean build (binary only, no NSIS yet)
@@ -139,95 +178,92 @@ if ($buildExit -ne 0) {
     exit 1
 }
 
-if (-not $NoNSIS) {
-    # Step 2: copy audio-service bundle (must happen after -clean)
-    Write-Step "Copiando bundle do audio-service"
-    Copy-Item $AudioServiceSrc $AudioServiceDest -Recurse -Force
-    Write-Ok "audio-service copiado para build\bin"
+# Step 2: copy audio-service bundle (must happen after -clean)
+Write-Step "Copiando bundle do audio-service"
+Copy-Item $AudioServiceSrc $AudioServiceDest -Recurse -Force
+Write-Ok "audio-service copiado para build\bin"
 
-    # Step 3: smoke test — o exe empacotado precisa subir e responder /health
-    Write-Step "Smoke test do audio-service empacotado"
+# Step 3: smoke test — whisper.cpp deve carregar suas DLLs empacotadas
+Write-Step "Smoke test do whisper.cpp empacotado"
+& $BundledCliDest --help *> $null
+$whisperCliExit = $LASTEXITCODE
+if ($whisperCliExit -ne 0) {
+    Write-Fail "whisper-cli.exe não iniciou (código $whisperCliExit). O artefato não será coletado."
+    exit 1
+}
+Write-Ok "whisper-cli.exe smoke test: OK"
 
-    $SmokePort = 8877
-    $SmokeExe  = Join-Path $AudioServiceDest "audio-service.exe"
-    # Orçamento alto de propósito: o /health só responde depois do load do modelo Whisper
-    # (criado no lifespan do FastAPI, antes do servidor aceitar conexões) — lento em CPU fria.
-    $SmokeTimeoutSec = 120
+# Step 4: smoke test — o exe empacotado precisa subir e responder /health
+Write-Step "Smoke test do audio-service empacotado"
 
-    if (-not (Test-Path $SmokeExe)) {
-        Write-Fail "Executável do audio-service não encontrado em: $SmokeExe"
-        Write-Host "  O bundle copiado está incompleto. Rebuild com o Python do .venv:" -ForegroundColor Yellow
-        Write-Host "    cd audio-service" -ForegroundColor Yellow
-        Write-Host "    .venv\Scripts\activate" -ForegroundColor Yellow
-        Write-Host "    pyinstaller build\pyinstaller\audio-service.spec --distpath build\dist --workpath build\work --noconfirm" -ForegroundColor Yellow
-        exit 1
-    }
+$SmokePort = 8877
+$SmokeExe  = Join-Path $AudioServiceDest "audio-service.exe"
+$SmokeTimeoutSec = 120
 
-    if (Get-NetTCPConnection -LocalPort $SmokePort -ErrorAction SilentlyContinue) {
-        Write-Fail "Porta $SmokePort já está em uso — o smoke test não pode rodar."
-        Write-Host "  Libere a porta e rode o build novamente:" -ForegroundColor Yellow
-        Write-Host "    Get-NetTCPConnection -LocalPort $SmokePort | Select-Object OwningProcess" -ForegroundColor Yellow
-        exit 1
-    }
+if (Get-NetTCPConnection -LocalPort $SmokePort -ErrorAction SilentlyContinue) {
+    Write-Fail "Porta $SmokePort já está em uso — o smoke test não pode rodar."
+    Write-Host "  Libere a porta e rode o build novamente:" -ForegroundColor Yellow
+    Write-Host "    Get-NetTCPConnection -LocalPort $SmokePort | Select-Object OwningProcess" -ForegroundColor Yellow
+    exit 1
+}
 
-    $smokeProc     = $null
-    $smokeOk       = $false
-    $smokeExited   = $false
-    $smokeExitCode = 0
-    $smokeWatch    = [System.Diagnostics.Stopwatch]::StartNew()
+$smokeProc     = $null
+$smokeOk       = $false
+$smokeExited   = $false
+$smokeExitCode = 0
+$smokeWatch    = [System.Diagnostics.Stopwatch]::StartNew()
 
-    try {
-        $smokeProc = Start-Process -FilePath $SmokeExe `
-                                   -ArgumentList "--port", "$SmokePort" `
-                                   -WindowStyle Hidden -PassThru
+try {
+    $smokeProc = Start-Process -FilePath $SmokeExe `
+                               -ArgumentList "--port", "$SmokePort" `
+                               -WindowStyle Hidden -PassThru
 
-        while ($smokeWatch.Elapsed.TotalSeconds -lt $SmokeTimeoutSec) {
-            if ($smokeProc.HasExited) {
-                $smokeExited   = $true
-                $smokeExitCode = $smokeProc.ExitCode
+    while ($smokeWatch.Elapsed.TotalSeconds -lt $SmokeTimeoutSec) {
+        if ($smokeProc.HasExited) {
+            $smokeExited   = $true
+            $smokeExitCode = $smokeProc.ExitCode
+            break
+        }
+
+        try {
+            $resp = Invoke-WebRequest -Uri "http://127.0.0.1:$SmokePort/health" -UseBasicParsing -TimeoutSec 2
+            if ($resp.StatusCode -eq 200) {
+                $smokeOk = $true
                 break
             }
-
-            try {
-                $resp = Invoke-WebRequest -Uri "http://127.0.0.1:$SmokePort/health" -UseBasicParsing -TimeoutSec 2
-                if ($resp.StatusCode -eq 200) {
-                    $smokeOk = $true
-                    break
-                }
-            } catch {
-                # serviço ainda subindo — tenta de novo
-            }
-
-            Start-Sleep -Seconds 1
+        } catch {
+            # serviço ainda subindo — tenta de novo
         }
-    } finally {
-        $smokeWatch.Stop()
-        if ($smokeProc) {
-            & taskkill /F /T /PID $smokeProc.Id 2>&1 | Out-Null
-            Stop-Process -Id $smokeProc.Id -Force -ErrorAction SilentlyContinue
-        }
+
+        Start-Sleep -Seconds 1
     }
-
-    $smokeSecs = [math]::Round($smokeWatch.Elapsed.TotalSeconds)
-
-    if (-not $smokeOk) {
-        if ($smokeExited) {
-            Write-Fail "audio-service smoke test: FALHOU (processo encerrou sozinho com código $smokeExitCode após ${smokeSecs}s)"
-        } else {
-            Write-Fail "audio-service smoke test: FALHOU (sem HTTP 200 em /health após ${smokeSecs}s, orçamento de ${SmokeTimeoutSec}s)"
-        }
-        Write-Host "  O exe empacotado não subiu — o instalador sairia com o serviço morto no boot." -ForegroundColor Yellow
-        Write-Host "  Regenere o bundle com o Python do .venv (ver CLAUDE.md):" -ForegroundColor Yellow
-        Write-Host "    cd audio-service" -ForegroundColor Yellow
-        Write-Host "    .venv\Scripts\activate" -ForegroundColor Yellow
-        Write-Host "    pyinstaller build\pyinstaller\audio-service.spec --distpath build\dist --workpath build\work --noconfirm" -ForegroundColor Yellow
-        Write-Host "  Depois valide manualmente: audio-service\build\dist\audio-service\audio-service.exe --port $SmokePort" -ForegroundColor Yellow
-        exit 1
+} finally {
+    $smokeWatch.Stop()
+    if ($smokeProc -and -not $smokeProc.HasExited) {
+        Stop-Process -Id $smokeProc.Id -Force -ErrorAction SilentlyContinue
     }
+}
 
-    Write-Ok "audio-service smoke test: OK ($smokeSecs s)"
+$smokeSecs = [math]::Round($smokeWatch.Elapsed.TotalSeconds)
 
-    # Step 4: regenerate wails_tools.nsh and run NSIS (no -clean, audio-service survives)
+if (-not $smokeOk) {
+    if ($smokeExited) {
+        Write-Fail "audio-service smoke test: FALHOU (processo encerrou sozinho com código $smokeExitCode após ${smokeSecs}s)"
+    } else {
+        Write-Fail "audio-service smoke test: FALHOU (sem HTTP 200 em /health após ${smokeSecs}s, orçamento de ${SmokeTimeoutSec}s)"
+    }
+    Write-Host "  O audio-service empacotado não iniciou; o artefato não será coletado." -ForegroundColor Yellow
+    Write-Host "  Regenere o bundle com o Python do venv:" -ForegroundColor Yellow
+    Write-Host "    cd audio-service" -ForegroundColor Yellow
+    Write-Host "    .venv\Scripts\python.exe -m PyInstaller build\pyinstaller\audio-service.spec --distpath build\dist --workpath build\work --noconfirm" -ForegroundColor Yellow
+    Write-Host "  Depois valide manualmente: audio-service\build\dist\audio-service\audio-service.exe --port $SmokePort" -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Ok "audio-service smoke test: OK ($smokeSecs s)"
+
+if (-not $NoNSIS) {
+    # Step 5: regenerate wails_tools.nsh and run NSIS (no -clean, audio-service survives)
     Push-Location $WailsDir
     wails build -nsis
     $nsisExit = $LASTEXITCODE
@@ -246,20 +282,63 @@ Write-Ok "Compilação concluída"
 Write-Step "Coletando artefatos"
 
 $BinDir = Join-Path $WailsDir "build\bin"
-$null   = New-Item -ItemType Directory -Path $DistDir -Force
 
 if ($NoNSIS) {
     $src = Get-ChildItem $BinDir -Filter "*.exe" | Where-Object { $_.Name -notlike "*installer*" } | Select-Object -First 1
     if (-not $src) { Write-Fail "Executável não encontrado em $BinDir"; exit 1 }
-    $destName = "meeting-notes-$Version-windows-amd64.exe"
+    $destName = "meeting-notes-$Version-windows-amd64-portable.zip"
 } else {
     $src = Get-ChildItem $BinDir -Filter "*installer*.exe" | Select-Object -First 1
     if (-not $src) { Write-Fail "Instalador não encontrado em $BinDir"; exit 1 }
     $destName = "meeting-notes-$Version-windows-amd64-installer.exe"
 }
 
+if ($src.Length -le 0) {
+    Write-Fail "O artefato de origem está vazio: $($src.FullName)"
+    exit 1
+}
+
 $dest = Join-Path $DistDir $destName
-Copy-Item $src.FullName $dest -Force
+$null = New-Item -ItemType Directory -Path $DistDir -Force
+$stagedDest = Join-Path $DistDir "$([System.IO.Path]::GetFileNameWithoutExtension($destName))-$([guid]::NewGuid().ToString('N'))$([System.IO.Path]::GetExtension($destName))"
+
+try {
+    if ($NoNSIS) {
+        Compress-Archive -Path @($src.FullName, $AudioServiceDest) -DestinationPath $stagedDest -CompressionLevel Optimal
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $archive = [System.IO.Compression.ZipFile]::OpenRead($stagedDest)
+        try {
+            $entries = @($archive.Entries | ForEach-Object { $_.FullName.Replace("\", "/") })
+            $requiredEntries = @($src.Name, "audio-service/audio-service.exe")
+            foreach ($entry in $requiredEntries) {
+                if ($entry -notin $entries) {
+                    Write-Fail "O ZIP portátil não contém o arquivo esperado: $entry"
+                    exit 1
+                }
+            }
+        } finally {
+            $archive.Dispose()
+        }
+    } else {
+        Copy-Item $src.FullName $stagedDest
+    }
+
+    if ((Get-Item $stagedDest).Length -le 0) {
+        Write-Fail "O artefato coletado está vazio: $stagedDest"
+        exit 1
+    }
+
+    Move-Item $stagedDest $dest -Force
+} finally {
+    if (Test-Path $stagedDest) {
+        Remove-Item -LiteralPath $stagedDest -Force
+    }
+}
+
+if ((Get-Item $dest).Length -le 0) {
+    Write-Fail "O artefato coletado está vazio: $dest"
+    exit 1
+}
 
 # ── summary ───────────────────────────────────────────────────────────────────
 

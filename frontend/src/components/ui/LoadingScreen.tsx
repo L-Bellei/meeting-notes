@@ -18,6 +18,9 @@ interface LoadingScreenProps {
 export function LoadingScreen({ checks, fading }: LoadingScreenProps) {
   return (
     <div
+      role="status"
+      aria-live="polite"
+      aria-label="Carregando Meeting Notes"
       className={cn(
         "fixed inset-0 z-50 flex flex-col items-center justify-center gap-7 bg-background transition-opacity duration-300",
         fading ? "opacity-0" : "opacity-100"
@@ -40,7 +43,7 @@ export function LoadingScreen({ checks, fading }: LoadingScreenProps) {
               </span>
             </div>
             {check.status === "error" && check.error && (
-              <p className="ml-7 text-[11px] text-destructive">{check.error}</p>
+              <p role="alert" className="ml-7 text-[11px] text-destructive">{check.error}</p>
             )}
           </div>
         ))}

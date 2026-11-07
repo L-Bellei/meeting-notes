@@ -1,12 +1,11 @@
 import { useState } from "react"
 import { Plus, Calendar, Search, Filter, X, Trash2 } from "lucide-react"
-import { useMeetings, useCreateMeeting, useDeleteMeeting, type MeetingFilters } from "../../hooks/useMeetings"
+import { useMeetings, useCreateMeeting, useDeleteMeeting, type Meeting, type MeetingFilters } from "../../hooks/useMeetings"
 import { useThemes } from "../../hooks/useThemes"
-import { Badge } from "../ui/badge"
+import { Badge, type BadgeProps } from "../ui/badge"
 import { Waveform } from "../ui/waveform"
 import { Button } from "../ui/button"
 import { cn } from "../../lib/utils"
-import type { Meeting } from "../../hooks/useMeetings"
 
 interface MeetingListProps {
   themeId: string | null
@@ -27,8 +26,8 @@ const STATUS_OPTIONS = [
   { value: "failed", label: "Falhou" },
 ]
 
-function statusVariant(s: Meeting["status"]) {
-  return s as any
+function statusVariant(s: Meeting["status"]): NonNullable<BadgeProps["variant"]> {
+  return s
 }
 
 function statusLabel(s: Meeting["status"]) {

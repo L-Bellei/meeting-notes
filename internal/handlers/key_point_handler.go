@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"meeting-notes/internal/models"
 	"meeting-notes/internal/repository"
 	"meeting-notes/internal/services"
 )
@@ -15,10 +16,15 @@ type KeyPointHandler struct {
 	svc        *services.KeyPointService
 	meetingSvc *services.MeetingService
 	themeRepo  *repository.ThemeRepository
+	operations *services.MeetingOperationCoordinator
 }
 
-func NewKeyPointHandler(svc *services.KeyPointService, meetingSvc *services.MeetingService, themeRepo *repository.ThemeRepository) *KeyPointHandler {
-	return &KeyPointHandler{svc: svc, meetingSvc: meetingSvc, themeRepo: themeRepo}
+func NewKeyPointHandler(svc *services.KeyPointService, meetingSvc *services.MeetingService, themeRepo *repository.ThemeRepository, coordinators ...*services.MeetingOperationCoordinator) *KeyPointHandler {
+	h := &KeyPointHandler{svc: svc, meetingSvc: meetingSvc, themeRepo: themeRepo}
+	if len(coordinators) > 0 {
+		h.operations = coordinators[0]
+	}
+	return h
 }
 
 type keyPointRequest struct {
@@ -43,8 +49,13 @@ func (h *KeyPointHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	kp, err := h.svc.Create(r.Context(), meetingID, req.Content, req.Position)
+	kp, err := runMeetingIdle(h.operations, meetingID, func() (*models.KeyPoint, error) {
+		return h.svc.Create(r.Context(), meetingID, req.Content, req.Position)
+	})
 	if err != nil {
+		if writeMeetingBusy(w, err) {
+			return
+		}
 		var ve *services.ValidationError
 		if errors.As(err, &ve) {
 			writeError(w, http.StatusUnprocessableEntity, ve.Message)
@@ -63,8 +74,14 @@ func (h *KeyPointHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	kp, err := h.svc.Update(r.Context(), id, req.Content, req.Position)
+	meetingID := chi.URLParam(r, "id")
+	kp, err := runMeetingIdle(h.operations, meetingID, func() (*models.KeyPoint, error) {
+		return h.svc.Update(r.Context(), id, req.Content, req.Position)
+	})
 	if err != nil {
+		if writeMeetingBusy(w, err) {
+			return
+		}
 		var ve *services.ValidationError
 		if errors.As(err, &ve) {
 			writeError(w, http.StatusUnprocessableEntity, ve.Message)
@@ -82,7 +99,13 @@ func (h *KeyPointHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 func (h *KeyPointHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "kpId")
-	if err := h.svc.Delete(r.Context(), id); err != nil {
+	meetingID := chi.URLParam(r, "id")
+	if err := runMeetingIdleError(h.operations, meetingID, func() error {
+		return h.svc.Delete(r.Context(), id)
+	}); err != nil {
+		if writeMeetingBusy(w, err) {
+			return
+		}
 		if errors.Is(err, repository.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "key point not found")
 			return
@@ -95,6 +118,13 @@ func (h *KeyPointHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func (h *KeyPointHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	meetingID := chi.URLParam(r, "id")
+	if h.operations != nil {
+		if err := h.operations.Begin(meetingID, "key_points"); err != nil {
+			writeError(w, http.StatusConflict, "meeting already has an active operation")
+			return
+		}
+		defer h.operations.End(meetingID)
+	}
 	meeting, err := h.meetingSvc.GetByID(r.Context(), meetingID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {

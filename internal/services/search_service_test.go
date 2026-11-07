@@ -12,7 +12,7 @@ import (
 	"meeting-notes/internal/services"
 )
 
-func newSearchService(t *testing.T) (*services.SearchService, *repository.MeetingRepository, *repository.SearchRepository) {
+func newSearchService(t *testing.T) (*services.SearchService, *repository.MeetingRepository) {
 	t.Helper()
 	db, err := database.Open(t.TempDir() + "/test.db")
 	if err != nil {
@@ -22,11 +22,11 @@ func newSearchService(t *testing.T) (*services.SearchService, *repository.Meetin
 	meetingRepo := repository.NewMeetingRepository(db)
 	searchRepo := repository.NewSearchRepository(db)
 	svc := services.NewSearchService(searchRepo, meetingRepo)
-	return svc, meetingRepo, searchRepo
+	return svc, meetingRepo
 }
 
 func TestSearchService_Search(t *testing.T) {
-	svc, meetingRepo, searchRepo := newSearchService(t)
+	svc, meetingRepo := newSearchService(t)
 	ctx := context.Background()
 
 	now := time.Now().UTC()
@@ -40,10 +40,6 @@ func TestSearchService_Search(t *testing.T) {
 	if err := meetingRepo.Create(ctx, m); err != nil {
 		t.Fatalf("create meeting: %v", err)
 	}
-	if err := searchRepo.UpsertMeeting(ctx, "m-1", "Sprint Planning", "", "", "", ""); err != nil {
-		t.Fatalf("upsert fts: %v", err)
-	}
-
 	results, err := svc.Search(ctx, "Sprint")
 	if err != nil {
 		t.Fatalf("Search: %v", err)
@@ -60,7 +56,7 @@ func TestSearchService_Search(t *testing.T) {
 }
 
 func TestSearchService_Search_EmptyQuery(t *testing.T) {
-	svc, _, _ := newSearchService(t)
+	svc, _ := newSearchService(t)
 	_, err := svc.Search(context.Background(), "")
 	var ve *services.ValidationError
 	if !errors.As(err, &ve) {
@@ -69,7 +65,7 @@ func TestSearchService_Search_EmptyQuery(t *testing.T) {
 }
 
 func TestSearchService_Search_ShortQuery(t *testing.T) {
-	svc, _, _ := newSearchService(t)
+	svc, _ := newSearchService(t)
 	_, err := svc.Search(context.Background(), "a")
 	var ve *services.ValidationError
 	if !errors.As(err, &ve) {
@@ -78,7 +74,7 @@ func TestSearchService_Search_ShortQuery(t *testing.T) {
 }
 
 func TestSearchService_Search_NoResults(t *testing.T) {
-	svc, _, _ := newSearchService(t)
+	svc, _ := newSearchService(t)
 	results, err := svc.Search(context.Background(), "inexistente")
 	if err != nil {
 		t.Fatalf("Search: %v", err)

@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -22,6 +25,8 @@ import (
 )
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
 	cfg := config.Load()
 
 	db, err := database.Open(cfg.DatabasePath)
@@ -43,12 +48,13 @@ func main() {
 	searchRepo := repository.NewSearchRepository(db)
 
 	aiClient := ai.NewDynamicAIClient(settingsRepo)
+	operations := services.NewMeetingOperationCoordinator()
 
 	// Services
 	boardColumnSvc := services.NewBoardColumnService(boardColumnRepo)
 	boardCardSvc := services.NewBoardCardService(boardCardRepo, boardColumnRepo, meetingRepo, summaryRepo, keyPointRepo, taskRepo)
 	themeSvc := services.NewThemeService(themeRepo)
-	meetingSvc := services.NewMeetingService(meetingRepo, themeRepo, searchRepo, keyPointRepo, taskRepo, summaryRepo)
+	meetingSvc := services.NewMeetingService(meetingRepo, themeRepo, operations)
 	summarySvc := services.NewSummaryService(summaryRepo, aiClient)
 	keyPointSvc := services.NewKeyPointService(keyPointRepo, aiClient)
 	taskSvc := services.NewTaskService(taskRepo, aiClient)
@@ -57,17 +63,21 @@ func main() {
 
 	// Audio + Orchestrator
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
-	orchestrator := services.NewOrchestrator(meetingRepo, themeRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo, boardCardSvc)
-	orchestrator.SetSearchRepo(searchRepo)
+	orchestrator := services.NewOrchestrator(meetingRepo, themeRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo, boardCardSvc, operations)
+	orchestrator.SetParentContext(ctx)
+	if err := orchestrator.RecoverInterruptedMeetings(ctx); err != nil {
+		log.Printf("recover interrupted meetings: %v", err)
+		return
+	}
 	orchestrator.SetLogRepo(logRepo)
 
 	// Handlers
 	boardHandler := handlers.NewBoardHandler(boardColumnSvc, boardCardSvc)
 	themeHandler := handlers.NewThemeHandler(themeSvc)
 	meetingHandler := handlers.NewMeetingHandler(meetingSvc, summaryRepo, keyPointRepo, taskRepo, orchestrator)
-	summaryHandler := handlers.NewSummaryHandler(summarySvc, meetingSvc, themeRepo)
-	keyPointHandler := handlers.NewKeyPointHandler(keyPointSvc, meetingSvc, themeRepo)
-	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc, themeRepo)
+	summaryHandler := handlers.NewSummaryHandler(summarySvc, meetingSvc, themeRepo, operations)
+	keyPointHandler := handlers.NewKeyPointHandler(keyPointSvc, meetingSvc, themeRepo, operations)
+	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc, themeRepo, operations)
 	settingsH := handlers.NewSettingsHandler(settingsSvc)
 	searchHandler := handlers.NewSearchHandler(searchSvc)
 	logHandler := handlers.NewLogHandler(logRepo)
@@ -213,7 +223,30 @@ func main() {
 	r.Post("/api/meetings/{id}/retranscribe", retranscribeHandler.Retranscribe)
 
 	log.Printf("server listening on 127.0.0.1:%s", cfg.HTTPPort)
-	if err := http.ListenAndServe("127.0.0.1:"+cfg.HTTPPort, r); err != nil {
-		log.Fatalf("server error: %v", err)
+	server := &http.Server{
+		Addr:    "127.0.0.1:" + cfg.HTTPPort,
+		Handler: r,
+		BaseContext: func(net.Listener) context.Context {
+			return ctx
+		},
+	}
+	serverErr := make(chan error, 1)
+	go func() {
+		serverErr <- server.ListenAndServe()
+	}()
+	select {
+	case err := <-serverErr:
+		if err != nil && err != http.ErrServerClosed {
+			log.Printf("server error: %v", err)
+		}
+	case <-ctx.Done():
+	}
+	stop()
+	if err := server.Shutdown(context.Background()); err != nil {
+		log.Printf("server shutdown: %v", err)
+		_ = server.Close()
+	}
+	if err := orchestrator.Shutdown(); err != nil {
+		log.Printf("orchestrator shutdown: %v", err)
 	}
 }

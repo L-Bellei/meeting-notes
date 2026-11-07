@@ -34,6 +34,7 @@ type Meeting struct {
 	Transcript      *string       `json:"transcript"`
 	Notes           *string       `json:"notes"`
 	AudioPath       *string       `json:"audio_path"`
+	RecordingID     *string       `json:"recording_id"`
 	ErrorMessage    *string       `json:"error_message"`
 	Language        *string       `json:"language"`
 	KeepAudio       bool          `json:"keep_audio"`

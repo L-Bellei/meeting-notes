@@ -97,6 +97,25 @@ func TestClient_StopRecording_OK(t *testing.T) {
 	}
 }
 
+func TestClient_RecoverRecording_OK(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/recording/recover/rec-1" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"recording_id":"rec-1","path":"tmp/rec-1.wav"}`))
+	}))
+	defer srv.Close()
+
+	got, err := audio.NewHTTPClient(srv.URL).RecoverRecording(context.Background(), "rec-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RecordingID != "rec-1" || got.Path != "tmp/rec-1.wav" {
+		t.Fatalf("RecoverRecording() = %+v", got)
+	}
+}
+
 func TestClient_Transcribe_OK(t *testing.T) {
 	var receivedBody map[string]string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

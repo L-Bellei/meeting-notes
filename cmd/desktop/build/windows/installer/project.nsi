@@ -27,6 +27,7 @@ Unicode true
 ## !define REQUEST_EXECUTION_LEVEL "admin"            # Default "admin"
 ####
 !include "wails_tools.nsh"
+!include "process_guard.nsh"
 
 # The version information for this two must consist of 4 parts
 VIProductVersion "${INFO_PRODUCTVERSION}.0"
@@ -70,12 +71,7 @@ ShowInstDetails show
 Function .onInit
     !insertmacro wails.checkArchitecture
 
-    # Always kill any running instance first (covers fresh install over a running app
-    # as well as upgrades where QuietUninstallString may not exist yet).
-    ExecWait 'taskkill /F /IM "${PRODUCT_EXECUTABLE}" /T'
-    ExecWait 'taskkill /F /IM "meeting-notes.exe" /T'
-    ExecWait 'taskkill /F /IM "audio-service.exe" /T'
-    Sleep 3000
+    !insertmacro MN_GUARD_RUNNING_PROCESSES installer_init MeetingNotesCheckProcess
 
     # --- Upgrade: silently remove previous version if already installed ---
     ReadRegStr $R0 HKLM "${UNINST_KEY}" "QuietUninstallString"
@@ -89,12 +85,19 @@ Function .onInit
         StrCpy $R1 "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
 
     # Run the previous silent uninstaller and wait for it to finish
+    !insertmacro MN_GUARD_RUNNING_PROCESSES installer_upgrade MeetingNotesCheckProcess
     ExecWait '$R0 _?=$R1'
 
     done_upgrade:
 FunctionEnd
 
+Function un.onInit
+    !insertmacro MN_GUARD_RUNNING_PROCESSES uninstaller_init un.MeetingNotesCheckProcess
+FunctionEnd
+
 Section
+    !insertmacro MN_GUARD_RUNNING_PROCESSES installer_section MeetingNotesCheckProcess
+
     !insertmacro wails.setShellContext
 
     !insertmacro wails.webview2runtime
@@ -121,6 +124,8 @@ Section
 SectionEnd
 
 Section "uninstall"
+    !insertmacro MN_GUARD_RUNNING_PROCESSES uninstaller_section un.MeetingNotesCheckProcess
+
     !insertmacro wails.setShellContext
 
     RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath

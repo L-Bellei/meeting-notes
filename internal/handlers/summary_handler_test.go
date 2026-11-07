@@ -34,14 +34,14 @@ func (f *fakeSummaryAI) GenerateTasks(ctx context.Context, transcript, notes, cu
 	return nil, 0, 0, nil
 }
 
-func newTestSummaryHandler(t *testing.T, aiClient ai.AIClient) (*handlers.SummaryHandler, string) {
+func newTestSummaryHandler(t *testing.T, aiClient ai.AIClient, coordinators ...*services.MeetingOperationCoordinator) (*handlers.SummaryHandler, string) {
 	t.Helper()
 	db, err := database.Open(t.TempDir() + "/test.db")
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	meetingSvc := services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db), nil, nil, nil, nil)
+	meetingSvc := services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db), coordinators...)
 	transcript := "Falamos sobre o roadmap."
 	m, err := meetingSvc.Create(context.Background(), "Reunião", "", "completed", nil)
 	if err != nil {
@@ -54,7 +54,7 @@ func newTestSummaryHandler(t *testing.T, aiClient ai.AIClient) (*handlers.Summar
 	}
 
 	summarySvc := services.NewSummaryService(repository.NewSummaryRepository(db), aiClient)
-	h := handlers.NewSummaryHandler(summarySvc, meetingSvc, repository.NewThemeRepository(db))
+	h := handlers.NewSummaryHandler(summarySvc, meetingSvc, repository.NewThemeRepository(db), coordinators...)
 	return h, m.ID
 }
 
@@ -95,6 +95,39 @@ func TestSummaryHandler_Create_ContentRequired(t *testing.T) {
 	h.Create(w, req)
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Errorf("status = %d, want 422", w.Code)
+	}
+}
+
+func TestSummaryHandler_Generate_ConflictsWithActivePipeline(t *testing.T) {
+	operations := services.NewMeetingOperationCoordinator()
+	h, mID := newTestSummaryHandler(t, &fakeSummaryAI{text: "summary"}, operations)
+	if err := operations.Begin(mID, "pipeline"); err != nil {
+		t.Fatal(err)
+	}
+	defer operations.End(mID)
+
+	req := withChiID(httptest.NewRequest(http.MethodPost, "/api/meetings/"+mID+"/summary/generate", nil), mID)
+	w := httptest.NewRecorder()
+	h.Generate(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSummaryHandler_Create_ConflictsWithActivePipeline(t *testing.T) {
+	operations := services.NewMeetingOperationCoordinator()
+	h, mID := newTestSummaryHandler(t, nil, operations)
+	if err := operations.Begin(mID, "pipeline"); err != nil {
+		t.Fatal(err)
+	}
+	defer operations.End(mID)
+
+	req := withChiID(httptest.NewRequest(http.MethodPost, "/api/meetings/"+mID+"/summary", bytes.NewBufferString(`{"content":"manual","model_used":"manual"}`)), mID)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Create(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409; body: %s", w.Code, w.Body.String())
 	}
 }
 

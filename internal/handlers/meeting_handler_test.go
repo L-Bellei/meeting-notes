@@ -58,7 +58,7 @@ func newTestMeetingHandler(t *testing.T) *handlers.MeetingHandler {
 	}
 	t.Cleanup(func() { db.Close() })
 	return handlers.NewMeetingHandler(
-		services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db), nil, nil, nil, nil),
+		services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db)),
 		repository.NewSummaryRepository(db),
 		repository.NewKeyPointRepository(db),
 		repository.NewTaskRepository(db),
@@ -343,7 +343,7 @@ func newTestMeetingAndThemeHandlers(t *testing.T) (*handlers.MeetingHandler, *ha
 	}
 	t.Cleanup(func() { db.Close() })
 	mh := handlers.NewMeetingHandler(
-		services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db), nil, nil, nil, nil),
+		services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db)),
 		repository.NewSummaryRepository(db),
 		repository.NewKeyPointRepository(db),
 		repository.NewTaskRepository(db),
@@ -414,7 +414,7 @@ func TestMeetingHandler_GetByID_PopulatesNestedData(t *testing.T) {
 	kpr := repository.NewKeyPointRepository(db)
 	tr := repository.NewTaskRepository(db)
 
-	mh := handlers.NewMeetingHandler(services.NewMeetingService(mr, repository.NewThemeRepository(db), nil, nil, nil, nil), sr, kpr, tr, nil)
+	mh := handlers.NewMeetingHandler(services.NewMeetingService(mr, repository.NewThemeRepository(db)), sr, kpr, tr, nil)
 
 	now := time.Now().UTC()
 	m := &models.Meeting{ID: "m-1", Title: "R", StartedAt: &now, Status: models.StatusCompleted}
@@ -462,7 +462,7 @@ func newOrchHandler(t *testing.T, fo *fakeOrchestrator) *handlers.MeetingHandler
 	}
 	t.Cleanup(func() { db.Close() })
 	return handlers.NewMeetingHandler(
-		services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db), nil, nil, nil, nil),
+		services.NewMeetingService(repository.NewMeetingRepository(db), repository.NewThemeRepository(db)),
 		repository.NewSummaryRepository(db),
 		repository.NewKeyPointRepository(db),
 		repository.NewTaskRepository(db),
@@ -599,5 +599,34 @@ func TestMeetingHandler_SetTranscript_BadJSON(t *testing.T) {
 	h.SetTranscript(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestMeetingHandler_Update_ConflictsWhenChangingGenerationInput(t *testing.T) {
+	db, err := database.Open(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	operations := services.NewMeetingOperationCoordinator()
+	meetingRepo := repository.NewMeetingRepository(db)
+	meetingSvc := services.NewMeetingService(meetingRepo, repository.NewThemeRepository(db), operations)
+	meeting, err := meetingSvc.Create(context.Background(), "R", "", "completed", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := operations.Begin(meeting.ID, "pipeline"); err != nil {
+		t.Fatal(err)
+	}
+	defer operations.End(meeting.ID)
+	h := handlers.NewMeetingHandler(meetingSvc, repository.NewSummaryRepository(db), repository.NewKeyPointRepository(db), repository.NewTaskRepository(db), nil)
+
+	body := `{"title":"R","status":"completed","transcript":"changed"}`
+	req := withChiID(httptest.NewRequest(http.MethodPut, "/api/meetings/"+meeting.ID, strings.NewReader(body)), meeting.ID)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Update(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409; body: %s", w.Code, w.Body.String())
 	}
 }

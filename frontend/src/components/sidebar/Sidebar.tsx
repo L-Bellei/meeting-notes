@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react"
-import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type KeyboardCoordinateGetter,
+  type DragEndEvent,
+} from "@dnd-kit/core"
 import { Plus, Tag, X, Pin, PinOff } from "lucide-react"
 import { useThemes, useDeleteTheme, useUpdateTheme, type Theme } from "../../hooks/useThemes"
 import { useMeetings } from "../../hooks/useMeetings"
@@ -32,6 +40,43 @@ function deleteErrorMessage(err: unknown): string {
   return DELETE_ERROR_MESSAGES[raw] ?? "Não foi possível excluir o tema."
 }
 
+const themeKeyboardCoordinates: KeyboardCoordinateGetter = (
+  event,
+  { currentCoordinates, context },
+) => {
+  const { collisionRect, droppableContainers, droppableRects, over } = context
+  if (!collisionRect || (event.code !== "ArrowUp" && event.code !== "ArrowDown")) return undefined
+
+  const currentCenter = {
+    x: collisionRect.left + collisionRect.width / 2,
+    y: collisionRect.top + collisionRect.height / 2,
+  }
+  const direction = event.code === "ArrowUp" ? -1 : 1
+  const destination = droppableContainers
+    .getEnabled()
+    .flatMap(container => {
+      const rect = droppableRects.get(container.id)
+      return rect ? [{ rect, id: container.id }] : []
+    })
+    .filter(({ id, rect }) => {
+      if (id === over?.id) return false
+      const centerY = rect.top + rect.height / 2
+      return direction < 0 ? centerY < currentCenter.y : centerY > currentCenter.y
+    })
+    .sort((a, b) => {
+      const distanceA = Math.abs(a.rect.top + a.rect.height / 2 - currentCenter.y)
+      const distanceB = Math.abs(b.rect.top + b.rect.height / 2 - currentCenter.y)
+      return distanceA - distanceB
+    })[0]
+
+  if (!destination) return undefined
+
+  return {
+    x: currentCoordinates.x + destination.rect.left + destination.rect.width / 2 - currentCenter.x,
+    y: currentCoordinates.y + destination.rect.top + destination.rect.height / 2 - currentCenter.y,
+  }
+}
+
 interface SidebarProps {
   open: boolean
   onClose: () => void
@@ -54,7 +99,19 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
   const [deleteError, setDeleteError] = useState("")
   const [activeId, setActiveId] = useState<string | null>(null)
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: themeKeyboardCoordinates }),
+  )
+
+  function themeName(id: string) {
+    return themes.find(theme => theme.id === id)?.name ?? "tema"
+  }
+
+  function dropTargetName(id: string) {
+    if (id === "drop-root") return "a raiz"
+    return themeName(id.replace("drop-", ""))
+  }
 
   async function handleDragEnd(e: DragEndEvent) {
     const themeId = String(e.active.id)
@@ -188,6 +245,28 @@ export function Sidebar({ open, onClose, selectedThemeId, onSelectTheme }: Sideb
         </div>
         <DndContext
           sensors={sensors}
+          accessibility={{
+            screenReaderInstructions: {
+              draggable:
+                "Para mover um tema, pressione Espaço ou Enter. Use as setas para cima e para baixo para escolher a raiz ou um tema principal. Pressione Espaço, Enter ou Tab para soltar, ou Escape para cancelar.",
+            },
+            announcements: {
+              onDragStart({ active }) {
+                return `Movendo o tema ${themeName(String(active.id))}. Use as setas para escolher o destino.`
+              },
+              onDragOver({ active, over }) {
+                if (!over) return `O tema ${themeName(String(active.id))} não está sobre um destino válido.`
+                return `${themeName(String(active.id))} sobre ${dropTargetName(String(over.id))}.`
+              },
+              onDragEnd({ active, over }) {
+                if (!over) return `Movimento do tema ${themeName(String(active.id))} cancelado.`
+                return `${themeName(String(active.id))} solto em ${dropTargetName(String(over.id))}.`
+              },
+              onDragCancel({ active }) {
+                return `Movimento do tema ${themeName(String(active.id))} cancelado.`
+              },
+            },
+          }}
           onDragStart={e => setActiveId(String(e.active.id))}
           onDragEnd={e => { setActiveId(null); handleDragEnd(e) }}
           onDragCancel={() => setActiveId(null)}

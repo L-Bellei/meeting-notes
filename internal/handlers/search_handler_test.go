@@ -16,7 +16,7 @@ import (
 	"meeting-notes/internal/services"
 )
 
-func newSearchHandler(t *testing.T) (*handlers.SearchHandler, *repository.MeetingRepository, *repository.SearchRepository) {
+func newSearchHandler(t *testing.T) (*handlers.SearchHandler, *repository.MeetingRepository) {
 	t.Helper()
 	db, err := database.Open(t.TempDir() + "/test.db")
 	if err != nil {
@@ -26,11 +26,11 @@ func newSearchHandler(t *testing.T) (*handlers.SearchHandler, *repository.Meetin
 	meetingRepo := repository.NewMeetingRepository(db)
 	searchRepo := repository.NewSearchRepository(db)
 	svc := services.NewSearchService(searchRepo, meetingRepo)
-	return handlers.NewSearchHandler(svc), meetingRepo, searchRepo
+	return handlers.NewSearchHandler(svc), meetingRepo
 }
 
 func TestSearchHandler_Search(t *testing.T) {
-	h, meetingRepo, searchRepo := newSearchHandler(t)
+	h, meetingRepo := newSearchHandler(t)
 	ctx := t.Context()
 
 	now := time.Now().UTC()
@@ -41,10 +41,6 @@ func TestSearchHandler_Search(t *testing.T) {
 	if err := meetingRepo.Create(ctx, m); err != nil {
 		t.Fatalf("create meeting: %v", err)
 	}
-	if err := searchRepo.UpsertMeeting(ctx, "m-1", "Daily Standup", "", "", "", ""); err != nil {
-		t.Fatalf("upsert fts: %v", err)
-	}
-
 	r := chi.NewRouter()
 	r.Get("/api/search", h.Search)
 	req := httptest.NewRequest(http.MethodGet, "/api/search?q=Daily", nil)
@@ -67,7 +63,7 @@ func TestSearchHandler_Search(t *testing.T) {
 }
 
 func TestSearchHandler_MissingQuery(t *testing.T) {
-	h, _, _ := newSearchHandler(t)
+	h, _ := newSearchHandler(t)
 	r := chi.NewRouter()
 	r.Get("/api/search", h.Search)
 	req := httptest.NewRequest(http.MethodGet, "/api/search", nil)
@@ -79,7 +75,7 @@ func TestSearchHandler_MissingQuery(t *testing.T) {
 }
 
 func TestSearchHandler_ShortQuery(t *testing.T) {
-	h, _, _ := newSearchHandler(t)
+	h, _ := newSearchHandler(t)
 	r := chi.NewRouter()
 	r.Get("/api/search", h.Search)
 	req := httptest.NewRequest(http.MethodGet, "/api/search?q=a", nil)
@@ -91,7 +87,7 @@ func TestSearchHandler_ShortQuery(t *testing.T) {
 }
 
 func TestSearchHandler_EmptyResults(t *testing.T) {
-	h, _, _ := newSearchHandler(t)
+	h, _ := newSearchHandler(t)
 	r := chi.NewRouter()
 	r.Get("/api/search", h.Search)
 	req := httptest.NewRequest(http.MethodGet, "/api/search?q=inexistente", nil)

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 const KEY = "theme_expanded"
 
@@ -15,31 +15,33 @@ function read(): string[] {
 
 export function useThemeExpanded(themeIds: string[]) {
   const [ids, setIds] = useState<string[]>(read)
-
-  useEffect(() => {
-    if (themeIds.length === 0) return
-    setIds(prev => {
-      const pruned = prev.filter(id => themeIds.includes(id))
-      return pruned.length === prev.length ? prev : pruned
-    })
-  }, [themeIds])
+  const activeIds = useMemo(
+    () => themeIds.length === 0 ? ids : ids.filter(id => themeIds.includes(id)),
+    [ids, themeIds],
+  )
 
   useEffect(() => {
     try {
-      localStorage.setItem(KEY, JSON.stringify(ids))
+      localStorage.setItem(KEY, JSON.stringify(activeIds))
     } catch { /* modo privado / cota — expansão volta a ser efêmera */ }
-  }, [ids])
+  }, [activeIds])
 
   const toggle = useCallback((id: string) => {
-    setIds(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id])
-  }, [])
+    setIds(prev => {
+      const current = themeIds.length === 0 ? prev : prev.filter(value => themeIds.includes(value))
+      return current.includes(id) ? current.filter(value => value !== id) : [...current, id]
+    })
+  }, [themeIds])
 
   const expand = useCallback((id: string) => {
-    setIds(prev => prev.includes(id) ? prev : [...prev, id])
-  }, [])
+    setIds(prev => {
+      const current = themeIds.length === 0 ? prev : prev.filter(value => themeIds.includes(value))
+      return current.includes(id) ? current : [...current, id]
+    })
+  }, [themeIds])
 
   const expanded: Record<string, boolean> = {}
-  for (const id of ids) expanded[id] = true
+  for (const id of activeIds) expanded[id] = true
 
   return { expanded, toggle, expand }
 }

@@ -4,6 +4,7 @@ import { Button } from "../ui/button"
 import { useUpdateTask, useGenerateTasks, type Task } from "../../hooks/useMeeting"
 import type { BoardCardDetail } from "../../hooks/useBoard"
 import { cn } from "../../lib/utils"
+import { parseManualTask } from "./manualTask"
 
 const PRIORITY_LABEL: Record<string, string> = { high: "alta", medium: "média", low: "baixa" }
 
@@ -13,16 +14,6 @@ interface Props {
   onToggleManual: (index: number) => void
   onAddManual: (text: string) => void
   onRemoveManual: (index: number) => void
-}
-
-export function parseManualTask(s: string): { text: string; done: boolean } {
-  if (s.startsWith("[x] ")) return { text: s.slice(4), done: true }
-  if (s.startsWith("[ ] ")) return { text: s.slice(4), done: false }
-  return { text: s, done: false }
-}
-
-export function encodeManualTask(text: string, done: boolean): string {
-  return `${done ? "[x]" : "[ ]"} ${text}`
 }
 
 function TaskRow({ task, meetingId }: { task: Task; meetingId: string }) {

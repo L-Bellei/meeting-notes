@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react"
-import { createPortal } from "react-dom"
+import { useState, useEffect } from "react"
 import { Search, X } from "lucide-react"
 import { useSearch } from "../../hooks/useSearch"
 import { Spinner } from "../ui/spinner"
+import { Dialog } from "../ui/Dialog"
 
 interface Props {
   onClose: () => void
@@ -12,54 +12,59 @@ interface Props {
 export function SearchModal({ onClose, onSelect }: Props) {
   const [input, setInput] = useState("")
   const [q, setQ] = useState("")
-  const inputRef = useRef<HTMLInputElement>(null)
-  const { data: results, isFetching } = useSearch(q)
-
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
+  const { data: results, isFetching, isError, error } = useSearch(q)
 
   useEffect(() => {
     const timer = setTimeout(() => setQ(input), 200)
     return () => clearTimeout(timer)
   }, [input])
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose()
-    }
-    document.addEventListener("keydown", onKey)
-    return () => document.removeEventListener("keydown", onKey)
-  }, [onClose])
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-24 bg-black/50"
-      onClick={onClose}
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      labelledBy="search-modal-title"
+      overlayClassName="items-start pt-24 bg-black/50"
+      panelClassName="w-full max-w-xl bg-background border border-border rounded-lg shadow-xl overflow-hidden"
+      closeOnBackdrop
     >
-      <div
-        className="w-full max-w-xl bg-background border border-border rounded-lg shadow-xl overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
+      <div>
+        <h2 id="search-modal-title" className="sr-only">Buscar reuniões</h2>
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
           <Search size={16} className="text-muted-foreground shrink-0" />
           <input
-            ref={inputRef}
+            autoFocus
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder="Buscar em reuniões..."
+            aria-label="Buscar em reuniões"
             className="flex-1 bg-transparent outline-none text-sm"
           />
-          {isFetching && <Spinner size={14} />}
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          {isFetching && (
+            <>
+              <span role="status" className="sr-only">Buscando reuniões...</span>
+              <span aria-hidden="true"><Spinner size={14} /></span>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fechar busca"
+            className="text-muted-foreground hover:text-foreground"
+          >
             <X size={16} />
           </button>
         </div>
 
         {q.trim().length >= 2 && (
           <ul className="max-h-80 overflow-y-auto py-1">
+            {isError && (
+              <li role="alert" className="px-4 py-3 text-sm text-destructive">
+                Não foi possível buscar reuniões: {error.message}
+              </li>
+            )}
             {results && results.length === 0 && (
-              <li className="px-4 py-3 text-sm text-muted-foreground">
+              <li role="status" className="px-4 py-3 text-sm text-muted-foreground">
                 Nenhum resultado para "{q}"
               </li>
             )}
@@ -80,7 +85,6 @@ export function SearchModal({ onClose, onSelect }: Props) {
           </ul>
         )}
       </div>
-    </div>,
-    document.body,
+    </Dialog>
   )
 }

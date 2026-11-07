@@ -64,24 +64,36 @@ func runMigrations(db *sql.DB) error {
 		}
 		name := entry.Name()
 
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("begin migration %s: %w", name, err)
+		}
 		var applied string
-		err := db.QueryRow(`SELECT name FROM schema_migrations WHERE name = ?`, name).Scan(&applied)
+		err = tx.QueryRow(`SELECT name FROM schema_migrations WHERE name = ?`, name).Scan(&applied)
 		if err == nil {
+			tx.Rollback()
 			continue // already applied
 		}
 		if err != sql.ErrNoRows {
+			tx.Rollback()
 			return fmt.Errorf("check migration %s: %w", name, err)
 		}
 
 		content, err := migrationsFS.ReadFile("migrations/" + name)
 		if err != nil {
+			tx.Rollback()
 			return fmt.Errorf("read migration %s: %w", name, err)
 		}
-		if _, err := db.Exec(string(content)); err != nil {
+		if _, err := tx.Exec(string(content)); err != nil {
+			tx.Rollback()
 			return fmt.Errorf("apply migration %s: %w", name, err)
 		}
-		if _, err := db.Exec(`INSERT INTO schema_migrations (name) VALUES (?)`, name); err != nil {
+		if _, err := tx.Exec(`INSERT INTO schema_migrations (name) VALUES (?)`, name); err != nil {
+			tx.Rollback()
 			return fmt.Errorf("record migration %s: %w", name, err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit migration %s: %w", name, err)
 		}
 	}
 	return nil

@@ -20,8 +20,15 @@ type stubAudioClient struct {
 func (s *stubAudioClient) Health(ctx context.Context) (*audio.HealthResponse, error) {
 	return s.healthResp, s.healthErr
 }
-func (s *stubAudioClient) StartRecording(ctx context.Context) (*audio.StartResponse, error) { return nil, nil }
-func (s *stubAudioClient) StopRecording(ctx context.Context) (*audio.StopResponse, error)   { return nil, nil }
+func (s *stubAudioClient) StartRecording(ctx context.Context) (*audio.StartResponse, error) {
+	return nil, nil
+}
+func (s *stubAudioClient) StopRecording(ctx context.Context) (*audio.StopResponse, error) {
+	return nil, nil
+}
+func (s *stubAudioClient) RecoverRecording(ctx context.Context, recordingID string) (*audio.StopResponse, error) {
+	return nil, nil
+}
 func (s *stubAudioClient) Transcribe(ctx context.Context, path, lang, device string) (*audio.TranscribeResponse, error) {
 	return nil, nil
 }

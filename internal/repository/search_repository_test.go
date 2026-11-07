@@ -3,27 +3,46 @@ package repository_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"meeting-notes/internal/database"
+	"meeting-notes/internal/models"
 	"meeting-notes/internal/repository"
 )
 
-func newSearchRepo(t *testing.T) *repository.SearchRepository {
+func newSearchRepo(t *testing.T) (*repository.SearchRepository, *repository.MeetingRepository, *repository.SummaryRepository, *repository.KeyPointRepository, *repository.TaskRepository) {
 	t.Helper()
 	db, err := database.Open(t.TempDir() + "/test.db")
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	return repository.NewSearchRepository(db)
+	return repository.NewSearchRepository(db),
+		repository.NewMeetingRepository(db),
+		repository.NewSummaryRepository(db),
+		repository.NewKeyPointRepository(db),
+		repository.NewTaskRepository(db)
 }
 
-func TestSearchRepository_UpsertAndSearch(t *testing.T) {
-	repo := newSearchRepo(t)
+func TestSearchRepository_SearchesCanonicalMeetingContent(t *testing.T) {
+	repo, meetings, summaries, keyPoints, tasks := newSearchRepo(t)
 	ctx := context.Background()
-
-	if err := repo.UpsertMeeting(ctx, "id-1", "Sprint Planning", "transcript text", "summary text", "Deploy API", "Write tests"); err != nil {
-		t.Fatalf("UpsertMeeting: %v", err)
+	now := time.Now().UTC()
+	meeting := &models.Meeting{
+		ID: "id-1", Title: "Sprint Planning", StartedAt: &now,
+		Status: models.StatusCompleted, Transcript: stringPointer("transcript text"),
+	}
+	if err := meetings.Create(ctx, meeting); err != nil {
+		t.Fatal(err)
+	}
+	if err := summaries.Upsert(ctx, &models.Summary{ID: "s-1", MeetingID: meeting.ID, Content: "summary text", ModelUsed: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := keyPoints.Create(ctx, &models.KeyPoint{ID: "kp-1", MeetingID: meeting.ID, Content: "Deploy API"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tasks.Create(ctx, &models.Task{ID: "t-1", MeetingID: meeting.ID, Description: "Write tests", Priority: models.PriorityMedium}); err != nil {
+		t.Fatal(err)
 	}
 
 	results, err := repo.Search(ctx, "Sprint")
@@ -41,15 +60,16 @@ func TestSearchRepository_UpsertAndSearch(t *testing.T) {
 	}
 }
 
-func TestSearchRepository_UpsertOverwrites(t *testing.T) {
-	repo := newSearchRepo(t)
+func TestSearchRepository_TracksMeetingUpdates(t *testing.T) {
+	repo, meetings, _, _, _ := newSearchRepo(t)
 	ctx := context.Background()
-
-	if err := repo.UpsertMeeting(ctx, "id-1", "Old Title", "", "", "", ""); err != nil {
-		t.Fatalf("first upsert: %v", err)
+	meeting := &models.Meeting{ID: "id-1", Title: "Old Title", Status: models.StatusCompleted}
+	if err := meetings.Create(ctx, meeting); err != nil {
+		t.Fatal(err)
 	}
-	if err := repo.UpsertMeeting(ctx, "id-1", "New Title", "", "", "", ""); err != nil {
-		t.Fatalf("second upsert: %v", err)
+	meeting.Title = "New Title"
+	if err := meetings.Update(ctx, meeting); err != nil {
+		t.Fatal(err)
 	}
 
 	results, err := repo.Search(ctx, "New")
@@ -70,14 +90,13 @@ func TestSearchRepository_UpsertOverwrites(t *testing.T) {
 }
 
 func TestSearchRepository_Delete(t *testing.T) {
-	repo := newSearchRepo(t)
+	repo, meetings, _, _, _ := newSearchRepo(t)
 	ctx := context.Background()
-
-	if err := repo.UpsertMeeting(ctx, "id-1", "To Delete", "", "", "", ""); err != nil {
-		t.Fatalf("upsert: %v", err)
+	if err := meetings.Create(ctx, &models.Meeting{ID: "id-1", Title: "To Delete", Status: models.StatusCompleted}); err != nil {
+		t.Fatal(err)
 	}
-	if err := repo.DeleteMeeting(ctx, "id-1"); err != nil {
-		t.Fatalf("DeleteMeeting: %v", err)
+	if err := meetings.Delete(ctx, "id-1"); err != nil {
+		t.Fatalf("Delete meeting: %v", err)
 	}
 
 	results, err := repo.Search(ctx, "Delete")
@@ -90,11 +109,15 @@ func TestSearchRepository_Delete(t *testing.T) {
 }
 
 func TestSearchRepository_EmptyQuery(t *testing.T) {
-	repo := newSearchRepo(t)
+	repo, _, _, _, _ := newSearchRepo(t)
 	ctx := context.Background()
 
 	_, err := repo.Search(ctx, "")
 	if err == nil {
 		t.Error("expected error for empty query")
 	}
+}
+
+func stringPointer(value string) *string {
+	return &value
 }

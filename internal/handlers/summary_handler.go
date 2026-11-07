@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"meeting-notes/internal/models"
 	"meeting-notes/internal/repository"
 	"meeting-notes/internal/services"
 )
@@ -15,10 +16,15 @@ type SummaryHandler struct {
 	svc        *services.SummaryService
 	meetingSvc *services.MeetingService
 	themeRepo  *repository.ThemeRepository
+	operations *services.MeetingOperationCoordinator
 }
 
-func NewSummaryHandler(svc *services.SummaryService, meetingSvc *services.MeetingService, themeRepo *repository.ThemeRepository) *SummaryHandler {
-	return &SummaryHandler{svc: svc, meetingSvc: meetingSvc, themeRepo: themeRepo}
+func NewSummaryHandler(svc *services.SummaryService, meetingSvc *services.MeetingService, themeRepo *repository.ThemeRepository, coordinators ...*services.MeetingOperationCoordinator) *SummaryHandler {
+	h := &SummaryHandler{svc: svc, meetingSvc: meetingSvc, themeRepo: themeRepo}
+	if len(coordinators) > 0 {
+		h.operations = coordinators[0]
+	}
+	return h
 }
 
 type createSummaryRequest struct {
@@ -47,8 +53,13 @@ func (h *SummaryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	s, err := h.svc.Upsert(r.Context(), meetingID, req.Content, req.ModelUsed)
+	s, err := runMeetingIdle(h.operations, meetingID, func() (*models.Summary, error) {
+		return h.svc.Upsert(r.Context(), meetingID, req.Content, req.ModelUsed)
+	})
 	if err != nil {
+		if writeMeetingBusy(w, err) {
+			return
+		}
 		var ve *services.ValidationError
 		if errors.As(err, &ve) {
 			writeError(w, http.StatusUnprocessableEntity, ve.Message)
@@ -67,8 +78,13 @@ func (h *SummaryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	s, err := h.svc.Upsert(r.Context(), meetingID, req.Content, req.ModelUsed)
+	s, err := runMeetingIdle(h.operations, meetingID, func() (*models.Summary, error) {
+		return h.svc.Upsert(r.Context(), meetingID, req.Content, req.ModelUsed)
+	})
 	if err != nil {
+		if writeMeetingBusy(w, err) {
+			return
+		}
 		var ve *services.ValidationError
 		if errors.As(err, &ve) {
 			writeError(w, http.StatusUnprocessableEntity, ve.Message)
@@ -82,7 +98,12 @@ func (h *SummaryHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 func (h *SummaryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	meetingID := chi.URLParam(r, "id")
-	if err := h.svc.Delete(r.Context(), meetingID); err != nil {
+	if err := runMeetingIdleError(h.operations, meetingID, func() error {
+		return h.svc.Delete(r.Context(), meetingID)
+	}); err != nil {
+		if writeMeetingBusy(w, err) {
+			return
+		}
 		if errors.Is(err, repository.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "summary not found")
 			return
@@ -95,6 +116,13 @@ func (h *SummaryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func (h *SummaryHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	meetingID := chi.URLParam(r, "id")
+	if h.operations != nil {
+		if err := h.operations.Begin(meetingID, "summary"); err != nil {
+			writeError(w, http.StatusConflict, "meeting already has an active operation")
+			return
+		}
+		defer h.operations.End(meetingID)
+	}
 	meeting, err := h.meetingSvc.GetByID(r.Context(), meetingID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
