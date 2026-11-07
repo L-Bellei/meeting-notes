@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"meeting-notes/internal/database"
 	"meeting-notes/internal/models"
@@ -25,11 +24,7 @@ func newTestMeetingService(t *testing.T) *services.MeetingService {
 	}
 	meetingRepo := repository.NewMeetingRepository(db)
 	themeRepo := repository.NewThemeRepository(db)
-	searchRepo := repository.NewSearchRepository(db)
-	keyPointRepo := repository.NewKeyPointRepository(db)
-	taskRepo := repository.NewTaskRepository(db)
-	summaryRepo := repository.NewSummaryRepository(db)
-	return services.NewMeetingService(meetingRepo, themeRepo, searchRepo, keyPointRepo, taskRepo, summaryRepo)
+	return services.NewMeetingService(meetingRepo, themeRepo)
 }
 
 func TestMeetingService_Create(t *testing.T) {
@@ -278,10 +273,7 @@ func newMeetingServiceWithSearch(t *testing.T) (*services.MeetingService, *repos
 	meetingRepo := repository.NewMeetingRepository(db)
 	themeRepo := repository.NewThemeRepository(db)
 	searchRepo := repository.NewSearchRepository(db)
-	keyPointRepo := repository.NewKeyPointRepository(db)
-	taskRepo := repository.NewTaskRepository(db)
-	summaryRepo := repository.NewSummaryRepository(db)
-	svc := services.NewMeetingService(meetingRepo, themeRepo, searchRepo, keyPointRepo, taskRepo, summaryRepo)
+	svc := services.NewMeetingService(meetingRepo, themeRepo)
 	return svc, searchRepo
 }
 
@@ -298,15 +290,29 @@ func TestMeetingService_Update_SyncsSearch(t *testing.T) {
 		t.Fatalf("Update: %v", err)
 	}
 
-	// FTS sync is async (goroutine) — wait briefly
-	time.Sleep(50 * time.Millisecond)
-
 	results, err := searchRepo.Search(ctx, "Updated")
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
 	if len(results) != 1 {
 		t.Fatalf("expected 1 FTS result after update, got %d", len(results))
+	}
+}
+
+func TestMeetingService_Create_IndexesSearch(t *testing.T) {
+	svc, searchRepo := newMeetingServiceWithSearch(t)
+	ctx := context.Background()
+
+	meeting, err := svc.Create(ctx, "Indexed meeting title", "", "", nil)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	results, err := searchRepo.Search(ctx, "Indexed")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 || results[0].MeetingID != meeting.ID {
+		t.Fatalf("search results = %+v, want created meeting %q", results, meeting.ID)
 	}
 }
 
@@ -318,16 +324,9 @@ func TestMeetingService_Delete_SyncsSearch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if err := searchRepo.UpsertMeeting(ctx, m.ID, m.Title, "", "", "", ""); err != nil {
-		t.Fatalf("upsert: %v", err)
-	}
-
 	if err := svc.Delete(ctx, m.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-
-	// FTS sync is async (goroutine) — wait briefly
-	time.Sleep(50 * time.Millisecond)
 
 	results, err := searchRepo.Search(ctx, "Delete")
 	if err != nil {

@@ -29,7 +29,7 @@ type ListFilters struct {
 }
 
 func (r *MeetingRepository) List(ctx context.Context, f ListFilters) ([]models.Meeting, error) {
-	query := `SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, audio_path, error_message, keep_audio, language, created_at FROM meetings`
+	query := `SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, audio_path, recording_id, error_message, keep_audio, language, created_at FROM meetings`
 	var args []any
 	var conditions []string
 
@@ -107,7 +107,7 @@ func (r *MeetingRepository) Create(ctx context.Context, m *models.Meeting) error
 
 func (r *MeetingRepository) GetByID(ctx context.Context, id string) (*models.Meeting, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, audio_path, error_message, keep_audio, language, created_at FROM meetings WHERE id = ?`, id,
+		`SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, audio_path, recording_id, error_message, keep_audio, language, created_at FROM meetings WHERE id = ?`, id,
 	)
 	m, err := scanMeeting(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -138,8 +138,8 @@ func (r *MeetingRepository) Update(ctx context.Context, m *models.Meeting) error
 		startedAt = &s
 	}
 	result, err := r.db.ExecContext(ctx,
-		`UPDATE meetings SET theme_id = ?, title = ?, started_at = ?, duration_seconds = ?, status = ?, transcript = ?, notes = ?, audio_path = ?, error_message = ?, keep_audio = ?, language = ? WHERE id = ?`,
-		m.ThemeID, m.Title, startedAt, m.DurationSeconds, string(m.Status), m.Transcript, m.Notes, m.AudioPath, m.ErrorMessage, m.KeepAudio, m.Language, m.ID,
+		`UPDATE meetings SET theme_id = ?, title = ?, started_at = ?, duration_seconds = ?, status = ?, transcript = ?, notes = ?, audio_path = ?, recording_id = ?, error_message = ?, keep_audio = ?, language = ? WHERE id = ?`,
+		m.ThemeID, m.Title, startedAt, m.DurationSeconds, string(m.Status), m.Transcript, m.Notes, m.AudioPath, m.RecordingID, m.ErrorMessage, m.KeepAudio, m.Language, m.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update meeting: %w", err)
@@ -152,6 +152,121 @@ func (r *MeetingRepository) Update(ctx context.Context, m *models.Meeting) error
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (r *MeetingRepository) TransitionStatus(ctx context.Context, id string, expected []models.MeetingStatus, status models.MeetingStatus, errorMessage *string, keepAudio *bool) error {
+	if len(expected) == 0 {
+		return fmt.Errorf("transition status: expected statuses are required")
+	}
+	args := []any{string(status), errorMessage}
+	query := `UPDATE meetings SET status = ?, error_message = ?`
+	if keepAudio != nil {
+		query += `, keep_audio = ?`
+		args = append(args, *keepAudio)
+	}
+	query += ` WHERE id = ? AND status IN (` + strings.TrimSuffix(strings.Repeat("?,", len(expected)), ",") + `)`
+	args = append(args, id)
+	for _, current := range expected {
+		args = append(args, string(current))
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("transition meeting status: %w", err)
+	}
+	return r.transitionResult(ctx, result, id)
+}
+
+func (r *MeetingRepository) SetStatus(ctx context.Context, id string, status models.MeetingStatus, errorMessage *string) error {
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE meetings SET status = ?, error_message = ? WHERE id = ?`,
+		string(status), errorMessage, id,
+	)
+	if err != nil {
+		return fmt.Errorf("set meeting status: %w", err)
+	}
+	return r.transitionResult(ctx, result, id)
+}
+
+func (r *MeetingRepository) SetTranscriptAndStatus(ctx context.Context, id string, expected []models.MeetingStatus, transcript string, status models.MeetingStatus, errorMessage *string) error {
+	if len(expected) == 0 {
+		return fmt.Errorf("set transcript and status: expected statuses are required")
+	}
+	query := `UPDATE meetings SET transcript = ?, status = ?, error_message = ? WHERE id = ? AND status IN (` +
+		strings.TrimSuffix(strings.Repeat("?,", len(expected)), ",") + `)`
+	args := []any{transcript, string(status), errorMessage, id}
+	for _, current := range expected {
+		args = append(args, string(current))
+	}
+	result, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("set meeting transcript and status: %w", err)
+	}
+	return r.transitionResult(ctx, result, id)
+}
+
+func (r *MeetingRepository) SetAudioPath(ctx context.Context, id string, audioPath *string, keepAudio *bool) error {
+	query := `UPDATE meetings SET audio_path = ?`
+	args := []any{audioPath}
+	if keepAudio != nil {
+		query += `, keep_audio = ?`
+		args = append(args, *keepAudio)
+	}
+	query += ` WHERE id = ?`
+	args = append(args, id)
+	result, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("set meeting audio path: %w", err)
+	}
+	return r.transitionResult(ctx, result, id)
+}
+
+func (r *MeetingRepository) SetRecordingID(ctx context.Context, id string, recordingID *string) error {
+	result, err := r.db.ExecContext(ctx, `UPDATE meetings SET recording_id = ? WHERE id = ?`, recordingID, id)
+	if err != nil {
+		return fmt.Errorf("set meeting recording id: %w", err)
+	}
+	return r.transitionResult(ctx, result, id)
+}
+
+func (r *MeetingRepository) SetRecordingResult(ctx context.Context, id, expectedRecordingID string, audioPath *string, keepAudio bool) error {
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE meetings SET audio_path = ?, recording_id = NULL, keep_audio = ? WHERE id = ? AND recording_id = ?`,
+		audioPath, keepAudio, id, expectedRecordingID,
+	)
+	if err != nil {
+		return fmt.Errorf("set meeting recording result: %w", err)
+	}
+	return r.transitionResult(ctx, result, id)
+}
+
+func (r *MeetingRepository) SetTranscriptionResult(ctx context.Context, id, transcript, language string, duration *int) error {
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE meetings SET transcript = ?, language = ?, duration_seconds = ?, status = ?, error_message = NULL WHERE id = ?`,
+		transcript, language, duration, string(models.StatusProcessing), id,
+	)
+	if err != nil {
+		return fmt.Errorf("set meeting transcription result: %w", err)
+	}
+	return r.transitionResult(ctx, result, id)
+}
+
+func (r *MeetingRepository) transitionResult(ctx context.Context, result sql.Result, id string) error {
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("meeting transition rows affected: %w", err)
+	}
+	if n > 0 {
+		return nil
+	}
+	var exists int
+	err = r.db.QueryRowContext(ctx, `SELECT 1 FROM meetings WHERE id = ?`, id).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("check meeting after transition: %w", err)
+	}
+	return ErrConflict
 }
 
 func (r *MeetingRepository) Delete(ctx context.Context, id string) error {
@@ -171,7 +286,7 @@ func (r *MeetingRepository) Delete(ctx context.Context, id string) error {
 
 func (r *MeetingRepository) GetRecording(ctx context.Context) (*models.Meeting, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, audio_path, error_message, keep_audio, language, created_at
+		`SELECT id, theme_id, title, started_at, duration_seconds, status, transcript, notes, audio_path, recording_id, error_message, keep_audio, language, created_at
      FROM meetings WHERE status = 'recording' LIMIT 1`,
 	)
 	m, err := scanMeeting(row)
@@ -196,6 +311,7 @@ func scanMeeting(row meetingScanner) (*models.Meeting, error) {
 	var transcript sql.NullString
 	var notes sql.NullString
 	var audioPath sql.NullString
+	var recordingID sql.NullString
 	var errorMessage sql.NullString
 	var language sql.NullString
 	var keepAudio int
@@ -203,7 +319,7 @@ func scanMeeting(row meetingScanner) (*models.Meeting, error) {
 	var status string
 
 	err := row.Scan(&m.ID, &themeID, &m.Title, &startedAt, &duration, &status,
-		&transcript, &notes, &audioPath, &errorMessage, &keepAudio, &language, &createdAt)
+		&transcript, &notes, &audioPath, &recordingID, &errorMessage, &keepAudio, &language, &createdAt)
 	if err != nil {
 		return nil, err
 	}
@@ -234,6 +350,10 @@ func scanMeeting(row meetingScanner) (*models.Meeting, error) {
 	if audioPath.Valid {
 		v := audioPath.String
 		m.AudioPath = &v
+	}
+	if recordingID.Valid {
+		v := recordingID.String
+		m.RecordingID = &v
 	}
 	if errorMessage.Valid {
 		v := errorMessage.String

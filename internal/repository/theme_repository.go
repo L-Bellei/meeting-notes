@@ -14,6 +14,7 @@ import (
 var (
 	ErrNotFound  = errors.New("not found")
 	ErrDuplicate = errors.New("name already exists")
+	ErrConflict  = errors.New("state conflict")
 )
 
 type ThemeRepository struct {

@@ -25,6 +25,10 @@ func NewRetranscribeHandler(orch retranscribeOrchestrator) *RetranscribeHandler 
 func (h *RetranscribeHandler) Retranscribe(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := h.orch.RetranscribeRecording(r.Context(), id); err != nil {
+		if errors.Is(err, services.ErrMeetingBusy) {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "meeting already has an active operation"})
+			return
+		}
 		var ve *services.ValidationError
 		if errors.As(err, &ve) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})

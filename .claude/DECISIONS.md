@@ -4,6 +4,168 @@ Registro de decisões transversais ao projeto. Decisões específicas de cada fe
 
 ---
 
+## [2026-11-06] Tornar o reparent de temas acessível por teclado
+
+**Contexto:** A reorganização de temas dependia exclusivamente de arraste com ponteiro,
+impedindo a operação por teclado.
+
+**Escolhas:** Manter `PointerSensor` e adicionar `KeyboardSensor` com navegação vertical entre
+os destinos já válidos da Sidebar (raiz e temas de primeiro nível). Cada tema movível recebe
+um handle acessível dedicado; temas com subcategorias permanecem não movíveis. Instruções e
+anúncios de início, destino, soltura e cancelamento são fornecidos em português.
+
+**Limites:** Não alterar API, persistência nem regras de hierarquia. O endpoint existente
+continua sendo a validação final do reparent.
+
+**Validação:** Testes cobrem handle focável, instruções, movimento para tema pai e raiz,
+cancelamento e retorno de foco; suíte frontend, ESLint e build passaram.
+
+---
+
+## [2026-11-05] Bloquear instalação e remoção com processos do Meeting Notes ativos
+
+**Contexto:** O NSIS encerrava à força os executáveis do app e do serviço de áudio em
+`.onInit`. Além do risco de interromper uma gravação/processamento, a atualização observada
+em 2026-08-28 podia terminar parcialmente e misturar arquivos de versões diferentes.
+
+**Escolha:** Não encerrar processos automaticamente. Se Meeting Notes ou `audio-service.exe`
+estiver ativo, instalação, atualização e desinstalação exibem orientação para fechar o app e
+abortam antes de alterar arquivos. Em modo silencioso, abortam sem UI; o instalador retorna
+código não zero. Falha na consulta de processos também bloqueia. A checagem ocorre na inicialização e
+imediatamente antes da seção de extração/remoção para reduzir a janela de corrida.
+
+**Trade-off:** O usuário precisa fechar e executar novamente o instalador; isso evita encerrar
+uma gravação sem consentimento. Não há alteração no ZIP portátil.
+
+**Validação:** teste de integração NSIS com processos descartáveis cobre os três nomes de
+executável para instalação e desinstalação; sem processos, ambos prosseguem. O script NSIS
+principal passa pelo preprocessor do makensis.
+
+---
+
+## [2026-11-05] Atualizar Vitest para remover vulnerabilidades de desenvolvimento
+
+**Contexto:** `npm audit` reportou 2 vulnerabilidades críticas em Vitest/Tinypool e 1 moderada
+em `@vitest/mocker`. A auditoria `--omit=dev` confirmou que não havia vulnerabilidades nas
+dependências de produção.
+
+**Escolha:** Com aprovação do usuário, atualizar o Vitest diretamente para 5.1.0, a versão que
+o audit reportou como correção disponível. Aceitar a mudança major porque a dependência só é
+usada na suíte de testes; validar a suíte completa e o build TypeScript/Vite antes de concluir.
+
+**Resultado:** `npm audit` e `npm audit --omit=dev` passaram com zero vulnerabilidades; os 7
+testes de UI e o build passaram. Nenhuma dependência de produção foi alterada.
+
+---
+
+## [2026-11-04] Acessibilidade consistente para diálogos do frontend
+
+**Contexto:** Diálogos independentes não compartilhavam nome/descrição ARIA, contenção de foco,
+retorno de foco ou estados anunciados de erro; falhas em busca e carregamento de cards podiam
+deixar conteúdo vazio sem orientação.
+
+**Escolhas:** Usar um componente `Dialog` compartilhado baseado em portal, com foco inicial,
+contenção de Tab/Shift+Tab, Escape e restauração de foco. O uso de backdrop continua opt-in
+somente onde já existia. A confirmação de exclusão de coluna permanece dentro do diálogo atual
+para evitar traps sobrepostos. Busca e detalhe do card anunciam erros; detalhe oferece retry.
+Os estados de carregamento são expostos por regiões vivas e o documento usa `lang="pt-BR"`.
+
+**Validação:** Testes Vitest cobrem semântica, erro, retry, foco, teclado, Escape e backdrop;
+não se adicionam testes e2e nem muda contrato/backend. O build frontend passou. ESLint continua
+com violações já existentes em vários arquivos; não foi feita uma limpeza geral de lint nesta
+etapa.
+
+---
+
+## [2026-11-04] Preflight e artefatos Windows completos
+
+**Contexto:** O build não reconhecia NSIS instalado no diretório padrão quando ausente
+do `PATH`. `-NoNSIS` ignorava o bundle de áudio e permitia coletar executável vazio;
+além disso, o app de produção procura `audio-service/` ao lado do executável principal.
+
+**Escolhas:** `build.ps1 -PreflightOnly` valida Wails, Go, Node/npm, NSIS (quando usado)
+e os assets necessários sem executar testes ou compilar. O caminho padrão do NSIS é
+adicionado somente ao `PATH` do processo atual. Ambos os modos exigem o bundle, validam
+o carregamento do `whisper-cli.exe` via `--help` e o `/health` HTTP do audio-service.
+`-NoNSIS` omite apenas a geração NSIS e produz ZIP portátil com `meeting-notes.exe` e
+`audio-service/`; a coleta rejeita arquivos vazios e só publica o nome final depois de
+validar um arquivo temporário no mesmo diretório.
+
+**Limites:** Não instalar ferramentas nem reconstruir automaticamente assets ausentes.
+O teste `--help` valida carregamento de DLLs, não execução Vulkan em GPU real. A etapa
+não gera nem publica uma release.
+
+---
+
+## [2026-11-04] Consistência transacional entre tasks e índice de busca
+
+**Contexto:** Falhas durante substituição de tasks geradas removiam tasks existentes. CRUD manual
+de tasks deixava o FTS desatualizado, e erros de sincronização eram ignorados depois de mutações
+persistidas.
+
+**Escolha:** O usuário escolheu que uma falha de indexação deve reverter a mutação principal e
+retornar erro, em vez de salvar a mutação e criar uma fila de reindexação. SQLite mantém essa
+garantia: triggers em meetings, summaries, key_points e tasks atualizam o FTS na mesma transação;
+a migration reconstrói o índice legado a partir da fonte canônica. Substituições de tasks geradas
+também usam uma transação única.
+
+**Trade-off:** Uma falha/corrupção do FTS bloqueia mutações indexadas até que o índice seja
+restaurado; a operação que falhou não altera os dados-fonte. Nenhum worker ou outbox assíncrono é
+necessário para este app local single-user.
+
+---
+
+## [2026-11-04] Migrations atômicas e recuperação segura de gravações
+
+**Contexto:** Uma falha no meio de um arquivo SQL podia persistir apenas parte do schema sem
+registrar a migration. Além disso, o backend não persistia a identidade retornada pelo gravador,
+impedindo associar com segurança arquivos já finalizados depois de reinício do audio-service.
+
+**Escolhas:** Executar cada migration e a inserção em `schema_migrations` na mesma transação;
+adicionar `meetings.recording_id` por migration aditiva; validar UUID e arquivo no serviço de áudio
+antes de recuperar ou associar. No shutdown, tentar finalizar a gravação. Em falha de `stop()`,
+preservar estado e identidade para nova tentativa. Na limpeza, limpar primeiro a referência no
+SQLite e só depois remover o WAV.
+
+**Invariantes:** Um arquivo só é associado pela identidade persistida e após validação; arquivos
+desconhecidos ou inválidos não são removidos automaticamente. Uma falha ao limpar a referência no
+banco impede a remoção do arquivo. O escopo é a Etapa 2; nenhuma etapa posterior foi iniciada.
+
+---
+
+## [2026-11-04] Exclusão mútua e recuperação do pipeline de reuniões
+
+**Contexto:** A auditoria da Etapa 1 confirmou que pedidos concorrentes podiam iniciar mais de um
+pipeline para a mesma reunião e que a gravação de um snapshot antigo podia sobrescrever alterações
+feitas durante a geração.
+
+**Escolhas:** Reservar cada reunião antes da transição e rejeitar concorrência com HTTP 409, sem
+fila; impedir mudanças em transcrição/notas e resultados gerados enquanto forem processados;
+persistir somente os campos pertencentes ao pipeline. No encerramento, cancelar e aguardar
+workers, tentando preservar áudio e estado que permita nova tentativa. A indexação de busca é
+síncrona para não deixar goroutines acessando o banco após o fechamento.
+
+**Escopo:** Etapa 1 somente. As demais etapas não foram iniciadas.
+
+---
+
+## [2026-11-04] Wails CLI 2.17.1 para builds com Go 1.27
+
+**Contexto:** Com Go 1.27.0, o CLI Wails 2.12.0 (compilado com Go 1.26.2 e usando
+`golang.org/x/tools` v0.30.0) falha durante `packages.Load` na análise de tipos, reportando
+`package "context" without types`. `go test ./cmd/desktop` passa, então o erro não é do código
+do app. Recompilar o mesmo CLI sob Go 1.27.0 também reproduz a falha.
+
+**Escolha operacional:** Usar Wails CLI 2.17.1 ou posterior para builds com Go 1.27.0. O CLI
+2.17.1 usa `x/tools` v0.49.0 e passou geração de bindings, build desktop, smoke do serviço
+empacotado e geração do instalador.
+
+**Escopo:** Isto não atualiza automaticamente a dependência Wails do app (`go.mod` continua em
+2.12.0). O CLI 2.17.1 alerta sobre a diferença, mas a build foi validada. Atualizar o runtime
+Wails é uma mudança separada e deve ser avaliada/testada antes de fazer parte de outra release.
+
+---
+
 ## [2026-08-30] GPU não-NVIDIA via whisper.cpp/Vulkan como segundo motor; CUDA permanece o caminho NVIDIA
 
 **Contexto:** A v2.9.0 só transcreve em GPU NVIDIA — faster-whisper/ctranslate2 não tem backend AMD no

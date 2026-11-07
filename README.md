@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/versão-2.2.3-6366f1?style=flat-square" />
+  <img alt="Version" src="https://img.shields.io/badge/versão-2.11.0-6366f1?style=flat-square" />
   <img alt="Platform" src="https://img.shields.io/badge/plataforma-Windows%2010%2F11-0078d4?style=flat-square&logo=windows" />
   <img alt="Go" src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat-square&logo=go" />
   <img alt="License" src="https://img.shields.io/badge/licença-MIT-22c55e?style=flat-square" />
@@ -32,7 +32,7 @@ Tudo fica armazenado em SQLite no próprio computador. Nenhum dado de reunião �
 ## Instalação rápida
 
 1. Baixe o instalador na [página de releases](https://github.com/L-Bellei/meeting-notes/releases/latest)
-2. Execute `meeting-notes-2.2.3-windows-amd64-installer.exe`
+2. Execute `meeting-notes-2.11.0-windows-amd64-installer.exe`
 3. Abra o **Meeting Notes** pelo menu Iniciar ou pelo ícone na área de trabalho
 4. Na primeira abertura, acesse **Configurações** (ícone de engrenagem) e insira sua chave de API
 
@@ -344,15 +344,24 @@ cd frontend && npx tsc --noEmit
 ### Build do instalador
 
 ```powershell
-# Com NSIS no PATH
-cd cmd/desktop
-$env:PATH += ";C:\Program Files (x86)\NSIS"
-wails build -nsis
+# Na raiz do projeto; valida pré-requisitos sem compilar
+.\build.ps1 -PreflightOnly
 
-# Copiar para dist/
-Copy-Item "build\bin\Meeting Notes-amd64-installer.exe" `
-  "..\..\dist\meeting-notes-2.2.3-windows-amd64-installer.exe"
+# Instalador NSIS (usa productVersion de cmd\desktop\wails.json)
+.\build.ps1
+
+# ZIP portátil completo, com Meeting Notes e audio-service
+.\build.ps1 -NoNSIS
 ```
+
+O caminho canônico exige Go, Node.js/npm, Wails CLI e o bundle do audio-service.
+NSIS é detectado pelo `PATH` ou pelo diretório padrão de instalação. O preflight
+interrompe a build se o serviço empacotado ou o whisper.cpp/Vulkan estiver ausente;
+ambos os formatos verificam o carregamento do whisper.cpp, executam o smoke test
+do `/health` e só então coletam o artefato.
+Se o Meeting Notes ou o serviço de áudio estiver aberto, o instalador/desinstalador
+aborta e orienta fechar o app antes de executar novamente; nenhum processo é encerrado
+à força.
 
 ---
 

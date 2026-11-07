@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { GetPort } from "./wailsjs/go/main/App"
 import { EventsOn } from "./wailsjs/runtime/runtime"
@@ -23,20 +23,18 @@ const queryClient = new QueryClient({
 })
 
 function AppInner() {
-  const [ready, setReady] = useState(false)
-  const [fadingOut, setFadingOut] = useState(false)
   const [showLoading, setShowLoading] = useState(true)
   const [checks, setChecks] = useState<LoadingCheck[]>([
     { label: "Servidor HTTP",          status: "loading" },
     { label: "Modelo de transcrição",  status: "pending" },
-    { label: "Assistente de IA",       status: "hidden"  },
+    { label: "Assistente de IA",       status: "pending" },
   ])
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null)
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null)
   const [recordingModalOpen, setRecordingModalOpen] = useState(false)
   const [stopConfirmMeetingId, setStopConfirmMeetingId] = useState<string | null>(null)
   const [hotkeySuggestedTitle, setHotkeySuggestedTitle] = useState<string>("")
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarOpenOverride, setSidebarOpenOverride] = useState<boolean | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [activeView, setActiveView] = useState<"meetings" | "board">("meetings")
   const [searchOpen, setSearchOpen] = useState(false)
@@ -44,13 +42,15 @@ function AppInner() {
 
   const { data: settings } = useSettings()
   const recordingHotkey = formatHotkey(settings?.recording_hotkey ?? "ctrl+shift+r")
-
-  const pinnedSyncedRef = useRef(false)
-  useEffect(() => {
-    if (pinnedSyncedRef.current || !settings) return
-    pinnedSyncedRef.current = true
-    if (settings.sidebar_pinned === "true") setSidebarOpen(true)
-  }, [settings])
+  const sidebarOpen = sidebarOpenOverride ?? (settings?.sidebar_pinned === "true")
+  const toggleSidebar = useCallback(
+    () => setSidebarOpenOverride(open => !(open ?? (settings?.sidebar_pinned === "true"))),
+    [settings?.sidebar_pinned],
+  )
+  const ready =
+    checks[0].status === "done" &&
+    (checks[1].status === "done" || checks[1].status === "error") &&
+    (checks[2].status === "hidden" || checks[2].status === "done" || checks[2].status === "error")
 
   useEffect(() => {
     let cancelled = false
@@ -114,10 +114,13 @@ function AppInner() {
               upd(2, { status: "error", error: aiHealth.error ?? "Não conectado ao Claude. Verifique nas configurações." })
             }
           }
+        } else if (!cancelled) {
+          upd(2, { status: "hidden" })
         }
-      } catch { /* silencioso */ }
+      } catch {
+        if (!cancelled) upd(2, { status: "hidden" })
+      }
 
-      if (!cancelled) setReady(true)
     })
 
     return () => { cancelled = true }
@@ -125,7 +128,6 @@ function AppInner() {
 
   useEffect(() => {
     if (!ready) return
-    setFadingOut(true)
     const t = setTimeout(() => setShowLoading(false), 300)
     return () => clearTimeout(t)
   }, [ready])
@@ -138,12 +140,12 @@ function AppInner() {
       }
       if (e.key === "b" && (e.ctrlKey || e.metaKey) && activeView === "meetings") {
         e.preventDefault()
-        setSidebarOpen(o => !o)
+        toggleSidebar()
       }
     }
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
-  }, [activeView])
+  }, [activeView, toggleSidebar])
 
   useEffect(() => {
     const unlisten = EventsOn("hotkey:recording-started", ({ meetingId }: { meetingId: string }) => {
@@ -190,11 +192,11 @@ function AppInner() {
 
   return (
     <>
-      {showLoading && <LoadingScreen checks={checks} fading={fadingOut} />}
+      {showLoading && <LoadingScreen checks={checks} fading={ready} />}
       {ready && (
         <div className="flex flex-col h-screen overflow-hidden bg-background">
           <Toolbar
-            onToggleSidebar={() => setSidebarOpen(o => !o)}
+            onToggleSidebar={toggleSidebar}
             onRecord={() => { setHotkeySuggestedTitle(applyTemplate()); setRecordingModalOpen(true) }}
             onSettings={() => setSettingsOpen(true)}
             onSearch={() => setSearchOpen(true)}
@@ -209,7 +211,7 @@ function AppInner() {
               <>
                 <Sidebar
                   open={sidebarOpen}
-                  onClose={() => setSidebarOpen(false)}
+                  onClose={() => setSidebarOpenOverride(false)}
                   selectedThemeId={selectedThemeId}
                   onSelectTheme={setSelectedThemeId}
                 />

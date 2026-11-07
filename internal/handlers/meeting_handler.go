@@ -177,6 +177,10 @@ func (h *MeetingHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	m, err := h.svc.Update(r.Context(), id, req.Title, req.ThemeID, req.Status, startedAt, req.DurationSeconds, req.Transcript, req.Notes)
 	if err != nil {
+		if errors.Is(err, services.ErrMeetingBusy) {
+			writeError(w, http.StatusConflict, "meeting is being processed")
+			return
+		}
 		var ve *services.ValidationError
 		if errors.As(err, &ve) {
 			writeError(w, http.StatusUnprocessableEntity, ve.Message)
@@ -195,6 +199,10 @@ func (h *MeetingHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *MeetingHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := h.svc.Delete(r.Context(), id); err != nil {
+		if errors.Is(err, services.ErrMeetingBusy) {
+			writeError(w, http.StatusConflict, "meeting is being processed")
+			return
+		}
 		if errors.Is(err, repository.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "meeting not found")
 			return
@@ -261,6 +269,10 @@ func (h *MeetingHandler) SetTranscript(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeOrchError(w http.ResponseWriter, err error) {
+	if errors.Is(err, services.ErrMeetingBusy) {
+		writeError(w, http.StatusConflict, "meeting already has an active operation")
+		return
+	}
 	if errors.Is(err, audio.ErrAudioServiceUnavailable) || errors.Is(err, audio.ErrAudioGenericError) {
 		writeError(w, http.StatusServiceUnavailable, "audio service unavailable")
 		return

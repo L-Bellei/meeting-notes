@@ -1,4 +1,5 @@
 from pathlib import Path
+import wave
 
 import pytest
 
@@ -83,6 +84,38 @@ def test_stop_returns_stopresult_and_transitions_to_idle(recorder):
     assert result.path.name == f"rec-{rec_id}.wav"
     assert result.partial is False
     assert recorder.state == "idle"
+
+
+def test_recover_completed_recording_by_id(recorder, tmp_path):
+    recording_id = "123e4567-e89b-12d3-a456-426614174000"
+    path = tmp_path / f"rec-{recording_id}.wav"
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(16000)
+        wav.writeframes(b"\x00\x00" * 16000)
+
+    result = recorder.recover(recording_id)
+
+    assert result.recording_id == recording_id
+    assert result.path == path
+    assert result.duration_seconds == 1
+    assert result.size_bytes == path.stat().st_size
+    assert result.partial is False
+    assert path.exists()
+
+
+def test_stop_failure_keeps_recording_identity_for_recovery(recorder, monkeypatch):
+    recording_id, _ = recorder.start()
+    path = recorder._path
+    monkeypatch.setattr(recorder, "_close_streams", lambda: (_ for _ in ()).throw(OSError("close failed")))
+
+    with pytest.raises(OSError, match="close failed"):
+        recorder.stop()
+
+    assert recorder.state == "recording"
+    assert recorder.status()["recording_id"] == recording_id
+    assert recorder._path == path
 
 
 def test_start_when_loopback_unavailable_raises(tmp_path):

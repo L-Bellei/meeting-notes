@@ -22,6 +22,14 @@ class RecorderError(Exception):
     pass
 
 
+class RecordingNotFoundError(RecorderError):
+    pass
+
+
+class InvalidRecordingError(RecorderError):
+    pass
+
+
 @dataclass
 class StopResult:
     recording_id: str
@@ -121,7 +129,6 @@ class Recorder:
             self._stopping = True
             path = self._path
             recording_id = self._recording_id
-            partial_at_entry = self._partial
 
         try:
             self._close_streams()
@@ -134,15 +141,54 @@ class Recorder:
                 size_bytes=size_bytes,
                 partial=self._partial,
             )
-        finally:
+        except Exception:
             with self._lock:
-                self._state = "idle"
-                self._recording_id = None
-                self._started_at = None
-                self._path = None
+                self._partial = True
                 self._stopping = False
+            raise
+
+        with self._lock:
+            self._state = "idle"
+            self._recording_id = None
+            self._started_at = None
+            self._path = None
+            self._stopping = False
 
         return result
+
+    def recover(self, recording_id):
+        try:
+            recording_id = str(uuid.UUID(recording_id))
+        except (ValueError, AttributeError) as e:
+            raise InvalidRecordingError("invalid recording id") from e
+
+        with self._lock:
+            active = self._state == "recording"
+            active_id = self._recording_id
+        if active:
+            if active_id != recording_id:
+                raise RecorderError("a different recording is active")
+            return self.stop()
+
+        path = self.recordings_dir / f"rec-{recording_id}.wav"
+        try:
+            resolved_path = path.resolve(strict=True)
+            if resolved_path.parent != self.recordings_dir.resolve():
+                raise InvalidRecordingError("recording path is outside the recordings directory")
+            info = sf.info(resolved_path)
+            size_bytes = resolved_path.stat().st_size
+        except FileNotFoundError as e:
+            raise RecordingNotFoundError("recording file not found") from e
+        except (OSError, RuntimeError) as e:
+            raise InvalidRecordingError(f"recording file is invalid: {e}") from e
+
+        return StopResult(
+            recording_id=recording_id,
+            path=resolved_path,
+            duration_seconds=info.duration,
+            size_bytes=size_bytes,
+            partial=False,
+        )
 
     def _open_streams(self):
         self._mic_queue = queue.Queue(maxsize=QUEUE_MAX_CHUNKS)
@@ -315,6 +361,7 @@ class Recorder:
             if self._mixer_thread.is_alive():
                 log.warning("mixer thread did not exit in time")
                 self._partial = True
+                raise RecorderError("mixer thread did not exit in time")
 
         if self._writer is not None:
             try:

@@ -1,6 +1,6 @@
-import { useRef, useState } from "react"
+import { useCallback, useState } from "react"
 import { useDraggable, useDroppable } from "@dnd-kit/core"
-import { ChevronRight, MoreHorizontal, Sparkles, LayoutGrid } from "lucide-react"
+import { ChevronRight, GripVertical, MoreHorizontal, Sparkles, LayoutGrid } from "lucide-react"
 import type { Theme } from "../../hooks/useThemes"
 import { ThemeRowMenu } from "./ThemeRowMenu"
 import { cn } from "../../lib/utils"
@@ -26,21 +26,27 @@ export function ThemeRow({
   onSelect, onToggleExpand, onCreateChild, onEdit, onDelete,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const menuBtn = useRef<HTMLButtonElement>(null)
+  const [menuButton, setMenuButton] = useState<HTMLButtonElement | null>(null)
+  const setMenuButtonRef = useCallback((node: HTMLButtonElement | null) => setMenuButton(node), [])
   const hasPrompt = theme.custom_prompt.trim() !== ""
 
-  const drag = useDraggable({ id: theme.id, disabled: !draggable })
+  const {
+    attributes: dragAttributes,
+    isDragging,
+    listeners: dragListeners,
+    setActivatorNodeRef: setDragActivatorNodeRef,
+    setNodeRef: setDragNodeRef,
+  } = useDraggable({ id: theme.id, disabled: !draggable })
   const drop = useDroppable({ id: `drop-${theme.id}`, disabled: !droppable })
 
   return (
     <div
-      ref={node => { drag.setNodeRef(node); drop.setNodeRef(node) }}
-      {...drag.listeners}
+      ref={node => { setDragNodeRef(node); drop.setNodeRef(node) }}
       className={cn(
         "relative flex items-center gap-1 rounded-xl pr-1 mt-0.5 hover:bg-accent transition-colors",
         selected && "bg-accent",
         depth > 0 && "ml-4",
-        drag.isDragging && "opacity-40",
+        isDragging && "opacity-40",
         drop.isOver && droppable && "ring-1 ring-primary"
       )}
     >
@@ -86,9 +92,22 @@ export function ThemeRow({
 
       <span className="text-[11px] tabular-nums text-muted-foreground flex-shrink-0">{count}</span>
 
+      {draggable && (
+        <button
+          type="button"
+          ref={setDragActivatorNodeRef}
+          {...dragAttributes}
+          {...dragListeners}
+          aria-label={`Mover tema ${theme.name}`}
+          className="p-1 rounded-md flex-shrink-0 text-muted-foreground hover:bg-primary/20 hover:text-primary"
+        >
+          <GripVertical size={14} />
+        </button>
+      )}
+
       <button
         type="button"
-        ref={menuBtn}
+        ref={setMenuButtonRef}
         onClick={() => setMenuOpen(v => !v)}
         aria-label={`Ações de ${theme.name}`}
         className="p-1 rounded-md flex-shrink-0 text-muted-foreground hover:bg-primary/20 hover:text-primary"
@@ -98,7 +117,7 @@ export function ThemeRow({
 
       {menuOpen && (
         <ThemeRowMenu
-          anchor={menuBtn.current}
+          anchor={menuButton}
           canAddChild={depth === 0}
           onAddChild={() => { setMenuOpen(false); onCreateChild() }}
           onEdit={() => { setMenuOpen(false); onEdit() }}

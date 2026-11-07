@@ -35,6 +35,9 @@ type fakeAudioClient struct {
 	startErr       error
 	stopResp       *audio.StopResponse
 	stopErr        error
+	stopFn         func(context.Context) (*audio.StopResponse, error)
+	recoverResp    *audio.StopResponse
+	recoverErr     error
 	transcribeResp *audio.TranscribeResponse
 	transcribeErr  error
 
@@ -53,11 +56,34 @@ func (f *fakeAudioClient) Health(ctx context.Context) (*audio.HealthResponse, er
 }
 func (f *fakeAudioClient) StartRecording(ctx context.Context) (*audio.StartResponse, error) {
 	f.startCalls++
+	if f.startErr == nil && f.startResp == nil {
+		return &audio.StartResponse{RecordingID: "r-1", StartedAt: time.Now().UTC()}, nil
+	}
 	return f.startResp, f.startErr
 }
 func (f *fakeAudioClient) StopRecording(ctx context.Context) (*audio.StopResponse, error) {
 	f.stopCalls++
+	if f.stopFn != nil {
+		return f.stopFn(ctx)
+	}
 	return f.stopResp, f.stopErr
+}
+func (f *fakeAudioClient) RecoverRecording(_ context.Context, recordingID string) (*audio.StopResponse, error) {
+	if f.recoverErr != nil {
+		return nil, f.recoverErr
+	}
+	resp := f.recoverResp
+	if resp == nil {
+		resp = f.stopResp
+	}
+	if resp == nil {
+		return nil, nil
+	}
+	copy := *resp
+	if copy.RecordingID == "" {
+		copy.RecordingID = recordingID
+	}
+	return &copy, nil
 }
 func (f *fakeAudioClient) Transcribe(ctx context.Context, path, language, device string) (*audio.TranscribeResponse, error) {
 	f.transcribeCalls++
@@ -139,9 +165,8 @@ func TestOrchestrator_StartRecording_AlreadyRecording(t *testing.T) {
 
 	orch.StartRecording(context.Background(), id)
 	err := orch.StartRecording(context.Background(), id)
-	var ve *services.ValidationError
-	if !errors.As(err, &ve) {
-		t.Errorf("expected ValidationError, got %v", err)
+	if !errors.Is(err, services.ErrMeetingBusy) {
+		t.Errorf("expected ErrMeetingBusy, got %v", err)
 	}
 	_ = mr
 }
@@ -426,9 +451,8 @@ func TestOrchestrator_SetTranscriptAndProcess_WhileRecording(t *testing.T) {
 	mr.Update(context.Background(), m)
 
 	err := orch.SetTranscriptAndProcess(context.Background(), id, "x")
-	var ve *services.ValidationError
-	if !errors.As(err, &ve) {
-		t.Errorf("expected ValidationError, got %v", err)
+	if !errors.Is(err, services.ErrMeetingBusy) {
+		t.Errorf("expected ErrMeetingBusy, got %v", err)
 	}
 }
 
@@ -458,7 +482,7 @@ func TestOrchestrator_NotifyFn_CalledOnStatusChange(t *testing.T) {
 	}
 	fa := &fakeAudioClient{
 		startResp:      &audio.StartResponse{RecordingID: "r-1", StartedAt: time.Now().UTC()},
-		stopResp:       &audio.StopResponse{Path: wavPath, DurationSeconds: 10},
+		stopResp:       &audio.StopResponse{RecordingID: "r-1", Path: wavPath, DurationSeconds: 10},
 		transcribeResp: &audio.TranscribeResponse{Transcript: transcript},
 	}
 	orch, _, id := newOrchTest(t, fa, &fakeAI{
@@ -540,7 +564,6 @@ func TestOrchestrator_RunAIPipeline_SyncsSearch(t *testing.T) {
 	ctx := context.Background()
 
 	searchRepo := repository.NewSearchRepository(db)
-	orch.SetSearchRepo(searchRepo)
 
 	m, err := mr.GetByID(ctx, id)
 	if err != nil {
@@ -563,6 +586,15 @@ func TestOrchestrator_RunAIPipeline_SyncsSearch(t *testing.T) {
 	}
 	if len(results) == 0 {
 		t.Error("expected FTS result after pipeline, got none")
+	}
+	for _, query := range []string{"summary", "point", "task"} {
+		results, err := searchRepo.Search(ctx, query)
+		if err != nil {
+			t.Fatalf("Search(%q): %v", query, err)
+		}
+		if len(results) == 0 || results[0].MeetingID != id {
+			t.Errorf("expected FTS result for %q after pipeline, got %+v", query, results)
+		}
 	}
 }
 

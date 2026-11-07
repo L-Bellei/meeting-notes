@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef } from "react"
-import { createPortal } from "react-dom"
+import { useState, useEffect } from "react"
 import { Button } from "../ui/button"
 import { useCardDetail, useUpdateCard, useLinkCardToMeeting, useDeleteCard } from "../../hooks/useBoard"
 import { useMeetings } from "../../hooks/useMeetings"
 import { ExpandableText } from "../ui/ExpandableText"
 import { CardModalHeader } from "./CardModalHeader"
-import { CardTasksSection, parseManualTask, encodeManualTask } from "./CardTasksSection"
+import { CardTasksSection } from "./CardTasksSection"
+import { parseManualTask, encodeManualTask } from "./manualTask"
 import { CardNotesSection } from "./CardNotesSection"
+import { Dialog } from "../ui/Dialog"
 
 interface Props {
   cardId: string | null
@@ -15,96 +16,36 @@ interface Props {
 
 // ─── main component ──────────────────────────────────────────────────────────
 export function CardDetailModal({ cardId, onClose }: Props) {
-  const { data: card, isLoading } = useCardDetail(cardId)
+  if (!cardId) return null
+  return <CardDetailContent key={cardId} cardId={cardId} onClose={onClose} />
+}
+
+function CardDetailContent({ cardId, onClose }: { cardId: string; onClose: () => void }) {
+  const { data: card, isLoading, isError, isFetching, error, refetch } = useCardDetail(cardId)
   const updateCard = useUpdateCard()
   const linkCard = useLinkCardToMeeting()
   const deleteCard = useDeleteCard()
-  const [description, setDescription] = useState("")
+  const [descriptionDraft, setDescriptionDraft] = useState<{ base: string; value: string } | null>(null)
   const [descriptionAtEditStart, setDescriptionAtEditStart] = useState("")
   const [editingNotes, setEditingNotes] = useState(false)
   const [linkingMeeting, setLinkingMeeting] = useState(false)
   const [selectedMeetingId, setSelectedMeetingId] = useState("")
   const [confirmDelete, setConfirmDelete] = useState(false)
   const { data: meetings = [] } = useMeetings()
-  const panelRef = useRef<HTMLDivElement>(null)
+  const persistedDescription = card?.description ?? ""
+  const description = descriptionDraft?.base === persistedDescription
+    ? descriptionDraft.value
+    : persistedDescription
 
-  useEffect(() => {
-    if (card) {
-      setDescription(card.description)
-      setLinkingMeeting(false)
-      setSelectedMeetingId("")
-    }
-  }, [card?.id])
-
-  const onCloseRef = useRef(onClose)
-  useEffect(() => {
-    onCloseRef.current = onClose
-  })
-
-  useEffect(() => {
-    if (!cardId) return
-    const previouslyFocused = document.activeElement as HTMLElement | null
-    panelRef.current?.focus()
-    return () => {
-      previouslyFocused?.focus()
-    }
-  }, [cardId])
-
-  useEffect(() => {
-    if (!cardId) return
-
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.preventDefault()
-        // Dois estágios: com a edição aberta, o primeiro Escape cancela a edição
-        // em vez de fechar o modal e descartar o texto digitado.
-        if (editingNotes) {
-          cancelEditing()
-          return
-        }
-        onCloseRef.current()
-        return
-      }
-      if (e.key !== "Tab") return
-      const panel = panelRef.current
-      if (!panel) return
-      const focusable = panel.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      )
-      if (focusable.length === 0) return
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-      if (!Array.from(focusable).includes(document.activeElement as HTMLElement)) {
-        e.preventDefault()
-        const target = e.shiftKey ? last : first
-        target.focus()
-        return
-      }
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault()
-        first.focus()
-      }
-    }
-
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [cardId, editingNotes])
-
-  useEffect(() => {
-    setEditingNotes(false)
-    setConfirmDelete(false)
-  }, [cardId])
+  function setDescription(value: string) {
+    setDescriptionDraft({ base: persistedDescription, value })
+  }
 
   useEffect(() => {
     if (!confirmDelete) return
     const timer = setTimeout(() => setConfirmDelete(false), 4000)
     return () => clearTimeout(timer)
   }, [confirmDelete])
-
-  if (!cardId) return null
 
   const isManual = card?.source === "manual"
   const manualTasks = card?.manual_tasks ?? []
@@ -114,7 +55,7 @@ export function CardDetailModal({ cardId, onClose }: Props) {
     setEditingNotes(true)
   }
   function cancelEditing() {
-    setDescription(descriptionAtEditStart)
+    setDescriptionDraft({ base: persistedDescription, value: descriptionAtEditStart })
     setEditingNotes(false)
   }
   function saveDescription() {
@@ -162,24 +103,49 @@ export function CardDetailModal({ cardId, onClose }: Props) {
     deleteCard.mutate(cardId, { onSuccess: onClose })
   }
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="card-modal-title"
-        tabIndex={-1}
-        className="bg-background border border-border rounded-lg w-[640px] max-w-[calc(100vw-2rem)] max-h-[80vh] flex flex-col shadow-xl overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
+  function handleEscape() {
+    if (editingNotes) {
+      cancelEditing()
+      return
+    }
+    onClose()
+  }
+
+  return (
+    <Dialog
+      open={!!cardId}
+      onClose={onClose}
+      onEscape={handleEscape}
+      labelledBy="card-modal-title"
+      overlayClassName="bg-black/50"
+      panelClassName="bg-background border border-border rounded-lg w-[640px] max-w-[calc(100vw-2rem)] max-h-[80vh] flex flex-col shadow-xl overflow-hidden"
+      closeOnBackdrop
+    >
         <div
           className="h-[3px] flex-shrink-0"
           style={{ background: (!isManual && card?.theme_color) || "#2a2a2a" }}
         />
         {isLoading && (
           <div className="px-5 py-4 border-b border-border flex-shrink-0">
-            <span id="card-modal-title" className="text-xs text-muted-foreground">Carregando...</span>
+            <h2 id="card-modal-title" className="text-xs text-muted-foreground">Carregando...</h2>
+          </div>
+        )}
+        {isError && (
+          <div className="px-5 py-4 border-b border-border flex-shrink-0">
+            {!card && <h2 id="card-modal-title" className="text-xs text-muted-foreground">Detalhes do card</h2>}
+            <p role="alert" className="text-sm text-destructive">
+              Não foi possível carregar o card: {error instanceof Error ? error.message : "erro inesperado"}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              aria-busy={isFetching}
+            >
+              {isFetching ? "Tentando novamente..." : "Tentar novamente"}
+            </Button>
           </div>
         )}
         {card && (
@@ -193,6 +159,7 @@ export function CardDetailModal({ cardId, onClose }: Props) {
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {isLoading && <p role="status" className="text-sm text-muted-foreground">Carregando detalhes do card...</p>}
           {card && (
             <CardTasksSection
               card={card}
@@ -271,8 +238,6 @@ export function CardDetailModal({ cardId, onClose }: Props) {
             </section>
           )}
         </div>
-      </div>
-    </div>,
-    document.body,
+    </Dialog>
   )
 }

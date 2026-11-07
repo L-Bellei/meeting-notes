@@ -1,7 +1,7 @@
 import { useState } from "react"
-import { createPortal } from "react-dom"
 import { X, Trash2, ChevronUp, ChevronDown, Pencil, Check } from "lucide-react"
 import { Button } from "../ui/button"
+import { Dialog } from "../ui/Dialog"
 import {
   useColumns, useCreateColumn, useUpdateColumn,
   useDeleteColumn, useReorderColumns, type BoardColumn,
@@ -54,12 +54,17 @@ export function ColumnSettingsPanel({ onClose }: Props) {
     )
   }
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background border border-border rounded-lg w-96 shadow-xl">
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      labelledBy="column-settings-title"
+      overlayClassName="bg-black/50"
+      panelClassName="bg-background border border-border rounded-lg w-96 shadow-xl"
+    >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h2 className="font-semibold text-sm">Configurar Colunas</h2>
-          <Button variant="ghost" size="icon" onClick={onClose}><X size={16} /></Button>
+          <h2 id="column-settings-title" className="font-semibold text-sm">Configurar Colunas</h2>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Fechar configuração de colunas"><X size={16} /></Button>
         </div>
         <div className="p-4 space-y-2 max-h-80 overflow-y-auto">
           {columns.map((col, idx) => (
@@ -67,6 +72,7 @@ export function ColumnSettingsPanel({ onClose }: Props) {
               {editingId === col.id ? (
                 <>
                   <input
+                    aria-label={`Nome da coluna ${col.name}`}
                     className="flex-1 text-sm bg-input border border-border rounded px-2 py-1"
                     value={editName}
                     onChange={e => setEditName(e.target.value)}
@@ -82,22 +88,22 @@ export function ColumnSettingsPanel({ onClose }: Props) {
                   <Button variant="ghost" size="icon" onClick={() => {
                     if (!editName.trim()) return
                     updateCol.mutate({ id: col.id, name: editName.trim() }, { onSuccess: () => setEditingId(null) })
-                  }}><Check size={14} /></Button>
+                  }} aria-label={`Salvar nome da coluna ${col.name}`}><Check size={14} /></Button>
                 </>
               ) : (
                 <>
                   <span className="flex-1 text-sm">{col.name}</span>
                   <span className="text-xs text-muted-foreground">{col.card_count}</span>
                   <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100"
-                    onClick={() => { setEditingId(col.id); setEditName(col.name) }}>
+                    onClick={() => { setEditingId(col.id); setEditName(col.name) }} aria-label={`Editar coluna ${col.name}`}>
                     <Pencil size={12} />
                   </Button>
                   <Button variant="ghost" size="icon" disabled={idx === 0}
-                    onClick={() => handleMove(col, -1)}><ChevronUp size={14} /></Button>
+                    onClick={() => handleMove(col, -1)} aria-label={`Mover coluna ${col.name} para cima`}><ChevronUp size={14} /></Button>
                   <Button variant="ghost" size="icon" disabled={idx === columns.length - 1}
-                    onClick={() => handleMove(col, 1)}><ChevronDown size={14} /></Button>
+                    onClick={() => handleMove(col, 1)} aria-label={`Mover coluna ${col.name} para baixo`}><ChevronDown size={14} /></Button>
                   <Button variant="ghost" size="icon" disabled={columns.length <= 1}
-                    onClick={() => handleDeleteClick(col)}><Trash2 size={12} /></Button>
+                    onClick={() => handleDeleteClick(col)} aria-label={`Excluir coluna ${col.name}`}><Trash2 size={12} /></Button>
                 </>
               )}
             </div>
@@ -105,6 +111,7 @@ export function ColumnSettingsPanel({ onClose }: Props) {
         </div>
         <div className="flex gap-2 px-4 pb-4">
           <input
+            aria-label="Nome da nova coluna"
             className="flex-1 text-sm bg-input border border-border rounded px-2 py-1"
             placeholder="Nova coluna..."
             value={newName}
@@ -113,16 +120,20 @@ export function ColumnSettingsPanel({ onClose }: Props) {
           />
           <Button size="sm" onClick={handleCreate}>Adicionar</Button>
         </div>
-      </div>
 
       {deletingCol && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
-          <div className="bg-background border border-border rounded-lg w-80 p-4 shadow-xl space-y-3">
-            <p className="text-sm">
+        <div
+          className="border-t border-border p-4 space-y-3"
+          role="group"
+          aria-labelledby="delete-column-title"
+          aria-live="polite"
+        >
+            <p id="delete-column-title" className="text-sm">
               A coluna <strong>{deletingCol.name}</strong> tem {deletingCol.card_count} card(s).
               Mover para:
             </p>
             <select
+              aria-label="Coluna de destino"
               className="w-full text-sm bg-input border border-border rounded px-2 py-1"
               value={moveToId}
               onChange={e => setMoveToId(e.target.value)}
@@ -133,12 +144,12 @@ export function ColumnSettingsPanel({ onClose }: Props) {
             </select>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => setDeletingCol(null)}>Cancelar</Button>
-              <Button variant="destructive" size="sm" onClick={handleConfirmDelete}>Deletar</Button>
+              <Button variant="destructive" size="sm" onClick={handleConfirmDelete} disabled={!moveToId || deleteCol.isPending}>
+                {deleteCol.isPending ? "Deletando..." : "Deletar"}
+              </Button>
             </div>
-          </div>
         </div>
       )}
-    </div>,
-    document.body,
+    </Dialog>
   )
 }

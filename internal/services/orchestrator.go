@@ -2,10 +2,10 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -32,8 +32,12 @@ type Orchestrator struct {
 	settings     orchestratorSettings
 	pipelineWG   sync.WaitGroup
 	notifyFn     func(meetingID, status string)
-	searchRepo   *repository.SearchRepository
 	logRepo      *repository.LogRepository
+	operations   *MeetingOperationCoordinator
+	pipelineCtx  context.Context
+	cancel       context.CancelFunc
+	shutdownOnce sync.Once
+	shutdownErr  error
 }
 
 func NewOrchestrator(
@@ -45,7 +49,13 @@ func NewOrchestrator(
 	audioClient audio.Client,
 	settings orchestratorSettings,
 	boardCardSvc *BoardCardService,
+	coordinators ...*MeetingOperationCoordinator,
 ) *Orchestrator {
+	ctx, cancel := context.WithCancel(context.Background())
+	operations := NewMeetingOperationCoordinator()
+	if len(coordinators) > 0 && coordinators[0] != nil {
+		operations = coordinators[0]
+	}
 	return &Orchestrator{
 		repo:         repo,
 		themeRepo:    themeRepo,
@@ -55,15 +65,23 @@ func NewOrchestrator(
 		boardCardSvc: boardCardSvc,
 		audio:        audioClient,
 		settings:     settings,
+		operations:   operations,
+		pipelineCtx:  ctx,
+		cancel:       cancel,
 	}
+}
+
+func (o *Orchestrator) SetParentContext(ctx context.Context) {
+	o.cancel()
+	o.pipelineCtx, o.cancel = context.WithCancel(ctx)
+}
+
+func (o *Orchestrator) OperationCoordinator() *MeetingOperationCoordinator {
+	return o.operations
 }
 
 func (o *Orchestrator) SetNotifyFn(fn func(meetingID, status string)) {
 	o.notifyFn = fn
-}
-
-func (o *Orchestrator) SetSearchRepo(repo *repository.SearchRepository) {
-	o.searchRepo = repo
 }
 
 func (o *Orchestrator) SetLogRepo(repo *repository.LogRepository) {
@@ -74,9 +92,7 @@ func (o *Orchestrator) persistLog(level, component, message string) {
 	if o.logRepo == nil {
 		return
 	}
-	go func() {
-		_ = o.logRepo.Insert(context.Background(), level, component, message, nil)
-	}()
+	_ = o.logRepo.Insert(context.Background(), level, component, message, nil)
 }
 
 func (o *Orchestrator) notify(meetingID string, status models.MeetingStatus) {
@@ -89,26 +105,151 @@ func (o *Orchestrator) WaitPipelines() {
 	o.pipelineWG.Wait()
 }
 
+func (o *Orchestrator) Shutdown() error {
+	o.shutdownOnce.Do(func() {
+		o.operations.Close()
+		o.cancel()
+		o.pipelineWG.Wait()
+		o.shutdownErr = o.RecoverInterruptedMeetings(context.Background())
+	})
+	return o.shutdownErr
+}
+
+func (o *Orchestrator) RecoverInterruptedMeetings(ctx context.Context) error {
+	for _, status := range []models.MeetingStatus{
+		models.StatusRecording,
+		models.StatusTranscribing,
+		models.StatusProcessing,
+		models.StatusFailed,
+	} {
+		meetings, err := o.repo.List(ctx, repository.ListFilters{Status: string(status)})
+		if err != nil {
+			return fmt.Errorf("list interrupted meetings: %w", err)
+		}
+		for i := range meetings {
+			meeting := &meetings[i]
+			var stopErr error
+			needsRecordingRecovery := (status == models.StatusRecording || status == models.StatusTranscribing) &&
+				(meeting.RecordingID != nil || meeting.AudioPath == nil || *meeting.AudioPath == "")
+			if status == models.StatusFailed && meeting.RecordingID != nil {
+				needsRecordingRecovery = true
+			}
+			if needsRecordingRecovery {
+				stopCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				var stopResp *audio.StopResponse
+				var err error
+				if meeting.RecordingID != nil {
+					stopResp, err = o.audio.RecoverRecording(stopCtx, *meeting.RecordingID)
+				} else {
+					stopResp, err = o.audio.StopRecording(stopCtx)
+				}
+				cancel()
+				if err != nil {
+					stopErr = err
+				} else if stopResp == nil || stopResp.Path == "" {
+					stopErr = errors.New("audio service returned no recording path")
+				} else {
+					keepAudio := true
+					if meeting.RecordingID != nil && stopResp.RecordingID != *meeting.RecordingID {
+						return fmt.Errorf("recovered recording identity mismatch for meeting %s", meeting.ID)
+					}
+					if meeting.RecordingID != nil {
+						err = o.repo.SetRecordingResult(ctx, meeting.ID, *meeting.RecordingID, &stopResp.Path, keepAudio)
+					} else {
+						err = o.repo.SetAudioPath(ctx, meeting.ID, &stopResp.Path, &keepAudio)
+					}
+					if err != nil {
+						return fmt.Errorf("preserve interrupted recording %s: %w", meeting.ID, err)
+					}
+				}
+			}
+			message := "processamento interrompido pelo encerramento do aplicativo"
+			if stopErr != nil {
+				message = fmt.Sprintf("%s; falha ao preservar áudio: %v", message, stopErr)
+			}
+			if status == models.StatusFailed && !needsRecordingRecovery {
+				continue
+			}
+			if err := o.repo.SetStatus(ctx, meeting.ID, models.StatusFailed, &message); err != nil {
+				return fmt.Errorf("mark interrupted meeting %s: %w", meeting.ID, err)
+			}
+			o.notify(meeting.ID, models.StatusFailed)
+		}
+	}
+	return nil
+}
+
+func isMeetingOperationStatus(status models.MeetingStatus) bool {
+	return status == models.StatusRecording || status == models.StatusTranscribing || status == models.StatusProcessing
+}
+
+func mapTransitionError(err error) error {
+	if errors.Is(err, repository.ErrConflict) {
+		return ErrMeetingBusy
+	}
+	return err
+}
+
 func (o *Orchestrator) StartRecording(ctx context.Context, meetingID string) error {
+	if err := o.operations.Begin(meetingID, "recording"); err != nil {
+		return err
+	}
+	release := true
+	defer func() {
+		if release {
+			o.operations.End(meetingID)
+		}
+	}()
 	m, err := o.repo.GetByID(ctx, meetingID)
 	if err != nil {
 		return err
 	}
-	if m.Status == models.StatusRecording {
-		return &ValidationError{"meeting is already recording"}
+	if isMeetingOperationStatus(m.Status) {
+		return ErrMeetingBusy
 	}
-	if _, err := o.audio.StartRecording(ctx); err != nil {
+	if err := o.withMeetingWrite(meetingID, func() error {
+		return o.repo.TransitionStatus(ctx, meetingID, []models.MeetingStatus{m.Status}, models.StatusRecording, nil, nil)
+	}); err != nil {
+		return mapTransitionError(err)
+	}
+	startResp, err := o.audio.StartRecording(ctx)
+	if err != nil {
+		if rollbackErr := o.repo.TransitionStatus(ctx, meetingID, []models.MeetingStatus{models.StatusRecording}, m.Status, m.ErrorMessage, nil); rollbackErr != nil {
+			return fmt.Errorf("start recording: %v; restore meeting status: %w", err, rollbackErr)
+		}
 		return err
+	}
+	if startResp == nil || startResp.RecordingID == "" {
+		release = false
+		return fmt.Errorf("audio service started recording without a recording id")
+	}
+	recordingID := startResp.RecordingID
+	persistCtx, persistCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	err = o.withMeetingWrite(meetingID, func() error {
+		return o.repo.SetRecordingID(persistCtx, meetingID, &recordingID)
+	})
+	persistCancel()
+	if err != nil {
+		release = false
+		return fmt.Errorf("persist recording identity: %w", err)
 	}
 	m.Status = models.StatusRecording
-	if err := o.repo.Update(ctx, m); err != nil {
-		return err
-	}
+	m.RecordingID = &recordingID
 	o.notify(m.ID, m.Status)
+	release = false
 	return nil
 }
 
 func (o *Orchestrator) StopRecording(ctx context.Context, meetingID string, keepAudio bool) error {
+	if err := o.operations.BeginStopRecording(meetingID); err != nil {
+		return err
+	}
+	release := true
+	defer func() {
+		if release {
+			o.operations.End(meetingID)
+		}
+	}()
 	m, err := o.repo.GetByID(ctx, meetingID)
 	if err != nil {
 		return err
@@ -116,23 +257,45 @@ func (o *Orchestrator) StopRecording(ctx context.Context, meetingID string, keep
 	if m.Status != models.StatusRecording {
 		return &ValidationError{"meeting is not recording"}
 	}
-	m.KeepAudio = keepAudio
-	if err := o.repo.Update(ctx, m); err != nil {
-		return err
+	if err := o.withMeetingWrite(meetingID, func() error {
+		return o.repo.TransitionStatus(ctx, meetingID, []models.MeetingStatus{models.StatusRecording}, models.StatusTranscribing, nil, &keepAudio)
+	}); err != nil {
+		return mapTransitionError(err)
 	}
-	o.spawnPipeline(meetingID, o.RunCapturePipeline)
+	o.notify(meetingID, models.StatusTranscribing)
+	o.spawnReservedPipeline(meetingID, o.RunCapturePipeline)
+	release = false
 	return nil
 }
 
 func (o *Orchestrator) Reprocess(ctx context.Context, meetingID string) error {
+	if err := o.operations.Begin(meetingID, "pipeline"); err != nil {
+		return err
+	}
+	release := true
+	defer func() {
+		if release {
+			o.operations.End(meetingID)
+		}
+	}()
 	m, err := o.repo.GetByID(ctx, meetingID)
 	if err != nil {
 		return err
 	}
+	if isMeetingOperationStatus(m.Status) {
+		return ErrMeetingBusy
+	}
 	if m.Transcript == nil || *m.Transcript == "" {
 		return &ValidationError{"transcript is required for processing"}
 	}
-	o.spawnPipeline(meetingID, o.RunAIPipeline)
+	if err := o.withMeetingWrite(meetingID, func() error {
+		return o.repo.TransitionStatus(ctx, meetingID, []models.MeetingStatus{m.Status}, models.StatusProcessing, nil, nil)
+	}); err != nil {
+		return mapTransitionError(err)
+	}
+	o.notify(meetingID, models.StatusProcessing)
+	o.spawnReservedPipeline(meetingID, o.RunAIPipeline)
+	release = false
 	return nil
 }
 
@@ -140,26 +303,39 @@ func (o *Orchestrator) SetTranscriptAndProcess(ctx context.Context, meetingID, t
 	if transcript == "" {
 		return &ValidationError{"transcript is required"}
 	}
+	if err := o.operations.Begin(meetingID, "pipeline"); err != nil {
+		return err
+	}
+	release := true
+	defer func() {
+		if release {
+			o.operations.End(meetingID)
+		}
+	}()
 	m, err := o.repo.GetByID(ctx, meetingID)
 	if err != nil {
 		return err
 	}
-	if m.Status == models.StatusRecording || m.Status == models.StatusTranscribing {
-		return &ValidationError{"cannot set transcript while recording or transcribing"}
+	if isMeetingOperationStatus(m.Status) {
+		return ErrMeetingBusy
 	}
-	m.Transcript = &transcript
-	if err := o.repo.Update(ctx, m); err != nil {
-		return err
+	if err := o.withMeetingWrite(meetingID, func() error {
+		return o.repo.SetTranscriptAndStatus(ctx, meetingID, []models.MeetingStatus{m.Status}, transcript, models.StatusProcessing, nil)
+	}); err != nil {
+		return mapTransitionError(err)
 	}
-	o.spawnPipeline(meetingID, o.RunAIPipeline)
+	o.notify(meetingID, models.StatusProcessing)
+	o.spawnReservedPipeline(meetingID, o.RunAIPipeline)
+	release = false
 	return nil
 }
 
-func (o *Orchestrator) spawnPipeline(meetingID string, fn func(context.Context, string) error) {
+func (o *Orchestrator) spawnReservedPipeline(meetingID string, fn func(context.Context, string) error) {
 	o.pipelineWG.Add(1)
 	go func() {
 		defer o.pipelineWG.Done()
-		bgCtx, cancel := context.WithTimeout(context.Background(), pipelineTimeout)
+		defer o.operations.End(meetingID)
+		bgCtx, cancel := context.WithTimeout(o.pipelineCtx, pipelineTimeout)
 		defer cancel()
 		if err := fn(bgCtx, meetingID); err != nil {
 			log.Printf("pipeline %s: %v", meetingID, err)
@@ -174,23 +350,49 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 		return err
 	}
 
-	m.Status = models.StatusTranscribing
-	if err := o.repo.Update(ctx, m); err != nil {
-		return err
+	if m.Status == models.StatusRecording {
+		if err := o.withMeetingWrite(meetingID, func() error {
+			return o.repo.TransitionStatus(ctx, meetingID, []models.MeetingStatus{models.StatusRecording}, models.StatusTranscribing, nil, nil)
+		}); err != nil {
+			return mapTransitionError(err)
+		}
+	} else if m.Status != models.StatusTranscribing {
+		return ErrMeetingBusy
 	}
-	o.notify(m.ID, m.Status)
 
-	stopResp, err := o.audio.StopRecording(ctx)
+	stopCtx, stopCancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	stopResp, err := o.audio.StopRecording(stopCtx)
+	stopCancel()
 	if err != nil {
-		o.markFailed(ctx, m, fmt.Sprintf("falha ao parar gravação: %v", err))
+		if ctx.Err() == nil {
+			o.markFailed(ctx, m, fmt.Sprintf("falha ao parar gravação: %v", err))
+		}
+		return err
+	}
+	if stopResp == nil || stopResp.Path == "" {
+		err := fmt.Errorf("audio service returned no recording path")
+		o.markFailed(ctx, m, err.Error())
+		return err
+	}
+	if m.RecordingID != nil && stopResp.RecordingID != *m.RecordingID {
+		err := fmt.Errorf("audio service returned recording %q, want %q", stopResp.RecordingID, *m.RecordingID)
+		o.markFailed(ctx, m, err.Error())
 		return err
 	}
 
-	// Persist audio path immediately — before any failure that might follow
-	m.AudioPath = &stopResp.Path
-	if err := o.repo.Update(ctx, m); err != nil {
+	persistCtx, persistCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	if err := o.withMeetingWrite(meetingID, func() error {
+		if m.RecordingID != nil {
+			return o.repo.SetRecordingResult(persistCtx, meetingID, *m.RecordingID, &stopResp.Path, m.KeepAudio)
+		}
+		return o.repo.SetAudioPath(persistCtx, meetingID, &stopResp.Path, nil)
+	}); err != nil {
+		persistCancel()
 		return err
 	}
+	persistCancel()
+	m.AudioPath = &stopResp.Path
+	m.RecordingID = nil
 
 	if err := CheckModelLoaded(ctx, o.audio); err != nil {
 		o.markFailed(ctx, m, err.Error())
@@ -215,22 +417,22 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 		return err
 	}
 
-	m.Transcript = &trResp.Transcript
-	m.Language = &trResp.Language
 	dur := int(stopResp.DurationSeconds)
-	m.DurationSeconds = &dur
-	m.Status = models.StatusProcessing
-	if err := o.repo.Update(ctx, m); err != nil {
+	if err := o.withMeetingWrite(meetingID, func() error {
+		return o.repo.SetTranscriptionResult(ctx, meetingID, trResp.Transcript, trResp.Language, &dur)
+	}); err != nil {
 		return err
 	}
-	o.notify(m.ID, m.Status)
+	m.Transcript = &trResp.Transcript
+	m.Language = &trResp.Language
+	m.DurationSeconds = &dur
+	m.Status = models.StatusProcessing
+	m.ErrorMessage = nil
+	o.notify(m.ID, models.StatusProcessing)
 
 	if !m.KeepAudio {
-		if err := os.Remove(stopResp.Path); err != nil && !os.IsNotExist(err) {
-			log.Printf("warning: delete WAV %s: %v", stopResp.Path, err)
-		} else {
-			m.AudioPath = nil
-			_ = o.repo.Update(ctx, m)
+		if err := o.clearAudioReferenceAndRemove(ctx, m, stopResp.Path); err != nil {
+			return err
 		}
 	}
 
@@ -238,11 +440,10 @@ func (o *Orchestrator) RunCapturePipeline(ctx context.Context, meetingID string)
 		return err
 	}
 
-	m.Status = models.StatusCompleted
-	if err := o.repo.Update(ctx, m); err != nil {
+	if err := o.setStatus(ctx, meetingID, models.StatusCompleted, nil); err != nil {
 		return err
 	}
-	o.notify(m.ID, m.Status)
+	o.notify(m.ID, models.StatusCompleted)
 	return nil
 }
 
@@ -283,22 +484,20 @@ func (o *Orchestrator) RunAIPipeline(ctx context.Context, meetingID string) erro
 		return &ValidationError{"transcript is required"}
 	}
 
-	m.Status = models.StatusProcessing
-	if err := o.repo.Update(ctx, m); err != nil {
+	if err := o.setStatus(ctx, meetingID, models.StatusProcessing, nil); err != nil {
 		return err
 	}
-	o.notify(m.ID, m.Status)
+	o.notify(m.ID, models.StatusProcessing)
 
 	if err := o.runAIGeneration(ctx, m); err != nil {
 		o.markFailed(ctx, m, friendlyAIError(err))
 		return err
 	}
 
-	m.Status = models.StatusCompleted
-	if err := o.repo.Update(ctx, m); err != nil {
+	if err := o.setStatus(ctx, meetingID, models.StatusCompleted, nil); err != nil {
 		return err
 	}
-	o.notify(m.ID, m.Status)
+	o.notify(m.ID, models.StatusCompleted)
 	return nil
 }
 
@@ -328,48 +527,60 @@ func (o *Orchestrator) runAIGeneration(ctx context.Context, m *models.Meeting) e
 			o.persistLog("warn", "orchestrator", fmt.Sprintf("auto-add board %s: %v", m.ID, err))
 		}
 	}
-	if o.searchRepo != nil {
-		go func() {
-			bgCtx := context.Background()
-			transcript := ""
-			if m.Transcript != nil {
-				transcript = *m.Transcript
-			}
-			summary := ""
-			if sm, err2 := o.summarySvc.Get(bgCtx, m.ID); err2 == nil && sm != nil {
-				summary = sm.Content
-			}
-			kps, _ := o.keyPointSvc.List(bgCtx, m.ID)
-			var kpContents []string
-			for _, kp := range kps {
-				kpContents = append(kpContents, kp.Content)
-			}
-			tasks, _ := o.taskSvc.List(bgCtx, m.ID)
-			var taskContents []string
-			for _, tk := range tasks {
-				taskContents = append(taskContents, tk.Description)
-			}
-			_ = o.searchRepo.UpsertMeeting(bgCtx, m.ID, m.Title, transcript, summary,
-				strings.Join(kpContents, "\n"), strings.Join(taskContents, "\n"))
-		}()
-	}
 	return nil
 }
 
 func (o *Orchestrator) markFailed(ctx context.Context, m *models.Meeting, errMsg string) {
-	m.Status = models.StatusFailed
-	if errMsg != "" {
-		m.ErrorMessage = &errMsg
-	}
-	if err := o.repo.Update(ctx, m); err != nil {
+	persistCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	message := errMsg
+	if err := o.withMeetingWrite(m.ID, func() error {
+		return o.repo.SetStatus(persistCtx, m.ID, models.StatusFailed, &message)
+	}); err != nil {
 		log.Printf("warning: mark failed %s: %v", m.ID, err)
 		o.persistLog("warn", "orchestrator", fmt.Sprintf("mark failed %s: %v", m.ID, err))
 		return
 	}
-	o.notify(m.ID, m.Status)
+	m.Status = models.StatusFailed
+	m.ErrorMessage = &message
+	o.notify(m.ID, models.StatusFailed)
+}
+
+func (o *Orchestrator) withMeetingWrite(meetingID string, fn func() error) error {
+	return o.operations.WithMeetingLock(meetingID, func(string) error {
+		return fn()
+	})
+}
+
+func (o *Orchestrator) clearAudioReferenceAndRemove(ctx context.Context, m *models.Meeting, audioPath string) error {
+	if err := o.withMeetingWrite(m.ID, func() error {
+		return o.repo.SetAudioPath(ctx, m.ID, nil, nil)
+	}); err != nil {
+		return err
+	}
+	m.AudioPath = nil
+	if err := os.Remove(audioPath); err != nil && !os.IsNotExist(err) {
+		log.Printf("warning: delete WAV %s: %v", audioPath, err)
+	}
+	return nil
+}
+
+func (o *Orchestrator) setStatus(ctx context.Context, meetingID string, status models.MeetingStatus, errorMessage *string) error {
+	return o.withMeetingWrite(meetingID, func() error {
+		return o.repo.SetStatus(ctx, meetingID, status, errorMessage)
+	})
 }
 
 func (o *Orchestrator) RetranscribeRecording(ctx context.Context, meetingID string) error {
+	if err := o.operations.Begin(meetingID, "pipeline"); err != nil {
+		return err
+	}
+	release := true
+	defer func() {
+		if release {
+			o.operations.End(meetingID)
+		}
+	}()
 	m, err := o.repo.GetByID(ctx, meetingID)
 	if err != nil {
 		return err
@@ -377,10 +588,17 @@ func (o *Orchestrator) RetranscribeRecording(ctx context.Context, meetingID stri
 	if m.AudioPath == nil || *m.AudioPath == "" {
 		return &ValidationError{Message: "nenhum arquivo de áudio disponível para transcrição"}
 	}
-	if m.Status == models.StatusRecording || m.Status == models.StatusTranscribing || m.Status == models.StatusProcessing {
-		return &ValidationError{Message: "a reunião já está sendo processada"}
+	if isMeetingOperationStatus(m.Status) {
+		return ErrMeetingBusy
 	}
-	o.spawnPipeline(meetingID, o.RunRetranscribePipeline)
+	if err := o.withMeetingWrite(meetingID, func() error {
+		return o.repo.TransitionStatus(ctx, meetingID, []models.MeetingStatus{m.Status}, models.StatusTranscribing, nil, nil)
+	}); err != nil {
+		return mapTransitionError(err)
+	}
+	o.notify(meetingID, models.StatusTranscribing)
+	o.spawnReservedPipeline(meetingID, o.RunRetranscribePipeline)
+	release = false
 	return nil
 }
 
@@ -394,12 +612,12 @@ func (o *Orchestrator) RunRetranscribePipeline(ctx context.Context, meetingID st
 	}
 	audioPath := *m.AudioPath
 
-	m.Status = models.StatusTranscribing
-	m.ErrorMessage = nil
-	if err := o.repo.Update(ctx, m); err != nil {
+	if err := o.setStatus(ctx, meetingID, models.StatusTranscribing, nil); err != nil {
 		return err
 	}
-	o.notify(m.ID, m.Status)
+	m.Status = models.StatusTranscribing
+	m.ErrorMessage = nil
+	o.notify(m.ID, models.StatusTranscribing)
 
 	if err := CheckModelLoaded(ctx, o.audio); err != nil {
 		o.markFailed(ctx, m, err.Error())
@@ -424,24 +642,26 @@ func (o *Orchestrator) RunRetranscribePipeline(ctx context.Context, meetingID st
 		return err
 	}
 
-	m.Transcript = &trResp.Transcript
-	m.Language = &trResp.Language
+	duration := m.DurationSeconds
 	if trResp.DurationSeconds > 0 {
 		dur := int(trResp.DurationSeconds)
-		m.DurationSeconds = &dur
+		duration = &dur
 	}
-	m.Status = models.StatusProcessing
-	if err := o.repo.Update(ctx, m); err != nil {
+	if err := o.withMeetingWrite(meetingID, func() error {
+		return o.repo.SetTranscriptionResult(ctx, meetingID, trResp.Transcript, trResp.Language, duration)
+	}); err != nil {
 		return err
 	}
-	o.notify(m.ID, m.Status)
+	m.Transcript = &trResp.Transcript
+	m.Language = &trResp.Language
+	m.DurationSeconds = duration
+	m.Status = models.StatusProcessing
+	m.ErrorMessage = nil
+	o.notify(m.ID, models.StatusProcessing)
 
 	if !m.KeepAudio {
-		if err := os.Remove(audioPath); err != nil && !os.IsNotExist(err) {
-			log.Printf("warning: delete WAV %s: %v", audioPath, err)
-		} else {
-			m.AudioPath = nil
-			_ = o.repo.Update(ctx, m)
+		if err := o.clearAudioReferenceAndRemove(ctx, m, audioPath); err != nil {
+			return err
 		}
 	}
 
@@ -449,10 +669,9 @@ func (o *Orchestrator) RunRetranscribePipeline(ctx context.Context, meetingID st
 		return err
 	}
 
-	m.Status = models.StatusCompleted
-	if err := o.repo.Update(ctx, m); err != nil {
+	if err := o.setStatus(ctx, meetingID, models.StatusCompleted, nil); err != nil {
 		return err
 	}
-	o.notify(m.ID, m.Status)
+	o.notify(m.ID, models.StatusCompleted)
 	return nil
 }

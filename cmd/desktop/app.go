@@ -33,19 +33,23 @@ import (
 )
 
 type App struct {
-	ctx        context.Context
-	db         *sql.DB
-	port       int
-	server     *http.Server
-	audioProc  *exec.Cmd
-	allowQuit  bool
-	tray       *TrayManager
-	portReady  chan struct{}
+	ctx       context.Context
+	db        *sql.DB
+	port      int
+	server    *http.Server
+	audioProc *exec.Cmd
+	allowQuit bool
+	tray      *TrayManager
+	portReady chan struct{}
+	orch      *services.Orchestrator
+	cancel    context.CancelFunc
 }
 
 func NewApp() *App { return &App{portReady: make(chan struct{})} }
 
 func (a *App) OnStartup(ctx context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+	a.cancel = cancel
 	a.ctx = ctx
 	cfg := config.Load()
 
@@ -77,11 +81,12 @@ func (a *App) OnStartup(ctx context.Context) {
 	searchRepo := repository.NewSearchRepository(db)
 
 	aiClient := ai.NewDynamicAIClient(settingsRepo)
+	operations := services.NewMeetingOperationCoordinator()
 
 	boardColumnSvc := services.NewBoardColumnService(boardColumnRepo)
 	boardCardSvc := services.NewBoardCardService(boardCardRepo, boardColumnRepo, meetingRepo, summaryRepo, keyPointRepo, taskRepo)
 	themeSvc := services.NewThemeService(themeRepo)
-	meetingSvc := services.NewMeetingService(meetingRepo, themeRepo, searchRepo, keyPointRepo, taskRepo, summaryRepo)
+	meetingSvc := services.NewMeetingService(meetingRepo, themeRepo, operations)
 	summarySvc := services.NewSummaryService(summaryRepo, aiClient)
 	keyPointSvc := services.NewKeyPointService(keyPointRepo, aiClient)
 	taskSvc := services.NewTaskService(taskRepo, aiClient)
@@ -89,8 +94,13 @@ func (a *App) OnStartup(ctx context.Context) {
 	searchSvc := services.NewSearchService(searchRepo, meetingRepo)
 
 	audioClient := audio.NewHTTPClient(cfg.AudioServiceURL)
-	orch := services.NewOrchestrator(meetingRepo, themeRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo, boardCardSvc)
-	orch.SetSearchRepo(searchRepo)
+	orch := services.NewOrchestrator(meetingRepo, themeRepo, summarySvc, keyPointSvc, taskSvc, audioClient, settingsRepo, boardCardSvc, operations)
+	orch.SetParentContext(ctx)
+	a.orch = orch
+	if err := orch.RecoverInterruptedMeetings(ctx); err != nil {
+		log.Printf("recover interrupted meetings: %v", err)
+		return
+	}
 	orch.SetLogRepo(logRepo)
 	orch.SetNotifyFn(func(meetingID, status string) {
 		if isWailsContext(ctx) {
@@ -121,9 +131,9 @@ func (a *App) OnStartup(ctx context.Context) {
 	boardHandler := handlers.NewBoardHandler(boardColumnSvc, boardCardSvc)
 	themeHandler := handlers.NewThemeHandler(themeSvc)
 	meetingHandler := handlers.NewMeetingHandler(meetingSvc, summaryRepo, keyPointRepo, taskRepo, orch)
-	summaryHandler := handlers.NewSummaryHandler(summarySvc, meetingSvc, themeRepo)
-	keyPointHandler := handlers.NewKeyPointHandler(keyPointSvc, meetingSvc, themeRepo)
-	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc, themeRepo)
+	summaryHandler := handlers.NewSummaryHandler(summarySvc, meetingSvc, themeRepo, operations)
+	keyPointHandler := handlers.NewKeyPointHandler(keyPointSvc, meetingSvc, themeRepo, operations)
+	taskHandler := handlers.NewTaskHandler(taskSvc, meetingSvc, themeRepo, operations)
 	settingsHandler := handlers.NewSettingsHandler(settingsSvc)
 	settingsHandler.SetOnUpdate(func(s map[string]string) {
 		if a.tray != nil {
@@ -261,7 +271,12 @@ func (a *App) OnStartup(ctx context.Context) {
 		return
 	}
 	a.port = ln.Addr().(*net.TCPAddr).Port
-	a.server = &http.Server{Handler: r}
+	a.server = &http.Server{
+		Handler: r,
+		BaseContext: func(net.Listener) context.Context {
+			return ctx
+		},
+	}
 	go a.server.Serve(ln)
 	signalPort() // unblock GetPort() before tray.Start(), which may be slow on first boot
 
@@ -287,11 +302,19 @@ func (a *App) OnBeforeClose(ctx context.Context) bool {
 }
 
 func (a *App) OnShutdown(ctx context.Context) {
+	if a.cancel != nil {
+		a.cancel()
+	}
 	if a.tray != nil {
 		a.tray.Stop()
 	}
 	if a.server != nil {
 		a.server.Shutdown(context.Background())
+	}
+	if a.orch != nil {
+		if err := a.orch.Shutdown(); err != nil {
+			log.Printf("orchestrator shutdown: %v", err)
+		}
 	}
 	if a.db != nil {
 		a.db.Close()
@@ -467,10 +490,10 @@ func findAudioServiceDir() string {
 	if exe, err := os.Executable(); err == nil {
 		exeDir := filepath.Dir(exe)
 		roots = append(roots,
-			exeDir,                                    // <exe-dir>/audio-service
-			filepath.Join(exeDir, ".."),               // one level up
-			filepath.Join(exeDir, "..", ".."),         // two levels up  (build/bin → cmd/desktop)
-			filepath.Join(exeDir, "..", "..", ".."),   // three levels up (cmd/desktop → cmd)
+			exeDir,                                        // <exe-dir>/audio-service
+			filepath.Join(exeDir, ".."),                   // one level up
+			filepath.Join(exeDir, "..", ".."),             // two levels up  (build/bin → cmd/desktop)
+			filepath.Join(exeDir, "..", "..", ".."),       // three levels up (cmd/desktop → cmd)
 			filepath.Join(exeDir, "..", "..", "..", ".."), // four levels up (build/bin → project root)
 		)
 	}

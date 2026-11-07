@@ -56,10 +56,25 @@ Em dev o audio-service sobe via `audio-service/.venv/Scripts/uvicorn.exe`; sem e
 Use **sempre** o `build.ps1` na raiz — ele é o caminho canônico. Não rode `wails build -nsis` direto: o `-nsis` empacota o conteúdo de `build/bin`, e sem a etapa de cópia do bundle PyInstaller o instalador sai **sem o audio-service**. O `build.ps1` faz `wails build -clean`, copia `audio-service/build/dist/audio-service` para `build/bin`, roda o NSIS e coleta o artefato em `dist/`.
 
 ```powershell
-# (NSIS precisa estar no PATH; o script roda os testes Go antes)
-.\build.ps1                 # usa productVersion do wails.json
-.\build.ps1 -Version 2.4.0  # também persiste a versão no wails.json
+.\build.ps1 -PreflightOnly   # verifica ferramentas e assets sem compilar
+.\build.ps1                  # instalador; testa Go, whisper.cpp e /health do serviço
+.\build.ps1 -NoNSIS          # ZIP portátil completo; mantém os mesmos gates de serviço
+.\build.ps1 -Version 2.4.0   # também persiste a versão no wails.json
 ```
+
+O preflight encontra NSIS no `PATH` ou em `C:\Program Files (x86)\NSIS`; não é
+necessário alterar o PATH global. `-NoNSIS` gera um ZIP com `meeting-notes.exe` e
+`audio-service/`, pois o app de produção procura o serviço ao lado do executável.
+Ambos os formatos exigem bundle PyInstaller válido e smoke test `/health`.
+O instalador e o desinstalador abortam sem alterar os arquivos do produto se o
+Meeting Notes ou `audio-service.exe` estiver em execução; feche o app manualmente
+e tente novamente. Para validar essa proteção sem gerar um build completo, rode
+`.\cmd\desktop\build\windows\installer\test-process-guard.ps1`.
+
+Com Go 1.27, use Wails CLI 2.17.1 ou posterior. O CLI 2.12.0 falha na geração de bindings
+(`package "context" without types`); o CLI 2.17.1 foi validado neste checkout. O runtime Wails
+do app permanece na versão declarada em `go.mod`; o CLI pode avisar sobre a diferença.
+
 Pré-requisitos: bundle do audio-service em `audio-service/build/dist/audio-service`. Se ausente, gerar com o spec **rastreado no git** (`audio-service/build/pyinstaller/audio-service.spec` — o resto de `audio-service/build/` é ignorado de propósito):
 
 O bundle **precisa** ser gerado com o Python do `.venv` (criado a partir de `requirements.txt`) — o bundle da v2.6.0/v2.7.0 saiu morto porque foi gerado com o Python global, que tinha um uvicorn de outra versão e sem os extras de `uvicorn[standard]`.
@@ -73,4 +88,4 @@ O bundle embarca CUDA desde 2026-08-29 (ver DECISIONS.md); o device é escolha d
 
 Segundo pré-requisito desde 2026-08-30: o binário do whisper.cpp (Vulkan) em `audio-service/vendor/whispercpp/` — compilado com `.\audio-service\build\fetch-whispercpp.ps1` (versão pinada em `audio-service/build/whispercpp.version`; exige CMake, VS Build Tools 2022 C++ e Vulkan SDK). O `.spec` e o `build.ps1` abortam sem ele.
 
-Release completa: bump de versão (via PR — `master` é protegido) → `build.ps1` → tag `vX.Y.Z` → GitHub Release com o `.exe` de `dist/`.
+Release completa: bump de versão (via PR — `master` é protegido) → `build.ps1` → tag `vX.Y.Z` → GitHub Release com o instalador `.exe` de `dist/`.

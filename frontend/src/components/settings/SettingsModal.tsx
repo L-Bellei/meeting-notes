@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from "react"
-import { createPortal } from "react-dom"
 import { X, Eye, EyeOff } from "lucide-react"
 import { useSettings, useUpdateSettings, pickWritable, type SettingsForm } from "../../hooks/useSettings"
 import { useAITest, useClaudeLogin } from "../../hooks/useAIConfigured"
@@ -7,6 +6,7 @@ import { useAudioHealth } from "../../hooks/useAudioHealth"
 import { Button } from "../ui/button"
 import { cn } from "../../lib/utils"
 import { formatHotkey } from "../../lib/formatHotkey"
+import { Dialog } from "../ui/Dialog"
 
 interface Props {
   open: boolean
@@ -73,6 +73,9 @@ function HotkeyCapture({ value, onChange }: { value: string; onChange: (v: strin
   return (
     <div className="flex items-center gap-2 mt-1">
       <button
+        type="button"
+        aria-label="Capturar atalho de gravação"
+        aria-pressed={listening}
         onClick={() => setListening(l => !l)}
         className={cn(
           "flex-1 text-sm rounded-xl px-3 py-2 text-left border transition-colors font-mono",
@@ -87,6 +90,7 @@ function HotkeyCapture({ value, onChange }: { value: string; onChange: (v: strin
         variant="outline"
         size="sm"
         onClick={() => { onChange("ctrl+shift+r"); setListening(false) }}
+        aria-label="Restaurar atalho padrão"
       >
         Restaurar
       </Button>
@@ -94,35 +98,37 @@ function HotkeyCapture({ value, onChange }: { value: string; onChange: (v: strin
   )
 }
 
-export function SettingsModal({ open, onClose }: Props) {
+export function SettingsModal(props: Props) {
   const { data: settings } = useSettings()
+  if (!props.open) return null
+  const settingsKey = settings ? JSON.stringify(settings) : "loading"
+  return <SettingsModalContent key={settingsKey} {...props} settings={settings} />
+}
+
+function SettingsModalContent({
+  onClose,
+  settings,
+}: Props & { settings: SettingsForm | undefined }) {
   const update = useUpdateSettings()
 
   const login = useClaudeLogin()
   const test = useAITest()
   const { data: audioHealth } = useAudioHealth()
 
-  const [form, setForm] = useState<SettingsForm>({})
+  const [form, setForm] = useState<SettingsForm>(() => settings ?? {})
   const [showKey, setShowKey] = useState(false)
   const [error, setError] = useState("")
   const [activeTab, setActiveTab] = useState<"geral" | "ia" | "transcricao" | "atalhos">("geral")
-  const [customModel, setCustomModel] = useState(false)
+  const [customModel, setCustomModel] = useState(() => {
+    const model = settings?.claude_code_model ?? ""
+    return model !== "" && !CLAUDE_MODEL_ALIASES.some(m => m.value === model)
+  })
   const tokenInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (open && settings) {
-      setForm(settings)
-      const model = settings.claude_code_model ?? ""
-      setCustomModel(model !== "" && !CLAUDE_MODEL_ALIASES.some(m => m.value === model))
-    }
-  }, [open, settings])
 
   const handleHotkeyChange = useCallback(
     (v: string) => setForm(f => ({ ...f, recording_hotkey: v })),
     []
   )
-
-  if (!open) return null
 
   function set<K extends keyof SettingsForm>(key: K, value: SettingsForm[K]) {
     setForm(f => ({ ...f, [key]: value }))
@@ -139,8 +145,8 @@ export function SettingsModal({ open, onClose }: Props) {
     try {
       await update.mutateAsync(pickWritable(form))
       handleClose()
-    } catch (e: any) {
-      setError(e.message ?? "Erro ao salvar")
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao salvar")
     }
   }
 
@@ -171,13 +177,18 @@ export function SettingsModal({ open, onClose }: Props) {
   const effectiveDevice = audioHealth?.device ?? ""
   const showGgmlDownloadNote = audioHealth?.gpu_backend === "vulkan" && !audioHealth?.vulkan_model_ready
 
-  const content = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-      <div className="bg-[#1a1a1a] border border-border rounded-2xl shadow-2xl w-[440px] max-h-[90vh] flex flex-col">
+  return (
+    <Dialog
+      open
+      onClose={handleClose}
+      labelledBy="settings-modal-title"
+      overlayClassName="bg-black/70"
+      panelClassName="bg-[#1a1a1a] border border-border rounded-2xl shadow-2xl w-[440px] max-h-[90vh] flex flex-col"
+    >
         {/* header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <span className="font-semibold text-sm text-foreground">Configurações</span>
-          <Button variant="ghost" size="icon" onClick={handleClose}><X size={16} /></Button>
+          <h2 id="settings-modal-title" className="font-semibold text-sm text-foreground">Configurações</h2>
+          <Button variant="ghost" size="icon" onClick={handleClose} aria-label="Fechar configurações"><X size={16} /></Button>
         </div>
 
         {/* tabs */}
@@ -185,6 +196,8 @@ export function SettingsModal({ open, onClose }: Props) {
           {(["geral", "ia", "transcricao", "atalhos"] as const).map(tab => (
             <button
               key={tab}
+              type="button"
+              aria-pressed={activeTab === tab}
               onClick={() => setActiveTab(tab)}
               className={cn(
                 "px-4 py-2.5 text-xs transition-colors border-b-2 -mb-px",
@@ -204,8 +217,9 @@ export function SettingsModal({ open, onClose }: Props) {
           {activeTab === "geral" && (
             <div className="px-5 py-4 space-y-4">
               <div>
-                <label className="text-xs text-muted-foreground">Nome do usuário</label>
+                <label htmlFor="settings-user-name" className="text-xs text-muted-foreground">Nome do usuário</label>
                 <input
+                  id="settings-user-name"
                   value={form.user_name ?? ""}
                   onChange={e => set("user_name", e.target.value)}
                   placeholder="Seu nome completo (ex: Leonardo Bellei)"
@@ -214,8 +228,9 @@ export function SettingsModal({ open, onClose }: Props) {
                 <p className="text-[10px] text-muted-foreground/60 mt-1">Usado para identificar o autor nas reuniões</p>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Template de nome de reunião</label>
+                <label htmlFor="settings-meeting-name-template" className="text-xs text-muted-foreground">Template de nome de reunião</label>
                 <input
+                  id="settings-meeting-name-template"
                   value={form.meeting_name_template ?? "Reunião {date}"}
                   onChange={e => set("meeting_name_template", e.target.value)}
                   placeholder="Reunião {date}"
@@ -254,17 +269,18 @@ export function SettingsModal({ open, onClose }: Props) {
                   </p>
                 )}
                 {login.isError && (
-                  <p className="text-[11px] text-destructive mt-2">{login.error.message}</p>
+                  <p role="alert" className="text-[11px] text-destructive mt-2">{login.error.message}</p>
                 )}
               </div>
 
               {/* token */}
               <div>
-                <label className="text-xs text-muted-foreground">
+                <label htmlFor="settings-claude-token" className="text-xs text-muted-foreground">
                   Token {!hasToken && <span className="text-destructive">*</span>}
                 </label>
                 <div className="flex gap-1 mt-1">
                   <input
+                    id="settings-claude-token"
                     ref={tokenInputRef}
                     type={showKey ? "text" : "password"}
                     value={form.claude_code_token ?? ""}
@@ -272,7 +288,12 @@ export function SettingsModal({ open, onClose }: Props) {
                     placeholder={hasToken ? "Deixe em branco para manter o token atual" : "sk-ant-oat01-..."}
                     className="flex-1 text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary bg-[#111111] border border-border text-foreground font-mono placeholder:text-muted-foreground/60 placeholder:font-sans"
                   />
-                  <Button variant="ghost" size="icon" onClick={() => setShowKey(v => !v)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowKey(v => !v)}
+                    aria-label={showKey ? "Ocultar token" : "Mostrar token"}
+                  >
                     {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
                   </Button>
                 </div>
@@ -297,8 +318,9 @@ export function SettingsModal({ open, onClose }: Props) {
 
               {/* model */}
               <div>
-                <label className="text-xs text-muted-foreground">Modelo</label>
+                <label htmlFor="settings-claude-model" className="text-xs text-muted-foreground">Modelo</label>
                 <select
+                  id="settings-claude-model"
                   value={customModel ? "custom" : model}
                   onChange={e => {
                     if (e.target.value === "custom") {
@@ -317,6 +339,7 @@ export function SettingsModal({ open, onClose }: Props) {
                 </select>
                 {customModel && (
                   <input
+                    aria-label="ID personalizado do modelo Claude"
                     value={model}
                     onChange={e => set("claude_code_model", e.target.value)}
                     placeholder="claude-sonnet-4-6"
@@ -348,7 +371,7 @@ export function SettingsModal({ open, onClose }: Props) {
                   <p className="text-[11px] text-emerald-500 mt-2">Conexão OK.</p>
                 )}
                 {test.isError && (
-                  <p className="text-[11px] text-destructive mt-2">{test.error.message}</p>
+                  <p role="alert" className="text-[11px] text-destructive mt-2">{test.error.message}</p>
                 )}
               </div>
 
@@ -363,6 +386,10 @@ export function SettingsModal({ open, onClose }: Props) {
                   </p>
                 </div>
                 <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.auto_generate === "true" && hasToken}
+                  aria-label="Gerar resumo, pontos-chave e tarefas automaticamente"
                   disabled={!hasToken}
                   title={!hasToken ? "Conecte com Claude para habilitar" : undefined}
                   onClick={() => set("auto_generate", form.auto_generate === "true" ? "false" : "true")}
@@ -385,8 +412,9 @@ export function SettingsModal({ open, onClose }: Props) {
           {activeTab === "transcricao" && (
             <div className="px-5 py-4 space-y-4">
               <div>
-                <label className="text-xs text-muted-foreground">Idioma do áudio</label>
+                <label htmlFor="settings-whisper-language" className="text-xs text-muted-foreground">Idioma do áudio</label>
                 <select
+                  id="settings-whisper-language"
                   value={form.whisper_language ?? "pt"}
                   onChange={e => set("whisper_language", e.target.value)}
                   className="w-full mt-1 text-sm rounded-xl px-3 py-2 focus:outline-none bg-[#111111] border border-border text-foreground"
@@ -399,8 +427,9 @@ export function SettingsModal({ open, onClose }: Props) {
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground">Modelo Whisper</label>
+                <label htmlFor="settings-whisper-model" className="text-xs text-muted-foreground">Modelo Whisper</label>
                 <select
+                  id="settings-whisper-model"
                   value={form.whisper_model ?? "medium"}
                   onChange={e => set("whisper_model", e.target.value)}
                   className="w-full mt-1 text-sm rounded-xl px-3 py-2 focus:outline-none bg-[#111111] border border-border text-foreground"
@@ -413,11 +442,12 @@ export function SettingsModal({ open, onClose }: Props) {
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground">Processamento</label>
+                <label htmlFor="settings-whisper-device" className="text-xs text-muted-foreground">Processamento</label>
                 <p className={cn("text-sm mt-1", audioHealth?.gpu_available ? "text-emerald-500" : "text-muted-foreground")}>
                   {gpuScan}
                 </p>
                 <select
+                  id="settings-whisper-device"
                   value={form.whisper_device ?? "auto"}
                   onChange={e => set("whisper_device", e.target.value)}
                   className="w-full mt-2 text-sm rounded-xl px-3 py-2 focus:outline-none bg-[#111111] border border-border text-foreground"
@@ -463,17 +493,14 @@ export function SettingsModal({ open, onClose }: Props) {
 
         {/* footer */}
         <div className="px-5 py-4 flex items-center justify-between border-t border-border">
-          {error ? <p className="text-xs text-destructive">{error}</p> : <span />}
+          {error ? <p role="alert" className="text-xs text-destructive">{error}</p> : <span />}
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handleClose}>Cancelar</Button>
-            <Button size="sm" onClick={handleSave} disabled={update.isPending}>
+            <Button size="sm" onClick={handleSave} disabled={update.isPending} aria-busy={update.isPending}>
               {update.isPending ? "Salvando..." : "Salvar"}
             </Button>
           </div>
         </div>
-      </div>
-    </div>
+    </Dialog>
   )
-
-  return createPortal(content, document.body)
 }

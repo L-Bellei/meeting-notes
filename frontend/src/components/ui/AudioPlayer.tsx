@@ -23,6 +23,7 @@ export function AudioPlayer({ meetingId, meetingTitle, onClose }: Props) {
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [playbackError, setPlaybackError] = useState("")
 
   // Drag state — uses translate() to avoid bottom/right → left/top coordinate conversion
   const dragRef = useRef<{ startMouseX: number; startMouseY: number; baseX: number; baseY: number } | null>(null)
@@ -34,7 +35,15 @@ export function AudioPlayer({ meetingId, meetingTitle, onClose }: Props) {
   const toggle = useCallback(() => {
     const a = audioRef.current
     if (!a) return
-    a.paused ? a.play().catch(() => {}) : a.pause()
+    if (a.paused) {
+      a.play()
+        .then(() => setPlaybackError(""))
+        .catch((error: unknown) => {
+          setPlaybackError(error instanceof Error ? error.message : "Não foi possível reproduzir o áudio.")
+        })
+    } else {
+      a.pause()
+    }
   }, [])
 
   const skip = useCallback((delta: number) => {
@@ -123,6 +132,7 @@ export function AudioPlayer({ meetingId, meetingTitle, onClose }: Props) {
       </div>
 
       <div className="px-4 pb-4">
+        {playbackError && <p role="alert" className="mb-2 text-xs text-destructive">{playbackError}</p>}
         {/* seek bar */}
         <div
           className="h-1 w-full rounded-full bg-muted cursor-pointer mb-1.5 relative"

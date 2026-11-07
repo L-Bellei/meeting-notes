@@ -2,6 +2,157 @@
 
 ---
 
+## [2026-11-06] Reorganizar temas por teclado
+
+Temas movíveis na Sidebar agora têm um handle de arraste dedicado, acessível por teclado e
+anunciado em português. As setas para cima/baixo percorrem a raiz e temas de primeiro nível;
+Espaço/Enter iniciam e soltam, Tab solta e Escape cancela. Temas com subcategorias continuam
+indisponíveis para reparent. O arraste com ponteiro, endpoint e regras de hierarquia não mudaram.
+
+**Verificação:** 4 testes focados e 11 testes frontend passaram; ESLint e build passaram.
+O build ainda avisa que o chunk JavaScript excede 500 kB. `git diff --check` passou. Nenhum
+commit ou release foi criado. Spec e plano em `docs/superpowers/`.
+
+---
+
+## [2026-11-05] Proteger instalação e desinstalação NSIS
+
+O template NSIS deixou de executar `taskkill /F`. Antes de atualizar, instalar ou desinstalar,
+o script verifica o executável configurado, `meeting-notes.exe` e `audio-service.exe`. Se algum
+estiver em execução (ou se a consulta falhar), a operação aborta sem substituir/remover arquivos;
+no modo interativo, orienta a fechar o app manualmente. A checagem é repetida antes das seções
+de escrita/remoção para reduzir a janela de corrida.
+
+**Verificação:** teste de integração compilou um harness NSIS temporário e confirmou execução
+normal sem processos; cada um dos três nomes bloqueou instalação e desinstalação silenciosas,
+com processo preservado e sem executar as seções de escrita/remoção. O harness também confirmou
+código não zero no instalador e no uninstaller executado com `_?=`. O script de produção passou
+em `makensis /PPO`.
+Não foi gerado instalador de release nem commit. Spec e plano em `docs/superpowers/`.
+
+---
+
+## [2026-11-05] Corrigir vulnerabilidades nas dependências de teste
+
+`npm audit` identificou duas vulnerabilidades críticas em dependências transitivas do Vitest
+(`tinypool` e `@vitest/mocker`) e uma moderada no `@vitest/mocker`, todas restritas às
+dependências de desenvolvimento. A auditoria de produção não encontrou vulnerabilidades.
+Com aprovação do usuário, Vitest foi atualizado de 3.2.x para 5.1.0, resolvendo os três avisos.
+
+**Verificação:** `npm audit` e `npm audit --omit=dev` reportam zero vulnerabilidades; os 7
+testes de UI e o build frontend passaram. O build continua emitindo o aviso de chunk >500 kB.
+
+---
+
+## [2026-11-05] Zerar lint do frontend
+
+ESLint passou sem erros ou warnings, mantendo as regras ativas. Bindings Wails gerados foram
+excluídos do lint; helpers de tasks foram extraídos; componentes passaram a derivar drafts e
+estados de carregamento dos dados de entrada e consultas, e receberam tipagem explícita em vez
+de `any`. Leitura de refs durante render e sincronizações de estado em effects foram removidas.
+
+**Verificação:** `npm --prefix frontend run lint`, `npm --prefix frontend test` (7 testes),
+`npm --prefix frontend run build` e `git diff --check` passaram. O build ainda avisa que o chunk
+JavaScript excede 500 kB. Nenhuma alteração foi commitada.
+
+---
+
+## [2026-11-04] Etapa 5 — resiliência e acessibilidade do frontend
+
+Criado um diálogo compartilhado com semântica ARIA, foco inicial, ciclo de teclado, Escape e
+restauração do foco; os oito diálogos do app foram migrados sem alterar quais aceitam fechamento
+por backdrop. A confirmação de exclusão de coluna passou a ser inline. Busca e detalhe de card
+agora mostram falha recuperável, incluindo retry no card; o estado de inicialização é anunciado
+por tecnologia assistiva. Campos, botões e toggles receberam nomes acessíveis e o documento agora
+declara `pt-BR` e Meeting Notes. Adicionada infraestrutura Vitest/jsdom/Testing Library.
+
+**Verificação:** 7 testes de UI e build frontend passaram; `git diff --check` passou. ESLint ainda
+falha com 39 erros e 1 warning no conjunto de 64 arquivos, incluindo violações existentes fora
+desta etapa. Build mantém o aviso de chunk acima de 500 kB. `npm install` reportou 3
+vulnerabilidades (1 moderada, 2 críticas), não investigadas. Nenhuma build de release foi feita.
+Spec e plano em `docs/superpowers/`.
+
+---
+
+## [2026-11-04] Etapa 4 — build Windows reproduzível
+
+`build.ps1 -PreflightOnly` agora verifica ferramentas e assets sem compilar, reconhece
+NSIS no diretório padrão e deixa o `wails.json` intacto. A ausência do bundle PyInstaller
+ou do whisper.cpp aborta antes dos testes/builds com instruções para regenerar usando os
+recursos existentes. O build executa `whisper-cli.exe --help` após copiar o bundle e exige
+HTTP 200 em `/health` antes de gerar qualquer artefato. `-NoNSIS` agora significa ZIP
+portátil completo com app + audio-service, e a coleta valida conteúdo e tamanho antes de
+mover um artefato temporário ao nome final.
+
+**Verificação:** reproduções antes da correção mostraram o falso negativo do NSIS e uma
+build simulada que aceitava executável vazio sem áudio. Depois: preflight padrão passou
+encontrando NSIS fora do `PATH`; preflight sem bundle falhou sem criar `dist/` ou alterar
+`wails.json`; estrutura do ZIP foi verificada em temporário. `go test ./...`, `go vet
+./...` e pytest (99 testes) passaram. Não foi gerado instalador nem publicada release.
+Spec e plano em `docs/superpowers/`. Etapa 5 é a próxima.
+
+---
+
+## [2026-11-04] Etapa 3 — lifecycle de tasks e indexação
+
+Substituição de tasks geradas passou a ser atômica. Migration 022 mantém o FTS derivado das tabelas
+canônicas via triggers transacionais e reconstrói o índice existente; meeting, summary, key point e
+task só são persistidos se a atualização da busca também tiver sucesso. Removidas atualizações
+best-effort que ignoravam erros e removida a API de escrita direta do FTS.
+
+**Verificação:** testes de regressão reproduziram perda de tasks e divergência de busca antes das
+correções; `go test ./...` e `go vet ./...` passaram.
+
+---
+
+## [2026-11-04] Etapa 2 — migrations e ciclo de vida do áudio
+
+Runner aplica cada migration e grava seu registro de forma atômica; teste de falha confirma
+rollback e repetição bem-sucedida. A migration aditiva 021 persiste o UUID da gravação, usado na
+recuperação após reinício; o audio-service também tenta finalizar gravações durante o shutdown e
+preserva o estado do gravador quando `stop()` falha. A limpeza passou a limpar a referência no
+banco antes de remover o WAV, evitando referências quebradas se a persistência falhar.
+
+Arquivos desconhecidos ou inválidos permanecem preservados e não são associados automaticamente.
+**Verificação:** `go test ./...`, `go vet ./...` e pytest completo do audio-service (99 testes)
+passaram. Etapa 3 não iniciada. Spec e plano em `docs/superpowers/`.
+
+---
+
+## [2026-11-04] Etapa 1 — consistência do pipeline de reuniões
+
+Auditoria reproduzível confirmou duplicação de reprocessamento e perda de alterações recentes por
+persistência de snapshot obsoleto. Implementados coordenador de operações por reunião, transições
+atômicas, persistência de campos específicos, bloqueios HTTP/UI para operações conflitantes e
+encerramento cancelável com espera dos workers e recuperação de áudio. Mutações manuais dos
+resultados gerados também conflitam durante o processamento; a indexação de busca não deixa mais
+goroutines sem controle no encerramento.
+
+**Verificação:** `go test ./...` passou; `npm run build` passou, com apenas o aviso de tamanho de
+chunk. Não avançou para outras etapas. Spec e plano em `docs/superpowers/`.
+
+---
+
+## [2026-11-04] Release v2.10.1 — segurança da API local
+
+**Tag:** https://github.com/L-Bellei/meeting-notes/releases/tag/v2.10.1 · **Merge:** PR #58 (`e145e41`; fix `70e17cf`)
+**Instalador:** `meeting-notes-2.10.1-windows-amd64-installer.exe`, **648,6 MB**.
+
+Corrigido o controle de acesso à API local com validação da origem das requisições. A release
+foi gerada pelo caminho canônico `build.ps1`; os testes Go passaram e o `audio-service.exe`
+empacotado respondeu HTTP 200 em `/health` no smoke test (28s) antes da geração NSIS.
+
+**O que bloqueou e resolveu a build:** Go 1.27.0 com o Wails CLI 2.12.0 (`x/tools` 0.30.0)
+falhava na geração de bindings com `package "context" without types`, embora o pacote desktop
+compilasse com `go test`. Recompilar o CLI antigo não resolveu. O Wails CLI 2.17.1 (`x/tools`
+0.49.0) gerou os bindings e compilou o app; foi atualizado na máquina de build. O runtime Wails
+do projeto permaneceu em 2.12.0 (o CLI avisa sobre a diferença, mas a build completa passou).
+
+**Etapa seguinte:** Etapa 1 do roadmap ainda não iniciada: `docs/engineering-improvements-roadmap.md`
+não está presente em `master`. Não inferir o escopo; obter/restaurar o arquivo antes do brainstorm.
+
+---
+
 ## [2026-08-30] Release v2.10.0 — transcrição em GPU AMD/Intel via whisper.cpp/Vulkan
 
 **Tag:** https://github.com/L-Bellei/meeting-notes/releases/tag/v2.10.0 · **Merge:** PR #56 (`455893c`)

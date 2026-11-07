@@ -1,4 +1,5 @@
 import os
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -6,7 +7,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from recorder import Recorder, RecorderError
+from recorder import InvalidRecordingError, Recorder, RecorderError, RecordingNotFoundError
 from transcriber import Transcriber
 
 RECORDINGS_DIR = Path(os.getenv("RECORDINGS_DIR", "./tmp")).resolve()
@@ -28,7 +29,14 @@ async def lifespan(app: FastAPI):
         compute_type=WHISPER_COMPUTE_TYPE,
         recordings_dir=RECORDINGS_DIR,
     )
-    yield
+    try:
+        yield
+    finally:
+        if recorder is not None and recorder.state == "recording":
+            try:
+                recorder.stop()
+            except (OSError, RuntimeError, RecorderError):
+                logging.getLogger("audio-service").exception("failed to finalize recording during shutdown")
 
 
 app = FastAPI(lifespan=lifespan)
@@ -77,6 +85,25 @@ def start_recording():
 def stop_recording():
     try:
         result = recorder.stop()
+    except RecorderError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {
+        "recording_id": result.recording_id,
+        "path": str(result.path),
+        "duration_seconds": result.duration_seconds,
+        "size_bytes": result.size_bytes,
+        "partial": result.partial,
+    }
+
+
+@app.post("/recording/recover/{recording_id}")
+def recover_recording(recording_id: str):
+    try:
+        result = recorder.recover(recording_id)
+    except RecordingNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except InvalidRecordingError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except RecorderError as e:
         raise HTTPException(status_code=409, detail=str(e))
     return {

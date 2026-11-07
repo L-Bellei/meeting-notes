@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,23 +28,21 @@ var validMeetingStatuses = map[string]bool{
 }
 
 type MeetingService struct {
-	repo         *repository.MeetingRepository
-	themeRepo    *repository.ThemeRepository
-	searchRepo   *repository.SearchRepository
-	keyPointRepo *repository.KeyPointRepository
-	taskRepo     *repository.TaskRepository
-	summaryRepo  *repository.SummaryRepository
+	repo       *repository.MeetingRepository
+	themeRepo  *repository.ThemeRepository
+	operations *MeetingOperationCoordinator
 }
 
 func NewMeetingService(
 	repo *repository.MeetingRepository,
 	themeRepo *repository.ThemeRepository,
-	searchRepo *repository.SearchRepository,
-	keyPointRepo *repository.KeyPointRepository,
-	taskRepo *repository.TaskRepository,
-	summaryRepo *repository.SummaryRepository,
+	coordinators ...*MeetingOperationCoordinator,
 ) *MeetingService {
-	return &MeetingService{repo, themeRepo, searchRepo, keyPointRepo, taskRepo, summaryRepo}
+	svc := &MeetingService{repo: repo, themeRepo: themeRepo}
+	if len(coordinators) > 0 && coordinators[0] != nil {
+		svc.operations = coordinators[0]
+	}
+	return svc
 }
 
 func (s *MeetingService) List(ctx context.Context, f MeetingFilters) ([]models.Meeting, error) {
@@ -95,11 +92,6 @@ func (s *MeetingService) Create(ctx context.Context, title, themeID, status stri
 	if err := s.repo.Create(ctx, m); err != nil {
 		return nil, err
 	}
-	if s.searchRepo != nil {
-		go func() {
-			_ = s.searchRepo.UpsertMeeting(context.Background(), m.ID, m.Title, "", "", "", "")
-		}()
-	}
 	return m, nil
 }
 
@@ -114,72 +106,84 @@ func (s *MeetingService) Update(ctx context.Context, id, title string, themeID *
 	if status != "" && !validMeetingStatuses[status] {
 		return nil, &ValidationError{"invalid status: must be one of pending, recording, transcribing, processing, completed, failed"}
 	}
-	m, err := s.repo.GetByID(ctx, id)
+	var updated *models.Meeting
+	update := func(operation string) error {
+		m, err := s.repo.GetByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		transcriptChanged := transcript != nil && !sameString(m.Transcript, transcript)
+		notesChanged := notes != nil && !sameString(m.Notes, notes)
+		switch operation {
+		case "recording":
+			if transcriptChanged {
+				return ErrMeetingBusy
+			}
+		case "pipeline", "summary", "key_points", "tasks":
+			if transcriptChanged || notesChanged {
+				return ErrMeetingBusy
+			}
+		}
+		m.Title = title
+		if themeID != nil {
+			if *themeID == "" {
+				m.ThemeID = nil
+			} else {
+				m.ThemeID = themeID
+			}
+		}
+		if status != "" && operation == "" {
+			m.Status = models.MeetingStatus(status)
+		}
+		if startedAt != nil {
+			m.StartedAt = startedAt
+		}
+		if durationSeconds != nil {
+			m.DurationSeconds = durationSeconds
+		}
+		if transcript != nil {
+			m.Transcript = transcript
+		}
+		if notes != nil {
+			m.Notes = notes
+		}
+		if err := s.repo.Update(ctx, m); err != nil {
+			return err
+		}
+		updated = m
+		return nil
+	}
+	var err error
+	if s.operations != nil {
+		err = s.operations.WithMeetingLock(id, update)
+	} else {
+		err = update("")
+	}
 	if err != nil {
 		return nil, err
 	}
-	m.Title = title
-	if themeID != nil {
-		if *themeID == "" {
-			m.ThemeID = nil
-		} else {
-			m.ThemeID = themeID
-		}
+	return updated, nil
+}
+
+func sameString(left, right *string) bool {
+	if left == nil {
+		return right == nil
 	}
-	if status != "" {
-		m.Status = models.MeetingStatus(status)
-	}
-	if startedAt != nil {
-		m.StartedAt = startedAt
-	}
-	if durationSeconds != nil {
-		m.DurationSeconds = durationSeconds
-	}
-	if transcript != nil {
-		m.Transcript = transcript
-	}
-	if notes != nil {
-		m.Notes = notes
-	}
-	if err := s.repo.Update(ctx, m); err != nil {
-		return nil, err
-	}
-	if s.searchRepo != nil {
-		go func() {
-			bgCtx := context.Background()
-			transcript := ""
-			if m.Transcript != nil {
-				transcript = *m.Transcript
-			}
-			summary := ""
-			if sm, err2 := s.summaryRepo.GetByMeetingID(bgCtx, m.ID); err2 == nil && sm != nil {
-				summary = sm.Content
-			}
-			kps, _ := s.keyPointRepo.ListByMeetingID(bgCtx, m.ID)
-			var kpContents []string
-			for _, kp := range kps {
-				kpContents = append(kpContents, kp.Content)
-			}
-			tasks, _ := s.taskRepo.ListByMeetingID(bgCtx, m.ID)
-			var taskContents []string
-			for _, tk := range tasks {
-				taskContents = append(taskContents, tk.Description)
-			}
-			_ = s.searchRepo.UpsertMeeting(bgCtx, m.ID, m.Title, transcript, summary,
-				strings.Join(kpContents, "\n"), strings.Join(taskContents, "\n"))
-		}()
-	}
-	return m, nil
+	return right != nil && *left == *right
 }
 
 func (s *MeetingService) Delete(ctx context.Context, id string) error {
-	if err := s.repo.Delete(ctx, id); err != nil {
-		return err
+	deleteMeeting := func(operation string) error {
+		if operation != "" {
+			return ErrMeetingBusy
+		}
+		if err := s.repo.Delete(ctx, id); err != nil {
+			return err
+		}
+		return nil
 	}
-	if s.searchRepo != nil {
-		go func() {
-			_ = s.searchRepo.DeleteMeeting(context.Background(), id)
-		}()
+	if s.operations != nil {
+		return s.operations.WithMeetingLock(id, deleteMeeting)
 	}
-	return nil
+	return deleteMeeting("")
 }

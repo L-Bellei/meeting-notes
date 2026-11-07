@@ -40,6 +40,38 @@ func (r *TaskRepository) ListByMeetingID(ctx context.Context, meetingID string) 
 }
 
 func (r *TaskRepository) Create(ctx context.Context, t *models.Task) error {
+	return createTask(ctx, r.db, t)
+}
+
+func (r *TaskRepository) ReplaceByMeetingID(ctx context.Context, meetingID string, tasks []models.Task) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin task replacement: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM tasks WHERE meeting_id = ?`, meetingID); err != nil {
+		return fmt.Errorf("delete tasks by meeting: %w", err)
+	}
+	for i := range tasks {
+		if tasks[i].MeetingID != meetingID {
+			return fmt.Errorf("replace tasks: task %s belongs to meeting %s, want %s", tasks[i].ID, tasks[i].MeetingID, meetingID)
+		}
+		if err := createTask(ctx, tx, &tasks[i]); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit task replacement: %w", err)
+	}
+	return nil
+}
+
+type taskExecer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+func createTask(ctx context.Context, exec taskExecer, t *models.Task) error {
 	if t.CreatedAt.IsZero() {
 		t.CreatedAt = time.Now().UTC()
 	}
@@ -52,7 +84,7 @@ func (r *TaskRepository) Create(ctx context.Context, t *models.Task) error {
 	if t.Completed {
 		completed = 1
 	}
-	_, err := r.db.ExecContext(ctx,
+	_, err := exec.ExecContext(ctx,
 		`INSERT INTO tasks (id, meeting_id, description, assignee, due_date, priority, completed, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.ID, t.MeetingID, t.Description, t.Assignee, dueDate, string(t.Priority), completed,
 		t.CreatedAt.UTC().Format(time.RFC3339Nano),
